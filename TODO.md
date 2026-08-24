@@ -263,6 +263,26 @@
 
 ---
 
+## 💡 ĐỀ XUẤT CẢI TIẾN ĐỢT 2 (Phase 3 & Phase 4 + Tối ưu hóa toàn diện Tầng 1 & Tầng 2) 🟡
+
+> **Mục đích:** Khắc phục các khoảng trống thực tế sau khi hoàn thành Phase 3 & 4, tối ưu hóa trải nghiệm giáo viên / học sinh, đảm bảo dữ liệu minh bạch và tăng tính thuyết phục cao nhất khi chấm thi và ghi hình demo.
+
+### 1. Tier 2 Aggregator & Digest Enhancement (Trực quan & Minh bạch dữ liệu) 🔴
+- [ ] **Persist Digest vào Firestore `class_analytics`**: Hiện tại `process_event` tạo Gmail draft và Sheets log nhưng chưa lưu `digest` vào collection `class_analytics` (đã tạo ở Phase 0). Cần lưu document vào `class_analytics/{class_id}/digests/{digest_id}` chứa đầy đủ `ranked_students`, `common_fallacies`, `digest_text`, `timestamp`, `gmail_draft_id` để làm nguồn dữ liệu lịch sử cho giáo viên và Web UI.
+- [ ] **Human-Friendly Student Name Resolution**: Hiện tại digest/email hiển thị `p['student_id']` (ví dụ `stu_stuck`). Bổ sung mapping lấy `name` từ profile (ví dụ `Binh (stu_stuck)`) để email gửi giáo viên trông tự nhiên và có tính sư phạm thực tế.
+- [ ] **HTML Rich Formatting cho Gmail Draft**: Tạo phiên bản HTML có định dạng bảng xếp hạng mức độ ưu tiên (Priority Index), màu sắc cảnh báo (badge kẹt streak/điểm giảm) và khung gợi ý Mini-Lesson để hiển thị chuyên nghiệp trong Gmail của giáo viên thay vì thuần text.
+
+### 2. Tier 1 Pipeline & Trải nghiệm Học sinh (Language & Interactive Engine) 🟡
+- [ ] **Bilingual Language Adaptation (VI / EN)**: Đảm bảo Summarizer, Debate Loop, và Scorer tự động phát hiện và phản hồi theo đúng ngôn ngữ của bài viết (tiếng Việt hoặc tiếng Anh), giúp các câu hỏi Socratic bằng tiếng Việt tự nhiên, không bị trả lời bằng tiếng Anh cho bài luận tiếng Việt.
+- [ ] **Student-Facing Constructive Feedback Summary**: Bổ sung trường `student_feedback` trong kết quả của `scorer.py` / `mutator.py` để sau khi hoàn thành tranh luận, học sinh nhận được nhận xét tích cực, chỉ ra điểm cải thiện dựa trên rubric 4 trục thay vì chỉ lưu điểm số vào profile ngầm.
+- [ ] **Interactive Debate Step Helper**: Bổ sung hàm tiện ích `step_debate_turn(session_id, student_reply)` chuẩn hóa để phục vụ API/Web UI/CLI tương tác nhiều lượt mà không cần chạy lại toàn bộ graph từ đầu.
+
+### 3. Resilience, Diagnostic & Demo Readiness (Sẵn sàng quay video) 🟢
+- [ ] **System Doctor CLI (`scripts/doctor.py`)**: Script kiểm tra toàn diện trước khi demo: verify GCP IAM, Firestore connectivity, Pub/Sub topic/DLQ subscriptions, Gmail OAuth token expiry, Sheets spreadsheet permission, Vertex AI API quota. Tránh mọi rủi ro gián đoạn khi quay video không cắt ghép.
+- [ ] **Fast Test Mock Mode**: Tách biệt rõ test e2e có gọi LLM thật (`tests/test_tier1_skeleton.py` ~28s) và unit test thuần (`pytest -m "not e2e"`) bằng pytest markers để tăng tốc độ phát triển và kiểm thử liên tục.
+
+---
+
 ## PHASE 5 — ADK Eval Suite (điểm cộng lớn cho Architectural Discipline) 🟡
 
 - [ ] Viết `evalset` ~10 test case, ưu tiên 3 nhóm:

@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import functools
 import glob
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
@@ -67,10 +68,20 @@ def _service():
 
 
 @with_google_api_retry
-def create_digest_draft(*, to_address: str, subject: str, body_text: str) -> str:
+def create_digest_draft(*, to_address: str, subject: str, body_text: str, body_html: str | None = None) -> str:
     """Creates a Gmail draft. Returns the draft id. Never sends -- see module
-    docstring; this function has no path to messages.send/drafts.send."""
-    message = MIMEText(body_text)
+    docstring; this function has no path to messages.send/drafts.send.
+
+    When body_html is given, the draft is a multipart/alternative message
+    (plain text kept as the fallback part -- some clients/screen readers
+    prefer it) so it renders as a formatted table in Gmail instead of raw text.
+    """
+    if body_html:
+        message = MIMEMultipart("alternative")
+        message.attach(MIMEText(body_text, "plain"))
+        message.attach(MIMEText(body_html, "html"))
+    else:
+        message = MIMEText(body_text)
     message["to"] = to_address
     message["subject"] = subject
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()

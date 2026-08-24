@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from eduagent.aggregator.class_aggregator import format_digest_email, process_event
+from eduagent.aggregator.class_aggregator import format_digest_email, format_digest_email_html, process_event
 
 _FAKE_DIGEST = {
     "headline": "Binh needs attention.",
@@ -40,6 +40,20 @@ def test_format_digest_email_includes_all_sections():
     assert "15-minute exercise" in text
 
 
+def test_format_digest_email_resolves_human_friendly_name():
+    text = format_digest_email(_FAKE_DIGEST, name_by_id={"stu_stuck": "Binh"})
+    assert "Binh (stu_stuck)" in text
+
+
+def test_format_digest_email_html_includes_table_and_mini_lesson():
+    ranked = [{"student_id": "stu_stuck", "name": "Binh", "priority": 9.0, "breakdown": {}, "reason": {"stuck_streak_count": 3, "score_trend": "stagnant", "inactivity_days": 0, "shared_fallacies": []}}]
+    html = format_digest_email_html(_FAKE_DIGEST, ranked, name_by_id={"stu_stuck": "Binh"})
+    assert "<table" in html
+    assert "Binh (stu_stuck)" in html
+    assert "stuck streak" in html
+    assert "15-minute exercise" in html
+
+
 def test_process_event_skips_duplicate_delivery():
     with patch("eduagent.aggregator.class_aggregator.claim_event", return_value=False):
         result = asyncio.run(process_event({"event_id": "e1", "student_id": "s1", "class_id": "c1", "essay_id": "e1"}))
@@ -64,6 +78,7 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
         patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
         patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value="draft123") as mock_gmail,
         patch("eduagent.integrations.sheets_mcp.append_audit_row") as mock_sheets_append,
+        patch("eduagent.aggregator.class_aggregator.persist_digest") as mock_persist_digest,
     ):
         mock_teacher.email = "teacher@example.com"
         mock_sheets.audit_spreadsheet_id = "sheet123"
@@ -75,6 +90,16 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
     assert result["ranked_students"][0]["student_id"] == "stu_stuck"
     mock_gmail.assert_called_once()
     mock_sheets_append.assert_called_once()
+    mock_persist_digest.assert_called_once()
+    assert mock_persist_digest.call_args.kwargs["class_id"] == "c1"
+    assert mock_persist_digest.call_args.kwargs["digest_id"] == "e3"
+    # Sheets audit row should use the human-friendly name, not the raw id.
+    sheets_row = mock_sheets_append.call_args.kwargs["row"]
+    assert "Binh (stu_stuck)" in sheets_row[4]
+    # Gmail draft should carry both a plain-text and an HTML body.
+    gmail_kwargs = mock_gmail.call_args.kwargs
+    assert "Binh (stu_stuck)" in gmail_kwargs["body_text"]
+    assert "<table" in gmail_kwargs["body_html"]
 
 
 def test_process_event_skips_gmail_and_sheets_when_unconfigured():
@@ -84,6 +109,7 @@ def test_process_event_skips_gmail_and_sheets_when_unconfigured():
         patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
         patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
         patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+        patch("eduagent.aggregator.class_aggregator.persist_digest"),
     ):
         mock_teacher.email = ""
         mock_sheets.audit_spreadsheet_id = ""
