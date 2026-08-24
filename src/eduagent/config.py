@@ -49,6 +49,16 @@ class PubSubConfig:
     # the TODO.md plan's "fail 3 times -> DLQ" is implemented as 5, the
     # platform floor, not a design choice.
     max_delivery_attempts: int = 5
+    # ĐỢT 8: the Cloud Run service is deployed --allow-unauthenticated (so
+    # judges can open the Web UI without a GCP identity), which means the
+    # `POST /` Pub/Sub push endpoint itself is no longer protected by Cloud
+    # Run IAM -- it must verify the push subscription's own OIDC token at
+    # the application layer instead (see ADR-014). Both are set at deploy
+    # time; if either is left unset in production, verify_oauth2_token()
+    # still runs (mandatory Google-signed-token check), it just cannot also
+    # pin the expected caller identity/audience.
+    push_audience: str = os.getenv("PUBSUB_PUSH_AUDIENCE", "")
+    push_service_account: str = os.getenv("PUBSUB_PUSH_SERVICE_ACCOUNT", "")
 
 
 @dataclass(frozen=True)

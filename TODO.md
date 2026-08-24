@@ -505,6 +505,30 @@
 
 ---
 
+### 12. ĐỢT 8 — Review tổng thể trước nộp: Đóng khoảng cách Tài liệu–Thực tế lần 2 🔴 CẦN LÀM NGAY (blocker)
+
+> Review thực tế (curl vào service live + đọc code + `git status`), không chỉ đọc TODO.md, phát hiện 1 lỗi nghiêm trọng có thể trực tiếp trừ điểm Architectural Discipline nếu giám khảo tự kiểm chứng, cộng với ĐỢT 7 chưa hề được commit.
+
+- [x] 🔴 **BLOCKER — README nói ngược thực tế deploy: `POST /` đang public, không có OIDC verify.** ✅ ĐÃ SỬA (code) — theo đúng Phương án A đã chọn:
+  - **Bằng chứng thật đã verify (2026-08-24):** `deploy.txt` ghi `--allow-unauthenticated`. `curl` trực tiếp vào service live: `GET /` → `200`; `POST /` với payload giả (không token) → `500` (nghĩa là request **đã lọt vào container**, không bị chặn ở tầng IAM). `grep -n "Authorization\|OIDC\|id_token" src/eduagent/server.py` → **0 kết quả** lúc đó, không có lớp verify nào ở code bù cho việc IAM đã mở.
+  - **Đã làm:** `src/eduagent/server.py::_verify_pubsub_push_auth()` — verify OIDC token thật bằng `google.oauth2.id_token.verify_oauth2_token` (chữ ký thật, không phải shared secret) trước khi `POST /` chạm `process_event()`; reject 401 nếu thiếu header/token không hợp lệ/sai service account. `src/eduagent/config.py` thêm `PUBSUB.push_audience` + `PUBSUB.push_service_account` (env var, optional pin thêm identity/audience). `requirements.txt` thêm `google-auth` tường minh (trước đó chỉ là transitive dep). README §3.10 + §5 sửa lại đúng thực tế (`--allow-unauthenticated` + verify ở tầng app, không còn nói `--no-allow-unauthenticated`). **ADR-014** đã thêm vào bảng ADR mô tả đúng trade-off + phát hiện thật.
+  - **Test mới (7 test trong `tests/test_server.py`):** thiếu header → 401; header sai định dạng → 401; token không hợp lệ (gọi thật `verify_oauth2_token`, không mock) → 401; token hợp lệ nhưng sai service account (khi có pin) → 401; token hợp lệ đúng service account → 200 gọi `process_event()`. Sửa `tests/test_server_interactive_api.py` (1 test cũ POST `/` không auth) để bypass đúng cách. **`pytest tests/ -q -m "not e2e"` → 184/184 pass** (tăng từ 179, không có test nào bị xoá).
+  - **CÒN LẠI (thao tác GCP thật của bạn, chưa làm):** redeploy service live với code mới + set 2 env var `PUBSUB_PUSH_AUDIENCE`/`PUBSUB_PUSH_SERVICE_ACCOUNT` (xem lệnh `gcloud run deploy` mới trong README §3.10), rồi verify lại bằng `curl -X POST` không token vào URL thật → phải là `401` (hiện tại vẫn là `500`/lọt qua cho tới khi redeploy). Đây là hành động deploy hạ tầng thật — cố ý không tự động chạy, cần bạn xác nhận.
+  - **Phương án B (không dùng):** tách 2 Cloud Run service (UI public / subscriber private `--no-allow-unauthenticated`) — cân nhắc sau nếu có thời gian, không cần thiết vì Phương án A đã đóng đúng lỗ hổng.
+
+- [x] 🔴 **BLOCKER — Commit + push toàn bộ ĐỢT 7 (Metacognitive Loop), hiện chưa nằm trong git.** ✅ ĐÃ XONG (đã có commit `224c458` + đã push lên `origin/master` trước khi review lần 2 này bắt đầu — xác nhận bằng `git log origin/master..HEAD` rỗng và `git status` báo "up to date").
+  - Commit này gộp `growth_bonus`/`breakthrough_count`/`/api/debate/reflect` + `tests/test_metacognitive_reflection.py` — nay đã tồn tại trên GitHub, giám khảo chấm được.
+
+- [ ] 🔴 **BLOCKER MỚI (thao tác thật) — Redeploy service live với fix OIDC ở trên, rồi commit + push chính các file vừa sửa (`server.py`, `config.py`, `README.md`, `requirements.txt`, `TODO.md`, `tests/test_server.py`, `tests/test_server_interactive_api.py`).**
+  - Việc code + test đã xong và xanh 100% (184/184) nhưng **chưa commit** — cần lặp lại đúng kỷ luật ở blocker trên: `git add` chọn lọc, review diff không dính `secrets/`/`.env`, commit, push.
+  - Sau khi push code, redeploy Cloud Run (lệnh cụ thể ở README §3.10) rồi verify lại bằng `curl -X POST <url>/` không kèm Authorization → kỳ vọng `401` (không còn `500`).
+- [ ] 🟡 Sau khi redeploy xong: chạy `scripts/doctor.py` trên GCP thật để xác nhận service vẫn healthy sau khi đổi auth (đặc biệt là Pub/Sub push subscription vẫn gửi được request thành công, không bị chính lớp verify mới này chặn nhầm).
+- [ ] 🟡 Cập nhật mục 2 "Ma trận tự kiểm tra điểm tối đa" (Architectural Discipline) nếu cần, để phản ánh ADR-014 mới.
+
+**Không thêm feature mới nào trong ĐỢT 8** — mục tiêu duy nhất là đóng khoảng cách tài liệu–thực tế và đảm bảo commit history phản ánh đúng công sức đã bỏ ra, trước khi chuyển sang Phase 8 (quay video).
+
+---
+
 ## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 
 > Video là thứ giám khảo xem nhiều nhất và chiếm phần lớn 30% Demo. Chỉ 4 phút đầu được chấm.

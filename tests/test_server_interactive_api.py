@@ -26,7 +26,9 @@ def test_demo_page_served_at_root_and_slash_demo():
 
 
 def test_pubsub_push_still_works_on_post_root_despite_new_get_route():
-    with patch("eduagent.server.process_event", new_callable=AsyncMock) as mock_process:
+    with patch("eduagent.server._verify_pubsub_push_auth", return_value=None), patch(
+        "eduagent.server.process_event", new_callable=AsyncMock
+    ) as mock_process:
         response = client.post("/", json={"message": {"data": "aGVsbG8="}})
     # Undecodable-as-JSON payload -- still handled by the existing push logic,
     # proving the new GET / route didn't shadow the POST / one.

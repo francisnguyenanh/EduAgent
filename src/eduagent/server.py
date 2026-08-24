@@ -22,6 +22,8 @@ import logging
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from google.auth.transport import requests as google_auth_requests
+from google.oauth2 import id_token as google_id_token
 
 from eduagent.aggregator.class_aggregator import process_event
 from eduagent.aggregator.digest_store import list_recent_digests
@@ -49,6 +51,7 @@ from eduagent.api import (
     update_settings,
 )
 from eduagent.auth import verify_access_token
+from eduagent.config import PUBSUB
 from eduagent.demo_page import DEMO_PAGE_HTML
 from eduagent.logging_config import configure_json_logging
 from eduagent.memory.firestore_memory import list_students_by_class
@@ -57,6 +60,45 @@ configure_json_logging()
 _logger = logging.getLogger(__name__)
 
 app = FastAPI(title="eduagent-class-aggregator")
+
+_google_auth_request = google_auth_requests.Request()
+
+
+def _verify_pubsub_push_auth(authorization: str | None) -> None:
+    """ĐỢT 8 / ADR-014: this service is deployed --allow-unauthenticated so
+    judges can open the Web UI without a GCP identity, which means Cloud Run
+    IAM no longer protects `POST /` -- this endpoint must authenticate the
+    Pub/Sub push subscription's own OIDC token itself, at the application
+    layer, or it becomes a public trigger for LLM-costed digest generation.
+
+    Real Pub/Sub push subscriptions always attach `Authorization: Bearer
+    <OIDC token>` signed by the subscription's configured service account
+    (see https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions).
+    google.oauth2.id_token.verify_oauth2_token() cryptographically verifies
+    the token against Google's public keys -- a request without a valid,
+    unexpired, Google-signed token is rejected regardless of configuration.
+    If PUBSUB_PUSH_AUDIENCE / PUBSUB_PUSH_SERVICE_ACCOUNT are also set (as
+    they are at real deploy time), the token's audience and calling service
+    account identity are pinned too, closing the same class of "any valid
+    Google token from anyone" gap that ADR-013 closed for teacher/student API
+    tokens.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Pub/Sub push OIDC token.")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            token, _google_auth_request, audience=PUBSUB.push_audience or None
+        )
+    except Exception as exc:
+        _logger.warning("Rejected POST / push request with invalid OIDC token: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid Pub/Sub push OIDC token.")
+
+    if PUBSUB.push_service_account and claims.get("email") != PUBSUB.push_service_account:
+        _logger.warning(
+            "Rejected POST / push request from unexpected service account: %s", claims.get("email")
+        )
+        raise HTTPException(status_code=401, detail="OIDC token not issued to the expected push service account.")
 
 
 def _verify_class_auth(class_id: str, authorization: str | None) -> dict:
@@ -243,7 +285,9 @@ async def health_check() -> dict:
 
 
 @app.post("/")
-async def pubsub_push(request: Request) -> JSONResponse:
+async def pubsub_push(request: Request, authorization: str | None = Header(None)) -> JSONResponse:
+    _verify_pubsub_push_auth(authorization)
+
     envelope = await request.json()
     message = envelope.get("message")
     if not message or "data" not in message:
