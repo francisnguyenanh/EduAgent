@@ -365,9 +365,17 @@ student_profile/{student_id}
 
 ## 12. VIỆC ĐANG CHỜ XỬ LÝ
 
-- [ ] Đã gửi email hỏi `cloudhackathons@google.com` về eligibility tái sử dụng CritiqAI (3 case: chỉ ý tưởng / snippet nhỏ / fork mở rộng). **Chờ phản hồi — cập nhật mục 6 khi có câu trả lời.**
-- [ ] Chưa chốt cụ thể: Class Aggregator chạy event-driven (Pub/Sub) hay định kỳ (Cloud Scheduler) — hiện nghiêng về **event-driven** vì dễ chủ động thời điểm khi quay demo.
-- [ ] Chưa chốt: có làm input multimodal (ảnh chụp bài viết tay) hay chỉ text — tuỳ theo thời gian còn lại sau khi xong Tầng 1 + Tầng 2.
+> Cập nhật 2026-08-24, sau khi hoàn thành Phase 0–4 + "ĐỀ XUẤT CẢI TIẾN ĐỢT 1 & 2" trong TODO.md. Các mục cũ dưới đây đã có câu trả lời thật (xem TODO.md để có chi tiết đầy đủ từng bước verify) nên không còn là "đang chờ" nữa — giữ lại có gạch để tra cứu lịch sử quyết định, không xoá.
+
+**Đã chốt (không còn chờ nữa):**
+- [x] Eligibility CritiqAI: chưa nhận phản hồi chính thức từ `cloudhackathons@google.com`, nhưng đã tự áp dụng nguyên tắc an toàn nhất trong lúc chờ — 100% code mới, disclosure rõ trong Devpost (xem mục 6, TODO.md Phase 8). Nếu có phản hồi khác đi, cập nhật lại mục 6.
+- [x] Class Aggregator: **event-driven qua Pub/Sub**, đã build và verify thật ở Phase 3 (topic + DLQ + subscription thật trên GCP, chaos test thật ở Phase 4) — không dùng Cloud Scheduler.
+- [x] Multimodal (OCR ảnh viết tay): dời có chủ đích sang Phase 6, đặt SAU Tầng 2 để không đe doạ xương sống nếu hết thời gian (xem TODO.md "Rủi ro & phương án dự phòng").
+
+**Quyết định kiến trúc mới phát sinh khi làm "ĐỀ XUẤT CẢI TIẾN ĐỢT 2" (TODO.md), chưa có ADR riêng trong README/mục 9 nên ghi tạm ở đây:**
+- **Bilingual (VI/EN) chỉ áp dụng ở lớp diễn đạt, không áp dụng ở lớp phân loại nội bộ.** `summarizer.fallacies_draft` LUÔN giữ thuật ngữ tiếng Anh chuẩn (`"hasty generalization"`, ...) bất kể ngôn ngữ bài luận, vì `persona_selector` match persona bằng regex tiếng Anh trên chính field này — dịch nhãn nguỵ biện sang tiếng Việt sẽ âm thầm làm hỏng logic chọn persona (lỗi sẽ không ném exception, chỉ chọn persona sai). Chỉ nội dung học sinh THỰC SỰ đọc (câu hỏi debate, `student_feedback`) mới đổi ngôn ngữ theo `detect_language()` (deterministic, zero LLM — cùng triết lý mục 9.1 nguyên tắc #3).
+- **Interactive Debate Step Helper (`interactive.py`) dùng session state in-process (dict), KHÔNG dùng Firestore.** Đây tiếp tục đúng ranh giới Session vs Memory đã lập ở Phase 2 (mục 7.5.6): một phiên tranh biện đang chạy dở là Session (tạm thời, mất khi restart process là chấp nhận được), transcript hoàn chỉnh mới là thứ cần persist — việc đó vẫn đi qua `profile_mutator` → Firestore như cũ, không đổi. Nếu sau này cần chạy nhiều Cloud Run instance (không còn "một process"), session store này phải chuyển sang Redis/Firestore-with-TTL trước khi lên production thật — ghi nợ kỹ thuật, chưa cần cho scope hackathon.
+- **Digest lịch sử (`class_analytics/{class_id}/digests/{digest_id}`) dùng chính `event_id` làm `digest_id`.** Không sinh UUID riêng — tận dụng luôn tính idempotent đã có sẵn từ `processed_events` (Phase 3): một event bị redeliver ghi đè đúng 1 document thay vì tạo bản ghi lịch sử trùng lặp.
 
 ---
 
