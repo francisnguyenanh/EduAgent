@@ -229,21 +229,37 @@
 
 ---
 
-## PHASE 4 — Resilience & Observability (chốt 30% Architecture) 🔴
+## PHASE 4 — Resilience & Observability (chốt 30% Architecture) 🔴 HOÀN THÀNH
 
 > Rules ghi rõ: *"design robust, failure-tolerant agentic systems"*. Đây là ranh giới giữa "script mong manh" và "production-minded".
 
-- [ ] **Retry + exponential backoff** cho mọi call Gemini / Firestore / MCP; timeout rõ ràng, không để treo vô hạn.
-- [ ] **Graceful degradation theo từng điểm gãy:**
-  - Gemini timeout → retry, quá N lần thì lưu essay ở trạng thái `pending_retry`, không mất bài của học sinh.
-  - OCR không đọc được ảnh → trả lỗi thân thiện, yêu cầu nhập text, KHÔNG đẩy rác vào pipeline.
-  - Validator fail liên tục → fallback về câu hỏi Socratic an toàn có sẵn, không bao giờ trả answer-leak ra cho học sinh.
-  - Gmail MCP lỗi → digest vẫn được lưu Firestore + hiện trên Web UI, không mất dữ liệu.
-- [ ] **Structured logging (JSON)** với `trace_id` xuyên suốt 1 essay từ Intake → Digest.
-- [ ] 🟡 **Cloud Trace:** instrument span cho từng node (Intake → Sanitizer → Summarizer → Persona → Debate ↔ Validator → Scorer → Pub/Sub → Aggregator). **Một trace span hoàn chỉnh là "proof of action" mạnh nhất trong cả video** — chi phí implement thấp, điểm thu về cao.
-- [ ] Chaos test nhanh: cắt mạng giữa chừng / bơm event lỗi vào Pub/Sub → xác nhận hệ thống không chết, DLQ nhận đúng.
+- [x] **Retry + exponential backoff** cho mọi call Gemini / Firestore / Pub/Sub / MCP. ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - `src/eduagent/llm.py`: retry qua `tenacity` (3 lần, backoff 1→8s), chỉ retry lỗi transient thật (`ServerError` 5xx, JSON hỏng, timeout) — KHÔNG retry `ClientError` (4xx, sẽ luôn fail giống nhau, retry chỉ tốn quota). Hết retry → raise `LLMGenerationError` để node tự quyết cách degrade, không âm thầm trả dữ liệu giả.
+  - `src/eduagent/resilience.py`: policy dùng chung cho Firestore/Pub/Sub (`with_gcp_retry`, bắt `ServiceUnavailable`/`DeadlineExceeded`/`GatewayTimeout`/`Aborted`) và Gmail/Sheets (`with_google_api_retry`, bắt `HttpError` 5xx riêng vì `googleapiclient` dùng exception hierarchy khác hẳn `google.api_core`).
+  - Áp dụng thật vào: `firestore_memory.py`, `idempotency.py`, `events.py`, `gmail_mcp.py`, `sheets_mcp.py`. Có timeout tường minh (`http_options.timeout=30s` cho Gemini).
+  - 8 unit test (`tests/test_resilience.py`) verify retry-rồi-raise bằng mock `ServerError` — pass ngay lần đầu.
+- [x] **Graceful degradation theo từng điểm gãy — TẤT CẢ đều test được, không chỉ lý thuyết.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - **Summarizer lỗi** → fallback summary rỗng hợp lệ, cờ `summary_degraded=True` — pipeline vẫn chạy tiếp (persona vẫn chọn được, debate vẫn hỏi "why do you believe that?" cơ bản).
+  - **Debate Loop lỗi** → thay vì để exception phá vỡ toàn vòng lặp retry (bug tiềm ẩn nếu không sửa: exception khác lỗi validator, code cũ không bắt), giờ bắt riêng và rơi thẳng xuống câu hỏi fallback ĐÚNG PERSONA (không phải câu chung chung).
+  - **Scorer lỗi** → KHÔNG ghi điểm 0 giả vào Firestore (sẽ làm sai `score_trend`/`persona_streak` và oan học sinh vì lỗi hạ tầng, không phải vì bài làm kém). Thay vào đó: cờ `scores_degraded=True` → Mutator route essay sang collection MỚI `pending_essays` (giữ nguyên `raw_input`/`sanitized_text`/`summary`, không mất gì) thay vì ghi vào `student_profiles`.
+  - **Digest Synthesizer lỗi** → fallback dựng thẳng từ dữ liệu ranking đã tính sẵn (không cần LLM), giáo viên vẫn nhận được digest hữu ích, chỉ thiếu văn phong tự nhiên.
+  - **Gmail/Sheets lỗi** → tách try/except ĐỘC LẬP cho từng cái trong `class_aggregator.py`: Gmail lỗi không chặn Sheets ghi log, và ngược lại; digest (phân tích thật) đã tồn tại trong response bất kể 2 kênh gửi có lỗi hay không.
+  - **Validator fail liên tục** (đã có từ Phase 1, không đổi) → fallback theo persona, không bao giờ để lọt answer-leak.
+  - 8 unit test mới (`tests/test_resilience.py`) mock `LLMGenerationError` cho từng node, verify đúng hành vi degrade — không phải chỉ đọc code mà tin.
+- [x] **Structured logging (JSON) với trace_id xuyên suốt.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/logging_config.py`, tự viết (không thêm dependency ngoài), tương thích Cloud Logging trên Cloud Run (severity/message/jsonPayload). `essay_id`/`student_id`/`event_id` đi kèm mọi log quan trọng qua `extra={...}` — verify bằng chạy thật, output đúng JSON parse được.
+- [x] 🟡 **Cloud Trace — span thật, không giả lập.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/tracing.py`, dùng OpenTelemetry SDK + `CloudTraceSpanExporter` thật (project GCP thật). Decorator `@traced_node` áp cho cả 8 node Tầng 1 + 1 span bao toàn bộ `class_aggregator.process_event`.
+  - **Verify bằng Cloud Trace API thật** (`google.cloud.trace_v1.TraceServiceClient.list_traces`): thấy đầy đủ cây span `intake → sanitizer → summarizer → persona_selector → debate_loop → challenge_validator → cognitive_scorer → profile_mutator`, và **phát hiện bất ngờ tích cực**: ADK2 tự động sinh thêm span riêng (`invocation`, `invoke_workflow`, `invoke_node`) lồng cùng cây — tức framework có observability built-in, code của mình chỉ cần cắm đúng `TracerProvider` là ăn theo được toàn bộ.
+  - Lưu ý: `CloudTraceSpanExporter` bị deprecate (cảnh báo trong log), Google khuyến nghị chuyển sang OTLP collector trong tương lai — vẫn hoạt động đúng và đủ cho scope hackathon, ghi nhận làm nợ kỹ thuật nếu có thời gian.
+- [x] **Chaos test thật trên GCP thật (không mock).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `scripts/chaos_test_pubsub.py`.
+  - **Phát hiện & vá 2 lỗ hổng thật khi viết chaos test:**
+    1. `scripts/run_class_aggregator_subscriber.py` gốc: 1 message lỗi format trong batch sẽ **crash toàn bộ vòng lặp**, khiến CẢ NHỮNG message hợp lệ đã xử lý xong trong cùng batch cũng không được ack (phải xử lý lại từ đầu, lãng phí, và tệ hơn — tiến trình subscriber chết hẳn, không xử lý gì thêm cho tới khi có người khởi động lại). Đã sửa: try/except riêng từng message, message lỗi bị bỏ qua (không ack) để Pub/Sub tự retry/dead-letter, KHÔNG ảnh hưởng message khác trong batch.
+    2. Bug trong chính chaos test script: tạo subscription tạm để "xem" DLQ **sau khi** dead-letter đã xảy ra — theo cơ chế Pub/Sub, subscription mới chỉ nhận message publish sau thời điểm nó tồn tại, nên lần chạy đầu luôn báo FAIL giả (không phải hệ thống lỗi, mà là thứ tự thao tác trong test sai). Sửa thứ tự: tạo subscription tạm TRƯỚC khi kích hoạt dead-letter.
+  - **Kết quả chạy thật sau khi sửa 2 lỗi trên:** publish message JSON hỏng thật → pull+nack liên tục để buộc redeliver nhanh (thay vì đợi thật `ack_deadline`×5 lần ≈ 5+ phút) → đúng 5 lần `delivery_attempt` (khớp `PUBSUB.max_delivery_attempts`) → **message xuất hiện thật trong DLQ** (`PASS: 1 message(s) found in DLQ`) → dọn sạch subscription tạm.
+  - Verify riêng subscriber thật (đã sửa) không crash khi nhận message hỏng: log JSON structured đầy đủ traceback, không ack, tiến trình vẫn thoát sạch (`--once`) thay vì treo/crash.
 
-**DoD:** kill 1 dependency bất kỳ → hệ thống degrade có kiểm soát, không crash, không mất dữ liệu học sinh • Cloud Trace hiển thị 1 trace đầy đủ end-to-end.
+**DoD:** kill 1 dependency bất kỳ → hệ thống degrade có kiểm soát, không crash, không mất dữ liệu học sinh [PASS, verify bằng 8 test mock + 1 chaos test thật] • Cloud Trace hiển thị 1 trace đầy đủ end-to-end [PASS, verify bằng Cloud Trace API thật].
+
+**→ Phase 4 HOÀN THÀNH 100%.** `pytest tests/ -q` → **49/49 pass**. Phát hiện và vá 2 lỗ hổng resilience thật (subscriber crash theo batch, thứ tự tạo subscription trong chính chaos test) — đúng tinh thần "kiểm chứng bằng cách cố tình làm nó hỏng", không phải chỉ đọc code rồi tin là nó đúng.
 
 ---
 

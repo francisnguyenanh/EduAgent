@@ -20,6 +20,7 @@ from google.api_core import exceptions as gcp_exceptions
 from google.cloud import firestore
 
 from eduagent.config import FIRESTORE
+from eduagent.resilience import with_gcp_retry
 
 
 @functools.lru_cache(maxsize=1)
@@ -27,6 +28,7 @@ def _client() -> firestore.Client:
     return firestore.Client()
 
 
+@with_gcp_retry
 def claim_event(event_id: str) -> bool:
     """Returns True if this call is the first to claim event_id (proceed),
     False if it was already claimed (skip -- this is a duplicate delivery)."""

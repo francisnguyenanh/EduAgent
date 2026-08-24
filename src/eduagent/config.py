@@ -35,6 +35,7 @@ class FirestoreConfig:
     class_analytics_collection: str = "class_analytics"
     audit_log_collection: str = "system_audit_logs"
     processed_events_collection: str = "processed_events"
+    pending_essays_collection: str = "pending_essays"
 
 
 @dataclass(frozen=True)

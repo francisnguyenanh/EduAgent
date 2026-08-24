@@ -21,10 +21,11 @@ from __future__ import annotations
 from google.adk.agents.context import Context
 
 from eduagent.config import GEMINI, VALIDATOR
-from eduagent.llm import generate_text
+from eduagent.llm import LLMGenerationError, generate_text
 from eduagent.nodes.validator import validate_debate_turn
 from eduagent.skills.debate_escalation import get_escalation_instruction
 from eduagent.skills.personas import get_persona
+from eduagent.tracing import traced_node
 
 # One canned fallback per persona -- used only when the LLM fails to produce
 # a validator-passing question after all retries. A single generic fallback
@@ -69,6 +70,7 @@ def _build_prompt(
     return "\n\n".join(parts)
 
 
+@traced_node("debate_loop")
 async def debate_loop(ctx: Context) -> dict:
     ctx.state["stage"] = "debate_loop"
 
@@ -97,7 +99,13 @@ async def debate_loop(ctx: Context) -> dict:
 
         question = None
         for _attempt in range(VALIDATOR.max_regeneration_retries + 1):
-            candidate = generate_text(model=GEMINI.flash_model, system_instruction=system_instruction, prompt=prompt)
+            try:
+                candidate = generate_text(model=GEMINI.flash_model, system_instruction=system_instruction, prompt=prompt)
+            except LLMGenerationError:
+                # Gemini itself is down (not just a bad-content regenerate) --
+                # no point burning remaining attempts on the same outage;
+                # go straight to the persona fallback for this turn.
+                break
             if validate_debate_turn(candidate).passed:
                 question = candidate
                 break

@@ -13,6 +13,7 @@ import json
 from google.cloud import pubsub_v1
 
 from eduagent.config import PUBSUB
+from eduagent.resilience import with_gcp_retry
 
 
 @functools.lru_cache(maxsize=1)
@@ -24,6 +25,7 @@ def _topic_path() -> str:
     return _publisher().topic_path(PUBSUB.project_id, PUBSUB.essay_evaluated_topic)
 
 
+@with_gcp_retry
 def publish_essay_evaluated(*, event_id: str, student_id: str, class_id: str, essay_id: str) -> str:
     """Publishes the event and returns the Pub/Sub message_id.
 

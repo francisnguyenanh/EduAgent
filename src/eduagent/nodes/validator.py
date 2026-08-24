@@ -78,7 +78,10 @@ def validate_debate_turn(text: str) -> ValidationResult:
 
 from google.adk.agents.context import Context  # noqa: E402
 
+from eduagent.tracing import traced_node  # noqa: E402
 
+
+@traced_node("challenge_validator")
 async def challenge_validator(ctx: Context) -> dict:
     """Validates the full debate transcript produced by debate_loop.
 

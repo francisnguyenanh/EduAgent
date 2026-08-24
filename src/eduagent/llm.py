@@ -12,12 +12,36 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import re
 from typing import Any
 
 from google import genai
+from google.genai import errors as genai_errors
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from eduagent.config import GEMINI
+
+_logger = logging.getLogger(__name__)
+
+# PHASE 4: retry only what's actually transient. ServerError (5xx) and a
+# malformed-JSON response are both worth retrying (the latter is often a
+# one-off generation glitch despite response_schema); ClientError (4xx --
+# e.g. a genuinely invalid request) is NOT retried because it will fail
+# identically every time and just burns the retry budget.
+_RETRYABLE_EXCEPTIONS = (genai_errors.ServerError, json.JSONDecodeError, TimeoutError, ConnectionError)
+
+_llm_retry = retry(
+    retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True,
+)
+
+
+class LLMGenerationError(RuntimeError):
+    """Raised after all retries are exhausted. Callers (nodes) decide how to
+    degrade gracefully -- this module never silently returns fake data."""
 
 
 @functools.lru_cache(maxsize=1)
@@ -42,6 +66,21 @@ def _strip_markdown_fence(text: str) -> str:
     return stripped
 
 
+@_llm_retry
+def _generate_json_once(*, model: str, system_instruction: str, prompt: str, response_schema: dict[str, Any]) -> dict[str, Any]:
+    response = _client().models.generate_content(
+        model=model,
+        contents=prompt,
+        config={
+            "system_instruction": system_instruction,
+            "response_mime_type": "application/json",
+            "response_schema": response_schema,
+            "http_options": {"timeout": 30_000},
+        },
+    )
+    return json.loads(_strip_markdown_fence(response.text))
+
+
 def generate_json(
     *,
     model: str,
@@ -51,26 +90,32 @@ def generate_json(
 ) -> dict[str, Any]:
     """Calls Gemini with a forced JSON schema, returns the parsed dict.
 
-    Raising on malformed output is intentional -- callers (nodes) decide how
-    to degrade (Phase 4 adds retry/fallback), this function does not silently
-    swallow errors.
+    Retries transient failures (5xx, malformed JSON, timeout) up to 3 times
+    with exponential backoff; after that, raises LLMGenerationError so the
+    caller can degrade explicitly instead of silently returning fake data.
     """
+    try:
+        return _generate_json_once(model=model, system_instruction=system_instruction, prompt=prompt, response_schema=response_schema)
+    except _RETRYABLE_EXCEPTIONS as exc:
+        _logger.error("generate_json exhausted retries for model=%s: %s", model, exc)
+        raise LLMGenerationError(f"generate_json failed after retries: {exc}") from exc
+
+
+@_llm_retry
+def _generate_text_once(*, model: str, system_instruction: str, prompt: str) -> str:
     response = _client().models.generate_content(
         model=model,
         contents=prompt,
-        config={
-            "system_instruction": system_instruction,
-            "response_mime_type": "application/json",
-            "response_schema": response_schema,
-        },
+        config={"system_instruction": system_instruction, "http_options": {"timeout": 30_000}},
     )
-    return json.loads(_strip_markdown_fence(response.text))
+    return response.text.strip()
 
 
 def generate_text(*, model: str, system_instruction: str, prompt: str) -> str:
-    response = _client().models.generate_content(
-        model=model,
-        contents=prompt,
-        config={"system_instruction": system_instruction},
-    )
-    return response.text.strip()
+    """Same retry/degrade contract as generate_json -- raises LLMGenerationError
+    after retries are exhausted rather than propagating the raw transient error."""
+    try:
+        return _generate_text_once(model=model, system_instruction=system_instruction, prompt=prompt)
+    except _RETRYABLE_EXCEPTIONS as exc:
+        _logger.error("generate_text exhausted retries for model=%s: %s", model, exc)
+        raise LLMGenerationError(f"generate_text failed after retries: {exc}") from exc

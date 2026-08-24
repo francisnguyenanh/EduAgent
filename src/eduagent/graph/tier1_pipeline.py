@@ -18,6 +18,8 @@ from eduagent.nodes.persona_selector import persona_selector
 from eduagent.nodes.scorer import cognitive_scorer
 from eduagent.nodes.summarizer import summarizer
 from eduagent.nodes.validator import challenge_validator
+from eduagent.logging_config import configure_json_logging
+from eduagent.tracing import configure_tracing
 
 _intake_node = FunctionNode(func=intake, name="intake")
 _sanitizer_node = FunctionNode(func=sanitizer, name="sanitizer")
@@ -31,6 +33,8 @@ _mutator_node = FunctionNode(func=profile_mutator, name="profile_mutator")
 
 def build_tier1_workflow() -> Workflow:
     """Builds the Tier 1 graph. Called fresh per run to avoid shared state."""
+    configure_tracing()
+    configure_json_logging()
     return Workflow(
         name="tier1_per_student_pipeline",
         description=(

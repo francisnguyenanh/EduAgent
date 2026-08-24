@@ -15,6 +15,8 @@ import functools
 import glob
 from pathlib import Path
 
+from eduagent.resilience import with_google_api_retry
+
 SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 _SECRETS_DIR = Path(__file__).parent.parent.parent.parent / "secrets"
@@ -72,6 +74,7 @@ def create_audit_spreadsheet(*, title: str = "eduagent Audit Log") -> str:
     return spreadsheet_id
 
 
+@with_google_api_retry
 def append_audit_row(*, spreadsheet_id: str, row: list) -> None:
     """Append-only: adds one row to the end of the sheet. No update/delete
     exposed from this module -- keep the audit trail immutable."""

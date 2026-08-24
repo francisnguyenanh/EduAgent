@@ -20,6 +20,8 @@ import glob
 from email.mime.text import MIMEText
 from pathlib import Path
 
+from eduagent.resilience import with_google_api_retry
+
 COMPOSE_ONLY_SCOPES = ["https://www.googleapis.com/auth/gmail.compose"]
 
 _SECRETS_DIR = Path(__file__).parent.parent.parent.parent / "secrets"
@@ -64,6 +66,7 @@ def _service():
     return build("gmail", "v1", credentials=_credentials())
 
 
+@with_google_api_retry
 def create_digest_draft(*, to_address: str, subject: str, body_text: str) -> str:
     """Creates a Gmail draft. Returns the draft id. Never sends -- see module
     docstring; this function has no path to messages.send/drafts.send."""

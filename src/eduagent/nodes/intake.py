@@ -13,6 +13,8 @@ import uuid
 
 from google.adk.agents.context import Context
 
+from eduagent.tracing import traced_node
+
 # Patterns aimed at overriding the system/agent instructions, not the essay's
 # actual content. Deliberately conservative -- false positives here just mean
 # a phrase gets redacted, not that the whole essay is rejected.
@@ -46,6 +48,7 @@ def strip_injection_attempts(text: str) -> tuple[str, list[str]]:
     return cleaned, matches
 
 
+@traced_node("intake")
 async def intake(ctx: Context, node_input: str) -> dict:
     """Accepts raw essay text, stamps pipeline start. No mutation here --
     the raw input is preserved for the audit trail even after sanitizing.
@@ -60,6 +63,7 @@ async def intake(ctx: Context, node_input: str) -> dict:
     return {"essay_text": node_input}
 
 
+@traced_node("sanitizer")
 async def sanitizer(ctx: Context) -> dict:
     raw = ctx.state.get("raw_input", "")
     cleaned, matches = strip_injection_attempts(raw)

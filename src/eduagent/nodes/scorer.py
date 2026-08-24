@@ -9,8 +9,13 @@ from __future__ import annotations
 
 from google.adk.agents.context import Context
 
+import logging
+
 from eduagent.config import GEMINI
-from eduagent.llm import generate_json
+from eduagent.llm import LLMGenerationError, generate_json
+from eduagent.tracing import traced_node
+
+_logger = logging.getLogger(__name__)
 
 _SYSTEM_INSTRUCTION = (
     "You are a rubric-based essay grader. Score strictly on the 4 axes given. "
@@ -45,6 +50,7 @@ _ZERO_SCORES = {axis: 0 for axis in _AXES}
 _EMPTY_RATIONALE = {axis: "" for axis in _AXES}
 
 
+@traced_node("cognitive_scorer")
 async def cognitive_scorer(ctx: Context) -> dict:
     ctx.state["stage"] = "cognitive_scorer"
 
@@ -52,6 +58,7 @@ async def cognitive_scorer(ctx: Context) -> dict:
     summary = ctx.state.get("summary", {})
     debate_turns = ctx.state.get("debate_turns", [])
 
+    scores_degraded = False
     if not essay_text.strip():
         scores, rationale = dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE)
     else:
@@ -60,14 +67,28 @@ async def cognitive_scorer(ctx: Context) -> dict:
             f"Extracted structure: {summary}\n\n"
             f"Debate transcript (persona questions + student replies, if any): {debate_turns}"
         )
-        result = generate_json(
-            model=GEMINI.flash_model,
-            system_instruction=_SYSTEM_INSTRUCTION,
-            prompt=prompt,
-            response_schema=_SCHEMA,
-        )
-        scores, rationale = result["scores"], result["rationale"]
+        try:
+            result = generate_json(
+                model=GEMINI.flash_model,
+                system_instruction=_SYSTEM_INSTRUCTION,
+                prompt=prompt,
+                response_schema=_SCHEMA,
+            )
+            scores, rationale = result["scores"], result["rationale"]
+        except LLMGenerationError:
+            # Critical distinction: a 0 score here would corrupt score_trend
+            # and unfairly flag the student as declining because of an infra
+            # outage, not their work. mutator.py checks scores_degraded and
+            # routes this essay to pending_essays instead of student_profiles
+            # -- no fabricated score ever reaches the permanent record.
+            _logger.error(
+                "Scorer degraded -- routing to pending_essays, not writing a fake score",
+                extra={"essay_id": ctx.state.get("essay_id"), "student_id": ctx.state.get("student_id")},
+            )
+            scores, rationale = dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE)
+            scores_degraded = True
 
     ctx.state["scores"] = scores
     ctx.state["score_rationale"] = rationale
+    ctx.state["scores_degraded"] = scores_degraded
     return scores

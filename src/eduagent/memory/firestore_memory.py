@@ -15,6 +15,7 @@ from google.cloud import firestore
 
 from eduagent.config import FIRESTORE
 from eduagent.memory.student_profile import empty_profile, merge_essay_into_profile
+from eduagent.resilience import with_gcp_retry
 
 
 @functools.lru_cache(maxsize=1)
@@ -22,11 +23,13 @@ def _client() -> firestore.Client:
     return firestore.Client()
 
 
+@with_gcp_retry
 def get_profile(student_id: str) -> dict | None:
     doc = _client().collection(FIRESTORE.student_profiles_collection).document(student_id).get()
     return doc.to_dict() if doc.exists else None
 
 
+@with_gcp_retry
 def apply_essay_result(
     student_id: str,
     *,

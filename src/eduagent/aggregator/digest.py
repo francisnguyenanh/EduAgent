@@ -9,8 +9,12 @@ ranking data ever disagree, the ranking data is right.
 
 from __future__ import annotations
 
+import logging
+
 from eduagent.config import GEMINI
-from eduagent.llm import generate_json
+from eduagent.llm import LLMGenerationError, generate_json
+
+_logger = logging.getLogger(__name__)
 
 _SYSTEM_INSTRUCTION = (
     "You are writing a short digest for a teacher who has very little time. "
@@ -57,6 +61,21 @@ def build_digest_prompt(*, ranked_students: list[dict], common_fallacies: list[s
     return "\n".join(lines)
 
 
+def _fallback_digest(*, ranked_students: list[dict], common_fallacies: list[str], top_n: int) -> dict:
+    """Built directly from the ranking data, no LLM -- used when Gemini is
+    down. Plain but still actionable: a teacher can read this and know
+    exactly who to check on, even without the narrative prose."""
+    top = ranked_students[:top_n]
+    return {
+        "headline": f"[Digest narrative unavailable -- Gemini degraded] {len(top)} student(s) flagged for review.",
+        "priority_students": [
+            {"student_id": r["student_id"], "why": f"priority={r['priority']}, reason={r['reason']}"} for r in top
+        ],
+        "class_wide_pattern": f"Common fallacies: {', '.join(common_fallacies)}" if common_fallacies else "",
+        "mini_lesson_suggestion": "",
+    }
+
+
 async def synthesize_digest(*, ranked_students: list[dict], common_fallacies: list[str], top_n: int = 5) -> dict:
     if not ranked_students:
         return {
@@ -67,9 +86,17 @@ async def synthesize_digest(*, ranked_students: list[dict], common_fallacies: li
         }
 
     prompt = build_digest_prompt(ranked_students=ranked_students, common_fallacies=common_fallacies, top_n=top_n)
-    return generate_json(
-        model=GEMINI.heavy_model,
-        system_instruction=_SYSTEM_INSTRUCTION,
-        prompt=prompt,
-        response_schema=_SCHEMA,
-    )
+    try:
+        return generate_json(
+            model=GEMINI.heavy_model,
+            system_instruction=_SYSTEM_INSTRUCTION,
+            prompt=prompt,
+            response_schema=_SCHEMA,
+        )
+    except LLMGenerationError:
+        # The ranking itself (the ground truth) already exists and cost no
+        # LLM call -- degrade to a plain rendering of it rather than losing
+        # the digest (and the teacher's visibility into who needs help)
+        # entirely just because the narrative-writing step is down.
+        _logger.error("Digest synthesis degraded to fallback rendering (Gemini unavailable)")
+        return _fallback_digest(ranked_students=ranked_students, common_fallacies=common_fallacies, top_n=top_n)

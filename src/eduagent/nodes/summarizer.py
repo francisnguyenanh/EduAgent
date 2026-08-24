@@ -11,8 +11,13 @@ from __future__ import annotations
 
 from google.adk.agents.context import Context
 
+import logging
+
 from eduagent.config import GEMINI
-from eduagent.llm import generate_json
+from eduagent.llm import LLMGenerationError, generate_json
+from eduagent.tracing import traced_node
+
+_logger = logging.getLogger(__name__)
 
 _SYSTEM_INSTRUCTION = (
     "You are an essay structure extractor for a critical-thinking coaching tool. "
@@ -48,19 +53,36 @@ _SCHEMA = {
 }
 
 
+@traced_node("summarizer")
 async def summarizer(ctx: Context) -> dict:
     essay_text = ctx.state.get("sanitized_text", "")
     ctx.state["stage"] = "summarizer"
 
     if not essay_text.strip():
         summary = {"main_claim": "", "claims": [], "evidence": [], "fallacies_draft": []}
+        ctx.state["summary_degraded"] = False
     else:
-        summary = generate_json(
-            model=GEMINI.flash_model,
-            system_instruction=_SYSTEM_INSTRUCTION,
-            prompt=f"Extract structure from this student essay:\n\n{essay_text}",
-            response_schema=_SCHEMA,
-        )
+        try:
+            summary = generate_json(
+                model=GEMINI.flash_model,
+                system_instruction=_SYSTEM_INSTRUCTION,
+                prompt=f"Extract structure from this student essay:\n\n{essay_text}",
+                response_schema=_SCHEMA,
+            )
+            ctx.state["summary_degraded"] = False
+        except LLMGenerationError:
+            # Gemini is down/degraded: don't crash the whole essay. Continue
+            # with an empty-but-valid summary so persona selection and the
+            # debate loop still run (on a plain "why do you believe that?"
+            # basis) -- flagged so the teacher digest / audit trail can tell
+            # this essay got a lower-fidelity pass, not that the student
+            # actually wrote nothing.
+            _logger.error(
+                "Summarizer degraded to empty summary",
+                extra={"essay_id": ctx.state.get("essay_id"), "student_id": ctx.state.get("student_id")},
+            )
+            summary = {"main_claim": "", "claims": [], "evidence": [], "fallacies_draft": []}
+            ctx.state["summary_degraded"] = True
 
     ctx.state["summary"] = summary
     return summary

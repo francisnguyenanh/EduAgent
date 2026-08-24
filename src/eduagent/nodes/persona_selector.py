@@ -17,6 +17,7 @@ from google.adk.agents.context import Context
 from eduagent.memory.firestore_memory import get_profile
 from eduagent.memory.student_profile import persona_history_from_profile, weakness_taxonomy_from_profile
 from eduagent.skills.personas import PERSONA_IDS, get_persona
+from eduagent.tracing import traced_node
 
 _FALLACY_KEYWORDS: dict[str, str] = {
     "skeptic": "evidence|source|unsourced|citation|proof|statistic|data",
@@ -56,6 +57,7 @@ def choose_persona(
     return best
 
 
+@traced_node("persona_selector")
 async def persona_selector(ctx: Context) -> dict:
     summary = ctx.state.get("summary", {})
     fallacies_draft = summary.get("fallacies_draft", [])

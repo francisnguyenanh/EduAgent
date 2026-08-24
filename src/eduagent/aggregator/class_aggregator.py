@@ -17,12 +17,17 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from opentelemetry import trace
+
 from eduagent.aggregator.digest import synthesize_digest
 from eduagent.aggregator.idempotency import claim_event
 from eduagent.aggregator.priority_engine import cluster_fallacies, common_fallacies, rank_students
 from eduagent.config import FIRESTORE, SHEETS, TEACHER
+from eduagent.logging_config import configure_json_logging
+from eduagent.tracing import configure_tracing
 
 _logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer("eduagent")
 
 
 def load_class_profiles(class_id: str) -> dict[str, dict]:
@@ -56,11 +61,22 @@ async def process_event(event: dict) -> dict:
     idempotency-skip path -- so callers/logs can tell a duplicate delivery
     from a real processing failure.
     """
+    configure_tracing()
+    configure_json_logging()
     event_id = event["event_id"]
     class_id = event["class_id"]
 
+    with _tracer.start_as_current_span("eduagent.node.class_aggregator") as span:
+        span.set_attribute("eduagent.event_id", event_id)
+        span.set_attribute("eduagent.class_id", class_id)
+        result = await _process_event_traced(event_id, class_id)
+        span.set_attribute("eduagent.status", result["status"])
+        return result
+
+
+async def _process_event_traced(event_id: str, class_id: str) -> dict:
     if not claim_event(event_id):
-        _logger.info("Skipping duplicate delivery of event_id=%s", event_id)
+        _logger.info("Skipping duplicate delivery", extra={"event_id": event_id, "class_id": class_id})
         return {"status": "skipped_duplicate", "event_id": event_id}
 
     profiles = load_class_profiles(class_id)
@@ -73,30 +89,44 @@ async def process_event(event: dict) -> dict:
 
     digest = await synthesize_digest(ranked_students=ranked, common_fallacies=fallacies)
 
+    # Gmail and Sheets are independent side effects -- one failing must not
+    # prevent the other (PHASE 4: "Gmail MCP loi -> digest van duoc luu
+    # Firestore + hien tren Web UI, khong mat du lieu"). The digest itself
+    # (the actual analysis) already exists in `digest` regardless of what
+    # happens below; only the delivery channels can fail here.
     draft_id = None
     if TEACHER.email:
-        from eduagent.integrations.gmail_mcp import create_digest_draft
+        try:
+            from eduagent.integrations.gmail_mcp import create_digest_draft
 
-        draft_id = create_digest_draft(
-            to_address=TEACHER.email,
-            subject=f"[eduagent] Class digest for {class_id}: {digest['headline'][:60]}",
-            body_text=format_digest_email(digest),
-        )
+            draft_id = create_digest_draft(
+                to_address=TEACHER.email,
+                subject=f"[eduagent] Class digest for {class_id}: {digest['headline'][:60]}",
+                body_text=format_digest_email(digest),
+            )
+        except Exception:
+            _logger.exception("Failed to create Gmail draft -- digest still returned/logged", extra={"class_id": class_id, "event_id": event_id})
 
     if SHEETS.audit_spreadsheet_id:
-        from eduagent.integrations.sheets_mcp import append_audit_row
+        try:
+            from eduagent.integrations.sheets_mcp import append_audit_row
 
-        append_audit_row(
-            spreadsheet_id=SHEETS.audit_spreadsheet_id,
-            row=[
-                now.isoformat(),
-                class_id,
-                "digest_created",
-                digest["headline"],
-                ", ".join(p["student_id"] for p in digest["priority_students"]),
-                draft_id or "",
-            ],
-        )
+            append_audit_row(
+                spreadsheet_id=SHEETS.audit_spreadsheet_id,
+                row=[
+                    now.isoformat(),
+                    class_id,
+                    "digest_created",
+                    digest["headline"],
+                    ", ".join(p["student_id"] for p in digest["priority_students"]),
+                    draft_id or "",
+                ],
+            )
+        except Exception:
+            _logger.exception(
+                "Failed to append Sheets audit row -- draft_id not lost, just not logged",
+                extra={"class_id": class_id, "event_id": event_id, "draft_id": draft_id},
+            )
 
     return {
         "status": "processed",
