@@ -1,0 +1,71 @@
+"""Central configuration: env vars and audit-able constants.
+
+Deterministic constants (e.g. Intervention Priority Index weights) live here,
+in code, so they can be inspected/audited — never inferred by an LLM.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class GeminiConfig:
+    flash_model: str = os.getenv("EDUAGENT_FLASH_MODEL", "gemini-3.5-flash")
+    pro_model: str = os.getenv("EDUAGENT_PRO_MODEL", "gemini-3.5-pro")
+    api_key_env_var: str = "GOOGLE_API_KEY"
+
+
+@dataclass(frozen=True)
+class FirestoreConfig:
+    project_id: str = os.getenv("GCP_PROJECT_ID", "")
+    student_profiles_collection: str = "student_profiles"
+    class_analytics_collection: str = "class_analytics"
+    audit_log_collection: str = "system_audit_logs"
+    processed_events_collection: str = "processed_events"
+
+
+@dataclass(frozen=True)
+class PubSubConfig:
+    project_id: str = os.getenv("GCP_PROJECT_ID", "")
+    essay_evaluated_topic: str = "essay-evaluated"
+    class_aggregator_subscription: str = "class-aggregator-sub"
+    dead_letter_topic: str = "essay-evaluated-dlq"
+    max_delivery_attempts: int = 3
+
+
+@dataclass(frozen=True)
+class PriorityWeights:
+    """Weights for the Intervention Priority Index (Phase 3, deterministic).
+
+    Priority = w1*stuck_streak + w2*score_decline + w3*inactivity_days + w4*shared_fallacy_weight
+
+    Chosen so that a student stuck on the same persona for 3+ essays without
+    improvement (w1) outweighs a single missed submission (w3) — persistent
+    non-progress is a stronger signal than a one-off gap. Values are placeholders
+    to be tuned against seed data in Phase 2/3; keep them here, not in a prompt,
+    so the ranking stays explainable to teachers.
+    """
+
+    stuck_streak: float = 3.0
+    score_decline: float = 2.5
+    inactivity_days: float = 1.0
+    shared_fallacy_weight: float = 1.5
+
+
+@dataclass(frozen=True)
+class ValidatorConfig:
+    """Deterministic guardrails for the Challenge Validator function node."""
+
+    max_response_chars: int = 600
+    min_response_chars: int = 20
+    max_debate_turns: int = 3
+    max_regeneration_retries: int = 2
+
+
+GEMINI = GeminiConfig()
+FIRESTORE = FirestoreConfig()
+PUBSUB = PubSubConfig()
+PRIORITY_WEIGHTS = PriorityWeights()
+VALIDATOR = ValidatorConfig()

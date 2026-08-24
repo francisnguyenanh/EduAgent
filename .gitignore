@@ -1,0 +1,37 @@
+# Reference-only old project — must NEVER enter this repo's history (eligibility rule)
+CritqAI-main/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*service-account*.json
+*credentials*.json
+*.key.json
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node (if web UI uses it)
+node_modules/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs / local artifacts
+*.log
+/tmp/
+scratch/

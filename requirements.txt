@@ -1,0 +1,7 @@
+google-adk>=2.3.0
+google-genai>=2.9.0
+google-cloud-firestore>=2.28.0
+google-cloud-pubsub>=2.23.0
+google-cloud-trace>=1.14.0
+pydantic>=2.9.0
+pytest>=8.3.0
