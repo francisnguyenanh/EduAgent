@@ -81,26 +81,28 @@
 
 ---
 
-## PHASE 0 — Nền móng & khoá rủi ro sớm 🔴
+## PHASE 0 — Nền móng & khoá rủi ro sớm 🔴 (ĐANG LÀM — code xong, chờ thao tác GCP/Gmail thật của bạn)
 
 > Mục tiêu: dựng hạ tầng và **xử lý trước 2 rủi ro có thể giết demo vào phút chót** (Gmail OAuth, code cũ lọt repo).
 
-- [ ] **Cô lập repo mới khỏi code cũ (rủi ro eligibility):**
-  - `git init` tại `CritiqAI_ver2`; thêm `CritqAI-main/` vào `.gitignore` NGAY dòng đầu tiên.
-  - Sau commit đầu, chạy `git ls-files | grep -i critqai` để xác nhận **zero** file cũ lọt vào history.
-- [ ] `.gitignore` chuẩn production: `.env`, `*service-account*.json`, `*credentials*`, `__pycache__/`, `.venv/`.
-- [ ] Môi trường: Python 3.11+, ADK2, `google-genai`, `google-cloud-firestore`, `google-cloud-pubsub`, `google-cloud-trace`.
-- [ ] GCP Project: bật Vertex AI/Gemini API, Firestore Native, Cloud Run API, Pub/Sub, Cloud Trace/Logging.
-- [ ] Service Account + phân quyền least-privilege (chỉ role cần thiết, không dùng Owner).
-- [ ] Firestore collections: `student_profiles`, `class_analytics`, `system_audit_logs`, `processed_events` (dùng cho idempotency).
-- [ ] 🔴 **Verify Gmail MCP OAuth NGAY BÂY GIỜ, không để đến cuối:**
-  - Tạo OAuth client, cấp đúng scope `gmail.compose`.
-  - Test tạo được 1 draft thật trong hòm thư.
-  - Test gọi `send` → xác nhận **bị từ chối ở tầng credential** (đây chính là bằng chứng least-privilege để quay video).
-  - Nếu vướng OAuth verification cho app chưa verified → xử lý bằng test user, hoặc chốt phương án dự phòng (Sheets + Web UI làm kênh digest chính) ngay từ giờ.
-- [ ] Skeleton graph ADK2 chạy end-to-end với mock data (mọi node là stub) → commit.
+- [x] **Cô lập repo mới khỏi code cũ (rủi ro eligibility):** ✅ ĐÃ LÀM + ĐÃ REVIEW
+  - `git init` tại `CritiqAI_ver2`; `CritqAI-main/` nằm dòng đầu `.gitignore`.
+  - Verify: `git diff --cached --name-only | grep -i critqai` → **0 kết quả** trước commit đầu tiên. PASS.
+- [x] `.gitignore` chuẩn production: `.env`, `*service-account*.json`, `*credentials*`, `__pycache__/`, `.venv/`. ✅ ĐÃ LÀM
+- [x] Môi trường: Python 3.14 sẵn có, đã verify cài đặt `google-adk==2.3.0`, `google-genai==2.9.0`, `google-cloud-firestore==2.28.0`, `pytest==8.3.3`. `requirements.txt` đã khai đủ (kèm `google-cloud-pubsub`, `google-cloud-trace` cho Phase 3–4, chưa cài — cài khi tới phase đó). ✅ ĐÃ LÀM
+- [ ] ⏸️ **GCP Project: bật Vertex AI/Gemini API, Firestore Native, Cloud Run API, Pub/Sub, Cloud Trace/Logging.** — CẦN BẠN THAO TÁC (tài khoản GCP thật). Chưa làm.
+- [ ] ⏸️ **Service Account + phân quyền least-privilege.** — CẦN BẠN THAO TÁC. Chưa làm.
+- [ ] ⏸️ Firestore collections thật trên Cloud (`student_profiles`, `class_analytics`, `system_audit_logs`, `processed_events`) — tên collection đã khai báo sẵn trong `src/eduagent/config.py::FirestoreConfig`, nhưng project Firestore thật CẦN BẠN TẠO. Chưa làm.
+- [ ] ⏸️ 🔴 **Verify Gmail MCP OAuth (compose-only, test gọi `send` bị chặn).** — CẦN BẠN THAO TÁC (Google Cloud Console + hòm thư Gmail thật). Chưa làm — **ưu tiên làm sớm, đây là rủi ro cao nhất còn lại của Phase 0.**
+- [x] Skeleton graph ADK2 chạy end-to-end với mock data (mọi node là stub) → commit. ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - Xây bằng API thật `google.adk.workflow.{Workflow, FunctionNode, START}` (không phải mock tự chế) — khớp đúng ADK2 Graph Workflow trong wiki 7.5.3.
+  - 8 stub node nối tuyến tính: `intake → sanitizer → summarizer → persona_selector → debate_loop → challenge_validator → cognitive_scorer → profile_mutator`, state thread qua `Context.state` (khớp wiki 7.5.6 — Context tách biệt `state` và `session`).
+  - Chạy qua `InMemoryRunner(node=workflow).run_debug(...)` — verify bằng `python -m pytest tests/ -q` → **1 passed**, không cần `GOOGLE_API_KEY` (chưa gọi LLM ở giai đoạn stub, đúng deterministic-first).
+  - Commit `69b49d3` — 14 file, không có file nào từ `CritqAI-main`.
 
-**DoD:** `git ls-files` sạch • Gmail draft tạo được thật, `send` bị chặn • skeleton graph chạy hết luồng không lỗi.
+**DoD:** `git ls-files` sạch [PASS] • skeleton graph chạy hết luồng không lỗi [PASS] • Gmail draft tạo được thật, `send` bị chặn [CHƯA — cần bạn cung cấp/thao tác GCP + Gmail] • GCP project/service account/Firestore thật tồn tại [CHƯA — cần bạn].
+
+**→ Phase 0 chưa thể đánh dấu PASS toàn phần.** Phần code-only đã xong và tự kiểm chứng được; phần còn lại đòi hỏi quyền truy cập tài khoản GCP/Gmail thật mà tôi không có. Cho tôi biết khi bạn đã tạo GCP project + OAuth client, tôi sẽ viết script verify (tạo draft thật + test send bị chặn) và tiếp tục Phase 1 song song trong lúc chờ.
 
 ---
 
