@@ -62,6 +62,50 @@ _EMPTY_RATIONALE = {axis: "" for axis in _AXES}
 _DEGRADED_STUDENT_FEEDBACK = ""
 
 
+def score_essay(
+    *,
+    essay_text: str,
+    summary: dict,
+    debate_turns: list[dict],
+    language: str = "en",
+    log_context: dict | None = None,
+) -> tuple[dict, dict, str, bool]:
+    """Scores one essay against the 4 rubric axes. Pulled out of
+    cognitive_scorer() so the SAME logic backs both the batch graph node
+    (against `Context`) and the interactive debate API (ĐỢT 5 -- scoring a
+    session right after its 3rd turn completes, without duplicating this
+    prompt/schema/degradation logic a second time) -- same pattern as
+    debate.py's generate_debate_turn().
+
+    Returns (scores, rationale, student_feedback, degraded).
+    """
+    if not essay_text.strip():
+        return dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE), _DEGRADED_STUDENT_FEEDBACK, False
+
+    prompt = (
+        f"Essay:\n{essay_text}\n\n"
+        f"Extracted structure: {summary}\n\n"
+        f"Debate transcript (persona questions + student replies, if any): {debate_turns}"
+    )
+    try:
+        result = generate_json(
+            model=GEMINI.flash_model,
+            system_instruction=f"{_SYSTEM_INSTRUCTION}\n\n{language_instruction(language)}",
+            prompt=prompt,
+            response_schema=_SCHEMA,
+        )
+        return result["scores"], result["rationale"], result["student_feedback"], False
+    except LLMGenerationError:
+        # Critical distinction: a 0 score here would corrupt score_trend
+        # and unfairly flag the student as declining because of an infra
+        # outage, not their work. Callers check the `degraded` flag and
+        # route around persisting a fabricated score (mutator.py ->
+        # pending_essays; the interactive API -> hides the radar and
+        # returns only a generic feedback message).
+        _logger.error("Scorer degraded -- not returning a fake score", extra=log_context or {})
+        return dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE), _DEGRADED_STUDENT_FEEDBACK, True
+
+
 @traced_node("cognitive_scorer")
 async def cognitive_scorer(ctx: Context) -> dict:
     ctx.state["stage"] = "cognitive_scorer"
@@ -71,35 +115,13 @@ async def cognitive_scorer(ctx: Context) -> dict:
     debate_turns = ctx.state.get("debate_turns", [])
     language = ctx.state.get("language", "en")
 
-    scores_degraded = False
-    if not essay_text.strip():
-        scores, rationale, student_feedback = dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE), _DEGRADED_STUDENT_FEEDBACK
-    else:
-        prompt = (
-            f"Essay:\n{essay_text}\n\n"
-            f"Extracted structure: {summary}\n\n"
-            f"Debate transcript (persona questions + student replies, if any): {debate_turns}"
-        )
-        try:
-            result = generate_json(
-                model=GEMINI.flash_model,
-                system_instruction=f"{_SYSTEM_INSTRUCTION}\n\n{language_instruction(language)}",
-                prompt=prompt,
-                response_schema=_SCHEMA,
-            )
-            scores, rationale, student_feedback = result["scores"], result["rationale"], result["student_feedback"]
-        except LLMGenerationError:
-            # Critical distinction: a 0 score here would corrupt score_trend
-            # and unfairly flag the student as declining because of an infra
-            # outage, not their work. mutator.py checks scores_degraded and
-            # routes this essay to pending_essays instead of student_profiles
-            # -- no fabricated score ever reaches the permanent record.
-            _logger.error(
-                "Scorer degraded -- routing to pending_essays, not writing a fake score",
-                extra={"essay_id": ctx.state.get("essay_id"), "student_id": ctx.state.get("student_id")},
-            )
-            scores, rationale, student_feedback = dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE), _DEGRADED_STUDENT_FEEDBACK
-            scores_degraded = True
+    scores, rationale, student_feedback, scores_degraded = score_essay(
+        essay_text=essay_text,
+        summary=summary,
+        debate_turns=debate_turns,
+        language=language,
+        log_context={"essay_id": ctx.state.get("essay_id"), "student_id": ctx.state.get("student_id")},
+    )
 
     ctx.state["scores"] = scores
     ctx.state["score_rationale"] = rationale

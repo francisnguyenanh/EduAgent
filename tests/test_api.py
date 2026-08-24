@@ -72,15 +72,55 @@ def test_submit_debate_turn_marks_complete_at_max_turns():
     assert turn2["turn_number"] == 2
     assert turn2["completed"] is False
 
-    with patch("eduagent.nodes.debate.generate_text", return_value="Q3"):
+    scored = {
+        "scores": {"logical_coherence": 5, "evidence_quality": 5, "counterargument_handling": 5, "scope_awareness": 5},
+        "rationale": {"logical_coherence": "", "evidence_quality": "", "counterargument_handling": "", "scope_awareness": ""},
+        "student_feedback": "Good effort overall.",
+    }
+    with (
+        patch("eduagent.nodes.debate.generate_text", return_value="Q3"),
+        patch("eduagent.nodes.scorer.generate_json", return_value=scored),
+        patch("eduagent.api.get_class_settings", return_value={"show_score_radar_to_students": True}),
+    ):
         turn3 = submit_debate_turn(DebateTurnRequest(session_id=session_id, student_reply="r2"))
     assert turn3["turn_number"] == 3
     assert turn3["completed"] is True
+    assert turn3["result"]["student_feedback"] == "Good effort overall."
+    assert turn3["result"]["show_score_radar"] is True
+    assert turn3["result"]["scores"]["logical_coherence"] == 5
 
-    # end_debate_session already ran inside submit_debate_turn on completion --
+    # complete_debate_session already ran inside submit_debate_turn on completion --
     # the session should no longer be reachable.
     with pytest.raises(interactive.UnknownSessionError):
         interactive.get_debate_session(session_id)
+
+
+def test_submit_debate_turn_hides_scores_when_radar_disabled():
+    payload_start = DebateStartRequest(essay_text="x", student_id="s1", class_id="c1")
+    with (
+        patch("eduagent.api.summarize_essay", return_value=({"fallacies_draft": []}, False)),
+        patch("eduagent.api.get_profile", return_value=None),
+        patch("eduagent.nodes.debate.generate_text", return_value="Q1"),
+    ):
+        started = start_debate(payload_start)
+    session_id = started["session_id"]
+
+    scored = {
+        "scores": {"logical_coherence": 5, "evidence_quality": 5, "counterargument_handling": 5, "scope_awareness": 5},
+        "rationale": {"logical_coherence": "", "evidence_quality": "", "counterargument_handling": "", "scope_awareness": ""},
+        "student_feedback": "Keep it up.",
+    }
+    with (
+        patch("eduagent.nodes.debate.generate_text", return_value="Q2"),
+        patch("eduagent.nodes.scorer.generate_json", return_value=scored),
+        patch("eduagent.api.get_class_settings", return_value={"show_score_radar_to_students": False}),
+    ):
+        submit_debate_turn(DebateTurnRequest(session_id=session_id, student_reply="r1"))
+        turn3 = submit_debate_turn(DebateTurnRequest(session_id=session_id, student_reply="r2"))
+
+    assert turn3["result"]["show_score_radar"] is False
+    assert "scores" not in turn3["result"]
+    assert turn3["result"]["student_feedback"] == "Keep it up."
 
 
 def test_start_debate_from_image_transcribes_then_starts_debate():

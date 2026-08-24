@@ -94,6 +94,29 @@ def test_evict_stale_sessions_removes_only_expired_ones():
         interactive.get_debate_session("old")
 
 
+def test_complete_debate_session_scores_and_ends_session():
+    interactive.start_debate_session(
+        "s7", persona_id="skeptic", essay_text="Homework is bad.", summary={}, class_id="c1", student_id="stu1"
+    )
+    with patch("eduagent.nodes.debate.generate_text", return_value="What evidence supports that claim?"):
+        interactive.step_debate_turn("s7")
+
+    scored = {
+        "scores": {"logical_coherence": 7, "evidence_quality": 6, "counterargument_handling": 5, "scope_awareness": 8},
+        "rationale": {"logical_coherence": "", "evidence_quality": "", "counterargument_handling": "", "scope_awareness": ""},
+        "student_feedback": "Nice work overall.",
+    }
+    with patch("eduagent.nodes.scorer.generate_json", return_value=scored):
+        result = interactive.complete_debate_session("s7")
+
+    assert result["scores"]["logical_coherence"] == 7
+    assert result["student_feedback"] == "Nice work overall."
+    assert result["degraded"] is False
+    assert result["class_id"] == "c1"
+    with pytest.raises(interactive.UnknownSessionError):
+        interactive.get_debate_session("s7")
+
+
 def test_start_debate_session_lazily_evicts_stale_sessions():
     interactive.start_debate_session("stale-1", persona_id="skeptic", essay_text="x", summary={})
     interactive._sessions["stale-1"]["created_at"] -= interactive._SESSION_TTL_SECONDS + 60

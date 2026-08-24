@@ -8,13 +8,16 @@ summarizer/persona_selector/debate functions, not a second implementation)
 and a read-only teacher analytics endpoint over the digests PHASE 3/ĐỢT 2
 already persist to Firestore.
 
-Deliberately NOT wired here: turning a finished 3-turn debate into a score +
-profile mutation. That path (`cognitive_scorer` + `profile_mutator`) runs
-inside the ADK2 graph against `Context`, and duplicating it as hand-rolled
-plumbing here would create a second, divergent copy of PHASE 1's scoring
-logic -- exactly the risk `interactive.py`'s own docstring already flags for
-debate turns. This surface closes the "human can actually reach the
-service" gap; full write-back stays the graph's job.
+ĐỢT 5: once the 3rd turn completes, this module also scores the debate (via
+`interactive.complete_debate_session()`, itself a thin wrapper around
+`nodes/scorer.py`'s `score_essay()` -- the exact same prompt/schema PHASE 1's
+batch `cognitive_scorer` node uses, not a second divergent copy) and returns
+it gated behind the class's `show_score_radar_to_students` setting. This is
+read-only, for the student-facing "how did I do" summary -- it deliberately
+does NOT persist to Firestore or mutate the student's profile. That
+write-back (`profile_mutator`, weakness_taxonomy merge, Pub/Sub publish) only
+ever happens through the ADK2 graph; duplicating it here would create a
+second, divergent path into `student_profiles`.
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from eduagent.auth import LoginError, LoginRequest, login as auth_login
 from eduagent.interactive import (
     DebateSessionComplete,
     UnknownSessionError,
-    end_debate_session,
+    complete_debate_session,
     get_debate_session,
     start_debate_session,
     step_debate_turn,
@@ -94,7 +97,7 @@ class ParentNoteRequest(BaseModel):
     student_id: str
 
 
-def _start_debate_from_essay_text(essay_text: str, *, student_id: str, ocr_meta: dict | None = None) -> dict:
+def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id: str = "", ocr_meta: dict | None = None) -> dict:
     """Shared core of start_debate()/start_debate_from_image(): runs the
     exact production summarizer -> memory-informed persona selection ->
     first debate turn, same as the batch graph's intake->...->debate_loop
@@ -129,6 +132,8 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, ocr_meta:
         summary=summary,
         prior_weaknesses=prior_weaknesses,
         language=language,
+        student_id=student_id,
+        class_id=class_id,
     )
     first_turn = step_debate_turn(session_id)
 
@@ -148,7 +153,7 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, ocr_meta:
 
 
 def start_debate(payload: DebateStartRequest) -> dict:
-    return _start_debate_from_essay_text(payload.essay_text, student_id=payload.student_id)
+    return _start_debate_from_essay_text(payload.essay_text, student_id=payload.student_id, class_id=payload.class_id)
 
 
 def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
@@ -167,6 +172,7 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
     result = _start_debate_from_essay_text(
         ocr_result["transcribed_text"],
         student_id=payload.student_id,
+        class_id=payload.class_id,
         ocr_meta={
             "confidence": ocr_result["confidence"],
             "uncertain_segments": ocr_result["uncertain_segments"],
@@ -186,6 +192,7 @@ def start_debate_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
     result = _start_debate_from_essay_text(
         essay_text,
         student_id=payload.student_id,
+        class_id=payload.class_id,
         ocr_meta=None,
     )
     result["gdoc"] = {
@@ -199,9 +206,35 @@ def submit_debate_turn(payload: DebateTurnRequest) -> dict:
     turn = step_debate_turn(payload.session_id, payload.student_reply)
     turns_so_far = len(get_debate_session(payload.session_id)["turns"])
     completed = turns_so_far >= _max_turns()
+    response = {"turn": turn, "turn_number": turns_so_far, "completed": completed}
     if completed:
-        end_debate_session(payload.session_id)
-    return {"turn": turn, "turn_number": turns_so_far, "completed": completed}
+        response["result"] = _score_and_close_session(payload.session_id)
+    return response
+
+
+def _score_and_close_session(session_id: str) -> dict:
+    """ĐỢT 5 -- runs once Turn 3 (VALIDATOR.max_debate_turns) finishes:
+    scores the debate via the exact cognitive_scorer prompt (interactive.py's
+    complete_debate_session(), which itself ends the session -- no separate
+    end_debate_session() call needed here) and gates the numeric radar behind
+    the class's own show_score_radar_to_students setting (ĐỢT 4 #2), same
+    respected-by-default=True fallback get_settings() already uses elsewhere,
+    so a Firestore hiccup degrades to "show the radar" rather than silently
+    hiding it from every student in the class."""
+    scored = complete_debate_session(session_id)
+    show_radar = True
+    class_id = scored.get("class_id", "")
+    if class_id:
+        try:
+            show_radar = bool(get_class_settings(class_id=class_id).get("show_score_radar_to_students", True))
+        except Exception:
+            _logger.exception("get_class_settings failed while gating score radar for class_id=%s -- defaulting to shown", class_id)
+
+    result = {"student_feedback": scored["student_feedback"], "show_score_radar": show_radar, "degraded": scored["degraded"]}
+    if show_radar:
+        result["scores"] = scored["scores"]
+        result["rationale"] = scored["rationale"]
+    return result
 
 
 def _max_turns() -> int:

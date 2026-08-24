@@ -64,6 +64,18 @@ DEMO_PAGE_HTML = """<!doctype html>
   .settings-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
   .settings-row label { margin: 0; }
   .hint { color: var(--muted); font-size: 0.75rem; margin-top: 0.25rem; }
+  .bubble-row { display: flex; align-items: flex-start; gap: 0.6rem; margin-top: 1rem; }
+  .bubble-row.student { flex-direction: row-reverse; }
+  .avatar { flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff; }
+  .speech-bubble { max-width: 80%; border-radius: 14px; padding: 0.6rem 0.9rem; background: var(--bg); border: 1px solid var(--border); }
+  .bubble-row.student .speech-bubble { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .speech-bubble .meta { font-weight: 600; font-size: 0.75rem; margin-bottom: 0.2rem; opacity: 0.85; }
+  .radar-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; }
+  .radar-label { flex: none; width: 11rem; font-size: 0.8rem; color: var(--muted); }
+  .radar-track { flex: 1; height: 0.6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .radar-fill { height: 100%; background: var(--accent); }
+  .radar-value { flex: none; width: 2rem; text-align: right; font-size: 0.8rem; color: var(--muted); }
+  .feedback-box { margin-top: 1rem; padding: 0.9rem 1rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -130,7 +142,11 @@ DEMO_PAGE_HTML = """<!doctype html>
           <button class="action" id="reply-btn" onclick="sendReply()">Send Reply</button>
         </div>
         <div id="turn-error" class="error hidden"></div>
-        <div id="complete-msg" class="hidden ok-text" style="margin-top:1rem;">Debate complete -- 3 turns finished.</div>
+        <div id="complete-result" class="hidden">
+          <p class="ok-text" style="margin-top:1rem;">Debate complete -- 3 turns finished.</p>
+          <div id="complete-radar"></div>
+          <div id="complete-feedback" class="feedback-box"></div>
+        </div>
       </div>
     </section>
 
@@ -250,11 +266,40 @@ function showTab(name) {
   if (name === 'settings') loadSettings();
 }
 
-function renderTurn(turnNumber, personaLabel, questionText) {
-  const div = document.createElement('div');
-  div.className = 'turn';
-  div.innerHTML = `<div class="meta">Turn ${turnNumber} <span class="badge">${personaLabel || ''}</span></div><div>${questionText}</div>`;
-  document.getElementById('turns').appendChild(div);
+// ĐỢT 5 #2: one avatar/color per Socratic persona so the 4 debate
+// personalities read as distinct characters in the chat, not interchangeable
+// grey boxes -- matches PERSONAS in skills/personas.py by persona_id.
+const PERSONA_STYLE = {
+  skeptic: {emoji: '🧐', color: '#1e3a8a', label: 'The Skeptic'},
+  devils_advocate: {emoji: '😈', color: '#c2410c', label: "The Devil's Advocate"},
+  nitpicker: {emoji: '🔍', color: '#7e22ce', label: 'The Nitpicker'},
+  expander: {emoji: '🌌', color: '#047857', label: 'The Expander'},
+};
+
+function personaStyle(personaId) {
+  return PERSONA_STYLE[personaId] || {emoji: '🤖', color: '#5b6472', label: personaId || 'Persona'};
+}
+
+function renderTurn(turnNumber, personaId, questionText) {
+  const style = personaStyle(personaId);
+  const row = document.createElement('div');
+  row.className = 'bubble-row';
+  row.innerHTML = `
+    <div class="avatar" style="background:${style.color};">${style.emoji}</div>
+    <div class="speech-bubble">
+      <div class="meta">Turn ${turnNumber} -- ${style.label}</div>
+      <div>${questionText}</div>
+    </div>`;
+  document.getElementById('turns').appendChild(row);
+}
+
+function renderStudentReply(replyText) {
+  const row = document.createElement('div');
+  row.className = 'bubble-row student';
+  row.innerHTML = `
+    <div class="avatar" style="background:var(--muted);">🗯️</div>
+    <div class="speech-bubble"><div class="meta">You</div><div>${replyText}</div></div>`;
+  document.getElementById('turns').appendChild(row);
 }
 
 function fileToBase64(file) {
@@ -311,7 +356,7 @@ async function startDebate() {
       warn.textContent = `Heads up: the photo was hard to read (confidence: ${data.ocr.confidence}) -- the debate below is based on a best-effort transcription.`;
       document.getElementById('turns').appendChild(warn);
     }
-    renderTurn(1, data.persona_name, data.turn.question);
+    renderTurn(1, data.persona_id, data.turn.question);
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
@@ -334,11 +379,12 @@ async function sendReply() {
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
+    renderStudentReply(replyText);
     renderTurn(data.turn_number, data.turn.persona, data.turn.question);
     document.getElementById('student_reply').value = '';
     if (data.completed) {
       document.getElementById('reply-area').classList.add('hidden');
-      document.getElementById('complete-msg').classList.remove('hidden');
+      renderCompleteResult(data.result);
     }
   } catch (e) {
     errEl.textContent = e.message;
@@ -346,6 +392,33 @@ async function sendReply() {
   } finally {
     btn.disabled = false;
   }
+}
+
+const AXIS_LABELS = {
+  logical_coherence: 'Logical coherence',
+  evidence_quality: 'Evidence quality',
+  counterargument_handling: 'Counterargument handling',
+  scope_awareness: 'Scope awareness',
+};
+
+function renderCompleteResult(result) {
+  // ĐỢT 5 #1: respects the teacher's show_score_radar_to_students setting
+  // (Settings tab) -- api.py already stripped `scores`/`rationale` out of
+  // `result` server-side when that flag is off, so the client only ever
+  // has to check for their presence, never re-derive the decision itself.
+  const radarEl = document.getElementById('complete-radar');
+  const feedbackEl = document.getElementById('complete-feedback');
+  radarEl.innerHTML = '';
+  if (result && result.scores) {
+    radarEl.innerHTML = Object.entries(result.scores).map(([axis, value]) => `
+      <div class="radar-row">
+        <div class="radar-label">${AXIS_LABELS[axis] || axis}</div>
+        <div class="radar-track"><div class="radar-fill" style="width:${Math.max(0, Math.min(10, value)) * 10}%;"></div></div>
+        <div class="radar-value">${value}/10</div>
+      </div>`).join('');
+  }
+  feedbackEl.textContent = (result && result.student_feedback) || 'Debate complete -- great effort working through all 3 turns!';
+  document.getElementById('complete-result').classList.remove('hidden');
 }
 
 async function loadPriority() {
@@ -424,6 +497,35 @@ async function loadAnalytics() {
   }
 }
 
+const TREND_COLORS = {improving: '#1e7a34', declining: '#b3261e', stagnant: '#b8860b', insufficient_data: '#5b6472'};
+
+function sparklineSvg(essayHistory, trend) {
+  // ĐỢT 4 storage/retrieval visual: a per-student avg_score-over-time
+  // sparkline, drawn from essay_history (already returned in full by
+  // list_students_by_class -- no new endpoint/query needed). Inline SVG,
+  // no charting library, consistent with this project's zero-new-dependency
+  // discipline (demo_page.py's own module docstring).
+  const points = (essayHistory || []).map(e => e.avg_score).filter(v => typeof v === 'number');
+  if (points.length < 2) return '<span class="hint">not enough essays yet</span>';
+  const w = 140, h = 36, pad = 4;
+  const maxV = 10, minV = 0; // rubric axes are fixed 0-10 (scorer.py) -- a fixed scale keeps sparklines comparable across students
+  const stepX = (w - 2 * pad) / (points.length - 1);
+  const coords = points.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = pad + (h - 2 * pad) * (1 - (v - minV) / (maxV - minV));
+    return [x, y];
+  });
+  const path = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const color = TREND_COLORS[trend] || TREND_COLORS.insufficient_data;
+  const lastPoint = coords[coords.length - 1];
+  const titleText = points.map(v => v.toFixed(1)).join(' -> ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">
+    <title>${titleText}</title>
+    <polyline points="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    <circle cx="${lastPoint[0].toFixed(1)}" cy="${lastPoint[1].toFixed(1)}" r="2.5" fill="${color}" />
+  </svg>`;
+}
+
 async function loadRoster() {
   const errEl = document.getElementById('roster-error');
   const resultsEl = document.getElementById('roster-results');
@@ -440,11 +542,12 @@ async function loadRoster() {
     let rows = data.students.map(s => `
       <tr>
         <td>${s.name || s.student_id}</td>
+        <td>${sparklineSvg(s.essay_history, s.score_trend)}</td>
         <td>${s.score_trend || ''}</td>
         <td>${s.flags && s.flags.needs_attention ? 'Yes' : 'No'}</td>
         <td>${(s.flags && s.flags.last_updated) || ''}</td>
       </tr>`).join('');
-    resultsEl.innerHTML = `<h3 style="margin-top:1.5rem;">Class Roster</h3><table><thead><tr><th>Student</th><th>Score trend</th><th>Needs attention</th><th>Last updated</th></tr></thead><tbody>${rows}</tbody></table>`;
+    resultsEl.innerHTML = `<h3 style="margin-top:1.5rem;">Class Roster</h3><table><thead><tr><th>Student</th><th>Score trend chart</th><th>Trend</th><th>Needs attention</th><th>Last updated</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');

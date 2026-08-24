@@ -28,6 +28,7 @@ import time
 
 from eduagent.config import VALIDATOR
 from eduagent.nodes.debate import generate_debate_turn
+from eduagent.nodes.scorer import score_essay
 from eduagent.skills.language import detect_language
 
 _sessions: dict[str, dict] = {}
@@ -55,10 +56,17 @@ def start_debate_session(
     summary: dict,
     prior_weaknesses: list[str] | None = None,
     language: str | None = None,
+    student_id: str = "",
+    class_id: str = "",
 ) -> None:
     """Registers a new interactive session. Call once, right after
     persona_selector has run (or with equivalent data), before the first
-    step_debate_turn() call. Overwrites any existing session with the same id."""
+    step_debate_turn() call. Overwrites any existing session with the same id.
+
+    `student_id`/`class_id` are stored only for logging and for
+    complete_debate_session() to look up the right class's
+    show_score_radar_to_students setting -- they never affect persona/debate
+    logic itself."""
     evict_stale_sessions()  # lazy sweep -- cheap, and every new session start is a natural trigger point
     _sessions[session_id] = {
         "persona_id": persona_id,
@@ -66,6 +74,8 @@ def start_debate_session(
         "summary": summary,
         "prior_weaknesses": prior_weaknesses or [],
         "language": language or detect_language(essay_text),
+        "student_id": student_id,
+        "class_id": class_id,
         "turns": [],
         "created_at": time.time(),
     }
@@ -125,3 +135,29 @@ def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
     )
     turns.append(new_turn)
     return new_turn
+
+
+def complete_debate_session(session_id: str) -> dict:
+    """ĐỢT 5 -- scores the finished debate (same cognitive_scorer prompt/
+    schema the batch graph uses, via scorer.py's shared score_essay()) and
+    tears the session down. Meant to be called once VALIDATOR.max_debate_turns
+    has been reached; does NOT persist to Firestore or mutate the student's
+    profile -- see interactive.py's module docstring and api.py's for why
+    that write-back stays the batch graph's job. This purely produces the
+    student-facing "how did I do" summary for the live Web UI."""
+    session = get_debate_session(session_id)
+    scores, rationale, student_feedback, degraded = score_essay(
+        essay_text=session["essay_text"],
+        summary=session["summary"],
+        debate_turns=session["turns"],
+        language=session["language"],
+        log_context={"session_id": session_id, "student_id": session.get("student_id")},
+    )
+    end_debate_session(session_id)
+    return {
+        "scores": scores,
+        "rationale": rationale,
+        "student_feedback": student_feedback,
+        "degraded": degraded,
+        "class_id": session.get("class_id", ""),
+    }

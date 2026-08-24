@@ -409,7 +409,7 @@
   - **Teacher Flow:** 4 tab — **Priority** (mới, xem dưới), **Digests** + **Roster** (tái dùng nguyên endpoint ĐỢT 3), **Settings** (mới, xem dưới).
   - **Priority tab:** gọi `GET /api/classes/{class_id}/priority` (hàm mới `api.class_priority()`, tái dùng nguyên `priority_engine.rank_students()` — KHÔNG viết lại logic rank, chỉ đọc `load_class_profiles()` trực tiếp thay vì qua digest đã cache) — hiển thị bảng ranking + lý do (`stuck streak`/`score_trend`/`inactivity`).
   - **Settings tab:** `digest_store.get_class_settings()`/`set_class_settings()` mới — lưu `settings` trên chính doc `class_analytics/{class_id}` (merge, không đè các field khác), field: `show_score_radar_to_students`, `stuck_streak_threshold`, `digest_notify_email`. Route `GET`/`PUT /api/classes/{class_id}/settings`.
-  - **Chưa làm (nợ có chủ đích):** biểu đồ xu hướng điểm số dạng chart trực quan (hiện Roster tab chỉ hiển thị `score_trend` dạng text `improving/declining/stagnant` — đã có từ ĐỢT 2, đủ thông tin nhưng chưa vẽ chart) — cắt được nếu hết thời gian, không phải xương sống.
+  - **Biểu đồ xu hướng điểm số.** ✅ ĐÃ LÀM + PASS — `demo_page.py::sparklineSvg()`: inline SVG sparkline (không thêm thư viện chart ngoài, đúng kỷ luật "no new infra" của file này) vẽ trực tiếp từ `essay_history[].avg_score` mà `list_students_by_class()` đã trả về sẵn (không cần endpoint/query mới). Trục cố định 0–10 (khớp thang điểm rubric của `scorer.py`) để so sánh được giữa các học sinh; màu polyline đổi theo `score_trend` (xanh=improving/đỏ=declining/vàng=stagnant); `<title>` SVG hiện dãy điểm số khi hover. Roster tab thêm cột "Score trend chart" cạnh cột text `score_trend` cũ.
 - [x] **Chu trình Giao tiếp Phụ huynh / Học sinh (Parent Communication Co-Pilot)**. ✅ ĐÃ LÀM + PASS — đúng giải pháp "Parent Note Co-Pilot" đã chọn trong phân tích rủi ro gốc (không tự động gửi email hàng loạt).
   - `src/eduagent/skills/parent_note.py::draft_parent_note()` — Gemini CHỈ diễn đạt (system instruction cấm nhắc điểm số/"priority"/AI), KHÔNG BAO GIỜ tự quyết định học sinh nào được nêu — dữ liệu đầu vào là `reason` đã tính sẵn 100% deterministic từ `priority_engine.compute_priority()` (tái dùng nguyên hàm, không viết logic ranking thứ 2). Fallback template khi LLM lỗi (graceful degradation, đúng kỷ luật Phase 4) — verify bằng test không bao giờ để lọt chữ "priority" ra ngoài.
   - Nút `[📋 Copy Parent Update Note]` trong bảng Priority tab — gọi `POST /api/parent-note`, tự copy vào clipboard (try/catch khi trình duyệt chặn quyền clipboard, vẫn hiện text để copy tay).
@@ -420,7 +420,31 @@
 
 ---
 
-**Kiểm chứng tổng ĐỢT 3 & ĐỢT 4:** `pytest tests/ -q` → **141/141 pass 100%**. Không có test nào gọi Vertex AI/Firestore/Gmail/Sheets/Cloud Run thật ngoài đúng 1 test `e2e` đã có từ trước.
+### 9. ĐỢT 5 — Hoàn thiện Trải nghiệm Tương tác & Điểm Thưởng Ban Giám Khảo (Interactive Radar Scoring & Polish) 🟡 HOÀN THÀNH PHẦN CODE (còn 1 việc thao tác GCP thật của bạn)
+
+- [x] **Hiển thị Điểm số & Nhận xét Động sau 3 Lượt Phản biện (Dynamic Post-Debate Feedback)**. ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - **Không thêm endpoint mới** (`/api/debate/complete`) — chọn nhánh "cờ trong Turn 3" của DoD gốc để tránh 1 round-trip thừa và tránh phải giữ session sống thêm sau khi hoàn thành: `submit_debate_turn()` trong `api.py` tự chấm điểm ngay khi `turns_so_far >= VALIDATOR.max_debate_turns`, trả về field `result` trong response của chính request Turn 3.
+  - `src/eduagent/nodes/scorer.py`: tách `score_essay()` thành hàm thuần (không phụ thuộc `Context`) — CÙNG một prompt/schema/degradation logic mà `cognitive_scorer` (batch graph node) dùng, không viết bản chấm điểm thứ 2 (đúng khuôn mẫu `generate_debate_turn()` của `debate.py`). `cognitive_scorer` giờ chỉ là 1 wrapper mỏng gọi `score_essay()`.
+  - `src/eduagent/interactive.py::complete_debate_session()` — gọi `score_essay()` bằng đúng transcript của session tương tác rồi đóng session (thay `end_debate_session()` rời rạc). `start_debate_session()` giờ lưu thêm `student_id`/`class_id` (trước đây không lưu) để tra đúng cấu hình lớp lúc chấm điểm xong.
+  - `api.py::_score_and_close_session()` — đọc `show_score_radar_to_students` qua `get_class_settings()` (mặc định `True` khi Firestore lỗi, cùng kỷ luật degrade-mở như `get_settings()` route khác); nếu `False` thì field `scores`/`rationale` bị lược khỏi response hoàn toàn ở phía server — client không tự quyết định ẩn/hiện, tránh học sinh mở DevTools thấy điểm số qua network tab dù giáo viên đã tắt.
+  - `demo_page.py`: khi `data.completed`, render `renderCompleteResult(data.result)` — thanh đo 4 trục nhận thức (`radar-row`/`radar-fill`) nếu có `scores`, luôn hiển thị `student_feedback`.
+  - 3 unit test mới (`tests/test_api.py::test_submit_debate_turn_marks_complete_at_max_turns` cập nhật + `test_submit_debate_turn_hides_scores_when_radar_disabled` mới, `tests/test_interactive.py::test_complete_debate_session_scores_and_ends_session` mới) — verify cả nhánh hiện điểm lẫn nhánh ẩn điểm, không gọi Vertex AI/Firestore thật.
+
+- [x] **Giao diện Hội thoại Socratic Trực quan (Socratic Persona Speech Bubbles & Visual Identity)**. ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `demo_page.py`.
+  - `PERSONA_STYLE` (JS): map đúng 4 `persona_id` (khớp `skills/personas.py::PERSONA_IDS`) → emoji + màu — 🧐 Skeptic (Deep Blue `#1e3a8a`), 😈 Devil's Advocate (Crimson/Orange `#c2410c`), 🔍 Nitpicker (Purple `#7e22ce`), 🌌 Expander (Emerald `#047857`) — đúng bảng màu trong bản nháp TODO gốc.
+  - `renderTurn()` giờ nhận `persona_id` (trước đây nhận `persona_name` hiển thị sẵn — đổi để tra đúng màu/emoji) và vẽ bong bóng chat AI (avatar tròn + `speech-bubble` căn trái); `renderStudentReply()` mới vẽ bong bóng câu trả lời của học sinh (avatar khác, căn phải, màu `--accent`) — trước đây câu trả lời của học sinh không hề xuất hiện lại trong khung chat sau khi gửi, giờ cuộc hội thoại đọc được đầy đủ 2 chiều.
+  - CSS mới: `.bubble-row`/`.avatar`/`.speech-bubble` (+ biến thể `.student`), theo đúng token màu light/dark hiện có của file (không thêm thư viện ngoài).
+
+- [ ] ⏸️ **Kiểm tra Truy cập Public Cloud Run & Sơ đồ Kiến trúc trước giờ G**. CHƯA LÀM — hành động thao tác GCP thật/xuất ảnh, không phải code, cần bạn tự chạy:
+  - **Cloud Run Public Access** — verify + (nếu thiếu) cấp quyền:
+    ```
+    gcloud run services get-iam-policy <SERVICE_NAME> --region <REGION> --format=json
+    gcloud run services add-iam-policy-binding <SERVICE_NAME> --region <REGION> --member="allUsers" --role="roles/run.invoker"
+    ```
+    (đây là hành động ảnh hưởng public access của service thật — cố tình không tự chạy thay bạn.)
+  - **Sơ đồ Kiến trúc File Ảnh** — mở README §2 (khối mermaid ở dòng ~24), dán vào `mermaid.live`, Export → PNG, đính kèm vào form Devpost mục Architecture Diagram.
+
+**Kiểm chứng ĐỢT 5 (phần code):** `pytest tests/ -q -m "not e2e"` → **164/164 pass** (tăng từ 162: +1 `test_submit_debate_turn_hides_scores_when_radar_disabled`, +1 `test_complete_debate_session_scores_and_ends_session`, cộng thêm cập nhật mock trong test hoàn thành cũ).
 
 ---
 
