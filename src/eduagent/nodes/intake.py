@@ -92,6 +92,21 @@ async def intake(ctx: Context, node_input: Any) -> dict:
     id for what is logically the same essay attempt.
     """
     text, image_bytes, image_mime_type = _extract_essay_input(node_input)
+    if text and ("docs.google.com/document" in text or "drive.google.com" in text):
+        from eduagent.integrations.gdocs import extract_gdoc_id, fetch_gdoc_text
+
+        doc_id = extract_gdoc_id(text)
+        if doc_id:
+            try:
+                gdoc_text = fetch_gdoc_text(text)
+                ctx.state["gdoc_url"] = text
+                ctx.state["gdoc_id"] = doc_id
+                text = gdoc_text
+            except Exception as exc:
+                ctx.state.setdefault("audit_events", []).append(
+                    {"stage": "intake", "event": "gdoc_fetch_failed", "error": str(exc)}
+                )
+
     ctx.state["stage"] = "intake"
     ctx.state.setdefault("essay_id", str(uuid.uuid4()))
     ctx.state["raw_input"] = text

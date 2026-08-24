@@ -26,14 +26,25 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from eduagent.aggregator.class_aggregator import process_event
 from eduagent.aggregator.digest_store import list_recent_digests
 from eduagent.api import (
+    ClassSettingsRequest,
     DebateSessionComplete,
+    DebateStartFromGDocRequest,
     DebateStartFromImageRequest,
     DebateStartRequest,
     DebateTurnRequest,
+    LoginError,
+    LoginRequest,
+    ParentNoteRequest,
     UnknownSessionError,
+    class_priority,
+    get_settings,
+    login,
+    parent_note,
     start_debate,
+    start_debate_from_gdoc,
     start_debate_from_image,
     submit_debate_turn,
+    update_settings,
 )
 from eduagent.demo_page import DEMO_PAGE_HTML
 from eduagent.logging_config import configure_json_logging
@@ -56,6 +67,52 @@ async def demo_page() -> HTMLResponse:
     return HTMLResponse(DEMO_PAGE_HTML)
 
 
+@app.post("/api/auth/login")
+async def api_login(payload: LoginRequest) -> dict:
+    try:
+        return login(payload)
+    except LoginError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+
+@app.get("/api/classes/{class_id}/priority")
+async def api_class_priority(class_id: str) -> dict:
+    try:
+        return class_priority(class_id)
+    except Exception:
+        _logger.exception("class_priority failed for class_id=%s", class_id)
+        raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
+
+
+@app.get("/api/classes/{class_id}/settings")
+async def api_get_settings(class_id: str) -> dict:
+    try:
+        return get_settings(class_id)
+    except Exception:
+        _logger.exception("get_settings failed for class_id=%s", class_id)
+        raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
+
+
+@app.put("/api/classes/{class_id}/settings")
+async def api_update_settings(class_id: str, payload: ClassSettingsRequest) -> dict:
+    try:
+        return update_settings(class_id, payload)
+    except Exception:
+        _logger.exception("update_settings failed for class_id=%s", class_id)
+        raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
+
+
+@app.post("/api/parent-note")
+async def api_parent_note(payload: ParentNoteRequest) -> dict:
+    try:
+        return parent_note(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception:
+        _logger.exception("parent_note failed for student_id=%s", payload.student_id)
+        raise HTTPException(status_code=502, detail="Failed to draft parent note -- check server logs.")
+
+
 @app.post("/api/debate/start")
 async def api_debate_start(payload: DebateStartRequest) -> dict:
     try:
@@ -72,6 +129,19 @@ async def api_debate_start_with_image(payload: DebateStartFromImageRequest) -> d
     except Exception:
         _logger.exception("start_debate_from_image failed")
         raise HTTPException(status_code=502, detail="Failed to start debate session from image -- check server logs.")
+
+
+@app.post("/api/debate/start-with-gdoc")
+async def api_debate_start_with_gdoc(payload: DebateStartFromGDocRequest) -> dict:
+    try:
+        return start_debate_from_gdoc(payload)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        _logger.exception("start_debate_from_gdoc failed")
+        raise HTTPException(status_code=502, detail="Failed to fetch Google Doc or start debate -- check server logs.")
 
 
 @app.post("/api/debate/turn")

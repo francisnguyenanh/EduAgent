@@ -12,10 +12,12 @@ import pytest
 
 from eduagent import interactive
 from eduagent.api import (
+    DebateStartFromGDocRequest,
     DebateStartFromImageRequest,
     DebateStartRequest,
     DebateTurnRequest,
     start_debate,
+    start_debate_from_gdoc,
     start_debate_from_image,
     submit_debate_turn,
 )
@@ -119,3 +121,23 @@ def test_start_debate_from_image_still_starts_on_low_confidence():
 
     assert result["ocr"]["degraded"] is True
     assert "session_id" in result  # still usable, just flagged for the caller to warn about
+
+
+def test_start_debate_from_gdoc_fetches_text_and_starts_debate():
+    payload = DebateStartFromGDocRequest(
+        gdoc_url="https://docs.google.com/document/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit",
+        student_id="s1",
+    )
+    with (
+        patch("eduagent.integrations.gdocs.fetch_gdoc_text", return_value="AI is transforming education.") as mock_fetch,
+        patch("eduagent.api.summarize_essay", return_value=({"fallacies_draft": []}, False)),
+        patch("eduagent.api.get_profile", return_value=None),
+        patch("eduagent.nodes.debate.generate_text", return_value="What role should teachers play?"),
+    ):
+        result = start_debate_from_gdoc(payload)
+
+    mock_fetch.assert_called_once()
+    assert result["gdoc"]["doc_id"] == "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+    assert result["gdoc"]["char_count"] == len("AI is transforming education.")
+    assert result["turn"]["question"] == "What role should teachers play?"
+    assert "session_id" in result

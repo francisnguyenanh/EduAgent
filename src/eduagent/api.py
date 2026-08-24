@@ -22,9 +22,13 @@ from __future__ import annotations
 import base64
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
+from eduagent.aggregator.digest_store import get_class_settings, set_class_settings
+from eduagent.aggregator.priority_engine import compute_priority, rank_students
+from eduagent.auth import LoginError, LoginRequest, login as auth_login
 from eduagent.interactive import (
     DebateSessionComplete,
     UnknownSessionError,
@@ -39,6 +43,7 @@ from eduagent.nodes.ocr import transcribe_essay_image
 from eduagent.nodes.persona_selector import choose_persona
 from eduagent.nodes.summarizer import summarize_essay
 from eduagent.skills.language import detect_language
+from eduagent.skills.parent_note import draft_parent_note
 from eduagent.skills.personas import get_persona
 
 _logger = logging.getLogger(__name__)
@@ -64,9 +69,29 @@ class DebateStartFromImageRequest(BaseModel):
     class_id: str = ""
 
 
+class DebateStartFromGDocRequest(BaseModel):
+    """Debate start using a publicly shared Google Doc link (viewable by anyone with link)."""
+
+    gdoc_url: str
+    student_id: str
+    name: str = ""
+    class_id: str = ""
+
+
 class DebateTurnRequest(BaseModel):
     session_id: str
     student_reply: str
+
+
+class ClassSettingsRequest(BaseModel):
+    show_score_radar_to_students: bool | None = None
+    stuck_streak_threshold: int | None = None
+    digest_notify_email: str | None = None
+
+
+class ParentNoteRequest(BaseModel):
+    class_id: str
+    student_id: str
 
 
 def _start_debate_from_essay_text(essay_text: str, *, student_id: str, ocr_meta: dict | None = None) -> dict:
@@ -151,6 +176,25 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
     return result
 
 
+def start_debate_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
+    """Starts a debate session by fetching essay text from a publicly shared Google Doc."""
+    from eduagent.integrations.gdocs import extract_gdoc_id, fetch_gdoc_text
+
+    doc_id = extract_gdoc_id(payload.gdoc_url)
+    essay_text = fetch_gdoc_text(payload.gdoc_url)
+
+    result = _start_debate_from_essay_text(
+        essay_text,
+        student_id=payload.student_id,
+        ocr_meta=None,
+    )
+    result["gdoc"] = {
+        "doc_id": doc_id,
+        "char_count": len(essay_text),
+    }
+    return result
+
+
 def submit_debate_turn(payload: DebateTurnRequest) -> dict:
     turn = step_debate_turn(payload.session_id, payload.student_reply)
     turns_so_far = len(get_debate_session(payload.session_id)["turns"])
@@ -166,13 +210,84 @@ def _max_turns() -> int:
     return VALIDATOR.max_debate_turns
 
 
+def login(payload: LoginRequest) -> dict:
+    """ĐỢT 4 #1 -- see auth.py's module docstring for why this is a mock,
+    stateless login rather than real Firebase Auth/OAuth. Raises LoginError
+    (mapped to HTTP 401 in server.py) for a bad password or malformed ID."""
+    result = auth_login(payload)
+    return {
+        "role": result.role,
+        "class_id": result.class_id,
+        "user_id": result.user_id,
+        "display_name": result.display_name,
+    }
+
+
+def class_priority(class_id: str) -> dict:
+    """ĐỢT 4 #2 Teacher Executive Dashboard -- the deterministic Intervention
+    Priority Index (priority_engine.rank_students, PHASE 3) as a live
+    read, independent of whatever the last persisted digest happened to
+    rank at send-time. Zero LLM calls."""
+    from eduagent.aggregator.class_aggregator import load_class_profiles
+
+    profiles = load_class_profiles(class_id)
+    ranked = rank_students(profiles, now=datetime.now(timezone.utc))
+    return {"class_id": class_id, "ranking": ranked}
+
+
+def get_settings(class_id: str) -> dict:
+    return {"class_id": class_id, "settings": get_class_settings(class_id=class_id)}
+
+
+def update_settings(class_id: str, payload: ClassSettingsRequest) -> dict:
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    return {"class_id": class_id, "settings": set_class_settings(class_id=class_id, settings=updates)}
+
+
+def parent_note(payload: ParentNoteRequest) -> dict:
+    """ĐỢT 4 #3 -- "Copy Parent Update Note" button's backend: re-derives
+    this one student's priority `reason` (same pure function the ranking
+    table already used) and hands it to the LLM only to phrase, never to
+    decide, per parent_note.py's module docstring."""
+    profile = get_profile(payload.student_id)
+    if profile is None:
+        raise ValueError(f"No profile found for student_id={payload.student_id!r}")
+
+    common_fallacy_set = set()
+    from eduagent.aggregator.class_aggregator import load_class_profiles
+    from eduagent.aggregator.priority_engine import cluster_fallacies, common_fallacies
+
+    profiles = load_class_profiles(payload.class_id)
+    common_fallacy_set = set(common_fallacies(cluster_fallacies(profiles)))
+
+    priority = compute_priority(profile, now=datetime.now(timezone.utc), common_fallacy_set=common_fallacy_set)
+    student_name = profile.get("name", payload.student_id)
+    essay_history = profile.get("essay_history", [])
+    language = "en"
+    if essay_history:
+        language = essay_history[-1].get("language", "en")
+
+    note, degraded = draft_parent_note(student_name=student_name, reason=priority["reason"], language=language)
+    return {"student_id": payload.student_id, "note": note, "degraded": degraded, "priority": priority}
+
+
 __all__ = [
     "DebateStartRequest",
     "DebateStartFromImageRequest",
+    "DebateStartFromGDocRequest",
     "DebateTurnRequest",
+    "ClassSettingsRequest",
+    "ParentNoteRequest",
     "start_debate",
     "start_debate_from_image",
+    "start_debate_from_gdoc",
     "submit_debate_turn",
+    "login",
+    "class_priority",
+    "get_settings",
+    "update_settings",
+    "parent_note",
     "UnknownSessionError",
     "DebateSessionComplete",
+    "LoginError",
 ]
