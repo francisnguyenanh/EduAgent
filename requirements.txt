@@ -12,3 +12,5 @@ tenacity>=9.1.0
 opentelemetry-sdk>=1.42.0
 opentelemetry-exporter-gcp-trace>=1.15.0
 Pillow>=10.0.0  # PHASE 6: scripts/generate_sample_essay_images.py only (dev/demo asset generation, not imported by src/)
+fastapi>=0.115.0  # PHASE 7: Cloud Run push-subscriber HTTP entrypoint (src/eduagent/server.py)
+uvicorn[standard]>=0.30.0  # PHASE 7: ASGI server the Dockerfile runs server.py with

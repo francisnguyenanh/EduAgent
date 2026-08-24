@@ -338,23 +338,19 @@
 
 ---
 
-## PHASE 7 — Deploy, Bằng chứng GCP & Tài liệu 🔴
+## PHASE 7 — Deploy, Bằng chứng GCP & Tài liệu 🔴 (ĐANG LÀM — code/tài liệu xong, chờ quyết định deploy thật + thao tác thu thập bằng chứng)
 
-- [ ] Dockerfile multi-stage (tối ưu dung lượng + bảo mật, non-root user).
-- [ ] Deploy lên **Cloud Run** (HTTPS endpoint thật, `.run.app` URL).
-- [ ] Thu thập **bằng chứng GCP Native** (chụp + quay màn hình):
-  - Cloud Run service status & metrics • Firestore live collections/documents
-  - Pub/Sub topic + subscription metrics + DLQ • Vertex AI / Gemini API logs • Cloud Trace span
-- [ ] **README.md chuẩn quốc tế:**
-  - Spin-up instructions từng bước — viết như thể người lạ hoàn toàn phải tự chạy được từ đầu.
-  - **Architecture Decision Records (ADR)** — bảng ma trận: quyết định / lý do / phương án đã loại. Đây là thứ trực tiếp ăn điểm *"We are evaluating your engineering decisions"*.
-  - Kết quả ADK Eval Suite.
-  - Sơ đồ luồng dữ liệu + mô hình bảo mật (OAuth scope, least-privilege SA).
-- [ ] **Architecture Diagram** (Mermaid + export PNG/SVG) — không cần đẹp, cần RÕ.
-- [ ] 🔴 Test spin-up lại từ máy sạch/incognito. Nếu repo private → share `testing@devpost.com` và `cloudhackathons@google.com`.
-- [ ] 🔴 Quét lại toàn bộ git history: không có API key, không có service account json, không có file từ repo cũ.
+- [x] **Dockerfile multi-stage, non-root user.** ✅ ĐÃ LÀM + PASS — `Dockerfile` (builder cài deps qua `pip install --user`, stage cuối chỉ copy `src/` + package đã cài, chạy bằng user `eduagent` uid 1000, không phải root). `.dockerignore` mới loại `secrets/`, `.env`, `CritqAI-main/`, ảnh test nặng, v.v. khỏi build context.
+  - **Chưa verify được bằng `docker build` thật** — Docker Desktop daemon không chạy trên máy hiện tại (`docker build` báo lỗi kết nối named pipe). Đã verify thay thế: chạy đúng lệnh CMD của Dockerfile (`uvicorn eduagent.server:app --host 0.0.0.0 --port 8080`) trực tiếp ngoài container → `curl /healthz` trả `200 {"status": "ok"}`. Cần chạy `docker build` thật (bật Docker Desktop) trước khi tin tưởng 100% image build được — dời việc này sang trước lúc deploy thật.
+- [x] **Xây HTTP server cho Cloud Run (việc chưa có trong plan gốc nhưng bắt buộc phải làm để deploy được).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/server.py` (FastAPI), đúng như Phase 3 đã ghi chú trước ("Phase 7 đổi thành Cloud Run push subscriber, cùng dùng `process_event()`"): `POST /` nhận Pub/Sub push envelope (base64-decode `message.data`), gọi `process_event()` y hệt logic Tầng 2 hiện có, trả 200 để Pub/Sub ack hoặc 500 để Pub/Sub tự retry/dead-letter — không có logic Tầng 2 mới nào phải viết lại. `GET /healthz` không đụng Firestore/Pub/Sub/Vertex AI (tránh healthcheck tự fail vì 1 dependency ngoài gặp sự cố thoáng qua). 5 unit test mới (`tests/test_server.py`) dùng `TestClient`, mock `process_event`, pass 100%.
+- [ ] ⏸️ **Deploy lên Cloud Run thật (HTTPS endpoint thật, `.run.app` URL).** CHƯA LÀM có chủ đích — đây là hành động thật trên hạ tầng cloud (tốn phí, tạo service công khai), cần bạn xác nhận rõ ràng trước khi chạy `gcloud run deploy`. Lệnh đã chuẩn bị sẵn trong README.md mục 3.10, dùng `--no-allow-unauthenticated` + service account `eduagent-sa` sẵn có từ Phase 0.
+- [ ] ⏸️ **Thu thập bằng chứng GCP Native (chụp/quay màn hình).** CHƯA LÀM — phụ thuộc vào việc deploy thật ở trên (đặc biệt Cloud Run service status/metrics) và cần thao tác chụp màn hình console thủ công không tự động hoá được. Pub/Sub metrics + DLQ, Firestore collections, Cloud Trace span, Vertex AI log đều ĐÃ có sẵn dữ liệu thật từ Phase 3/4 (chỉ cần chụp lại).
+- [x] **README.md chuẩn quốc tế.** ✅ ĐÃ LÀM + PASS — `README.md` mới, đầy đủ: disclosure bắt buộc, spin-up từng bước (bao gồm chạy server local + lệnh `gcloud run deploy` mẫu), 10 ADR trong 1 bảng ma trận (quyết định/lý do/phương án đã loại — gộp cả ADR-001..003 cũ từ Phase 0/3 và 7 ADR mới phát sinh từ Đợt 2/Phase 5/6), kết quả ADK Eval Suite thật (15/15), mô hình bảo mật (SA 5-role, Gmail compose-only + AST test, Sheets append-only, Cloud Run `--no-allow-unauthenticated`), bằng chứng multimodal ingestion (12 ảnh thật).
+- [x] **Architecture Diagram (Mermaid).** ✅ ĐÃ LÀM + PASS — nhúng trực tiếp trong README.md mục 2, vẽ đủ cả Tầng 1 (routing OCR/text) và Tầng 2 (Cloud Run push subscriber), khớp đúng code hiện tại (không phải sơ đồ lý thuyết cũ ở PROJECT_WIKI.md mục 1 — đã cập nhật theo kiến trúc thật sau khi có `server.py`/routing OCR). Bỏ qua bước export PNG/SVG riêng vì Mermaid nhúng trong README đã render trực tiếp trên GitHub, không cần file ảnh tách rời.
+- [ ] ⏸️ **Test spin-up lại từ máy sạch/incognito.** CHƯA LÀM — cần môi trường máy sạch thật để test khách quan, dời tới gần ngày nộp bài (sau khi deploy thật) để tránh phải lặp lại nếu còn thay đổi code.
+- [x] **Quét lại toàn bộ git history.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — verify thật bằng `git log --all --diff-filter=A --name-only` (không có file nào tên `credential`/`service-account`/`secret`/`*.key`/`client_secret`/`token.json`/`.env`, không có file nào từ `CritqAI-main`) và `git log --all -p | grep` cho pattern `AIza...`/`BEGIN PRIVATE KEY`/`"type": "service_account"` — **0 kết quả** cho tất cả. `git ls-files` hiện tại cũng không có file `secrets/`/`.env` nào bị lọt.
 
-**DoD:** người lạ đọc README tự deploy được • mọi bằng chứng GCP đã nằm trong thư mục assets.
+**DoD:** người lạ đọc README tự deploy được • mọi bằng chứng GCP đã nằm trong thư mục assets. **[CHƯA ĐẠT ĐẦY ĐỦ]** — README đã đủ để người lạ tự chạy pipeline + tự deploy (có lệnh cụ thể), nhưng "mọi bằng chứng GCP" (screenshot Cloud Run service thật) chưa có vì chưa deploy thật.
 
 ---
 
