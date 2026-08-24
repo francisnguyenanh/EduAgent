@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from typing import Any
 
 from google import genai
@@ -27,6 +28,18 @@ def _client() -> genai.Client:
         os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
         os.environ.setdefault("GOOGLE_CLOUD_LOCATION", GEMINI.vertex_location)
     return genai.Client()
+
+
+_MARKDOWN_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+def _strip_markdown_fence(text: str) -> str:
+    """Defensive: response_mime_type='application/json' should return bare
+    JSON, but strip a ```json ... ``` fence if the model wraps it anyway."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = _MARKDOWN_FENCE.sub("", stripped).strip()
+    return stripped
 
 
 def generate_json(
@@ -51,7 +64,7 @@ def generate_json(
             "response_schema": response_schema,
         },
     )
-    return json.loads(response.text)
+    return json.loads(_strip_markdown_fence(response.text))
 
 
 def generate_text(*, model: str, system_instruction: str, prompt: str) -> str:

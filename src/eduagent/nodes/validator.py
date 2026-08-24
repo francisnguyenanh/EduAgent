@@ -21,16 +21,30 @@ from eduagent.config import VALIDATOR
 # Phrases that indicate the "question" has slipped into giving an answer
 # instead of asking one. Deliberately narrow -- false negatives here are
 # safer than blocking legitimate Socratic prompts that happen to explain a
-# concept the student already raised.
+# concept the student already raised. Bilingual (EN + VI) since essays and
+# debate turns may be in either language.
 _ANSWER_LEAK_PATTERNS = [
     re.compile(r"\bthe (correct|right) answer is\b", re.IGNORECASE),
     re.compile(r"\byou should (write|say|conclude|argue) that\b", re.IGNORECASE),
     re.compile(r"\bhere('s| is) (a|the) (better|corrected|revised) (version|argument|sentence)\b", re.IGNORECASE),
     re.compile(r"\blet me (fix|rewrite|correct) (that|this|it) for you\b", re.IGNORECASE),
     re.compile(r"\binstead,? (write|say):", re.IGNORECASE),
+    re.compile(r"câu trả lời đúng là", re.IGNORECASE),
+    re.compile(r"bạn nên (viết|nói|kết luận) là", re.IGNORECASE),
+    re.compile(r"đây là (câu|đoạn|bài) (viết lại|sửa lại|đúng)", re.IGNORECASE),
+    re.compile(r"thay vì vậy,? hãy viết:?", re.IGNORECASE),
 ]
 
 _QUESTION_MARK = re.compile(r"\?")
+_QUOTED_SPAN = re.compile(r'"[^"]*"|\'[^\']*\'')
+
+
+def _count_questions_outside_quotes(text: str) -> int:
+    """Counts '?' but ignores any that fall inside a quoted span, so an agent
+    quoting the student's own question back (e.g. 'You said "why does it
+    matter?" -- but what about...') isn't flagged as asking two questions."""
+    without_quotes = _QUOTED_SPAN.sub("", text)
+    return len(_QUESTION_MARK.findall(without_quotes))
 
 
 @dataclass
@@ -46,7 +60,7 @@ def validate_debate_turn(text: str) -> ValidationResult:
         if pattern.search(text):
             violations.append(f"answer_leak:{pattern.pattern}")
 
-    question_count = len(_QUESTION_MARK.findall(text))
+    question_count = _count_questions_outside_quotes(text)
     if question_count == 0:
         violations.append("single_question_rule:no_question_found")
     elif question_count > 1:

@@ -26,13 +26,40 @@ from eduagent.nodes.validator import validate_debate_turn
 from eduagent.skills.debate_escalation import get_escalation_instruction
 from eduagent.skills.personas import get_persona
 
-_SAFE_FALLBACK_QUESTION = (
-    "That's an interesting point -- what evidence led you to that conclusion?"
-)
+# One canned fallback per persona -- used only when the LLM fails to produce
+# a validator-passing question after all retries. A single generic fallback
+# would break persona anchoring right at the moment it matters most (the
+# regenerate loop already failed once).
+_PERSONA_FALLBACK_QUESTIONS: dict[str, str] = {
+    "skeptic": "What evidence led you to that conclusion, and where does it come from?",
+    "devils_advocate": "What would someone who disagrees with you say, and how would you respond?",
+    "nitpicker": "Walk me through the reasoning step by step -- where exactly does one point lead to the next?",
+    "expander": "Does this still hold true in a different context, or only in the specific case you described?",
+}
+_DEFAULT_FALLBACK_QUESTION = "That's an interesting point -- what evidence led you to that conclusion?"
 
 
-def _build_prompt(*, essay_text: str, summary: dict, turn: int, prior_turns: list[dict], student_response: str | None) -> str:
+def _build_prompt(
+    *,
+    essay_text: str,
+    summary: dict,
+    turn: int,
+    prior_turns: list[dict],
+    student_response: str | None,
+    prior_weaknesses: list[str],
+) -> str:
     parts = [f"Original essay:\n{essay_text}", f"Extracted summary: {summary}"]
+    if turn == 1 and prior_weaknesses:
+        # Memory injection (Phase 2 -> Phase 3 follow-up): only surfaced on
+        # the opening turn, where "have you improved on this before" is a
+        # meaningful question to ask -- repeating it every turn would just be
+        # noise once the live back-and-forth is underway.
+        parts.append(
+            "This student has previously struggled with: "
+            + ", ".join(prior_weaknesses)
+            + ". If this essay repeats one of these patterns, consider probing it directly; "
+            "if it's actually improved, you may acknowledge that briefly before pushing further."
+        )
     for t in prior_turns:
         parts.append(f"Turn {t['turn']} question: {t['question']}")
         if t.get("student_response"):
@@ -50,6 +77,7 @@ async def debate_loop(ctx: Context) -> dict:
     essay_text = ctx.state.get("sanitized_text", "")
     summary = ctx.state.get("summary", {})
     student_responses: list[str] = ctx.state.get("student_responses", [])
+    prior_weaknesses: list[str] = ctx.state.get("prior_weakness_taxonomy", [])
 
     turns: list[dict] = []
     max_turns = min(VALIDATOR.max_debate_turns, 1 + len(student_responses))
@@ -64,6 +92,7 @@ async def debate_loop(ctx: Context) -> dict:
             turn=turn_number,
             prior_turns=turns,
             student_response=student_response,
+            prior_weaknesses=prior_weaknesses,
         )
 
         question = None
@@ -73,7 +102,7 @@ async def debate_loop(ctx: Context) -> dict:
                 question = candidate
                 break
         if question is None:
-            question = _SAFE_FALLBACK_QUESTION
+            question = _PERSONA_FALLBACK_QUESTIONS.get(persona_id, _DEFAULT_FALLBACK_QUESTION)
 
         turns.append(
             {

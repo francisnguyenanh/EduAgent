@@ -169,6 +169,31 @@
 
 ---
 
+## 💡 ĐỀ XUẤT CẢI TIẾN CÁC PHẦN ĐÃ LÀM XONG (Phase 0 – Phase 2) — ĐÃ THỰC HIỆN 100%
+
+> **Mục đích:** Tối ưu hóa các module đã hoàn thành để tăng độ chịu lỗi (resilience), chống false-positive khi demo/chấm thi và chuẩn bị đầu vào tốt nhất cho Tầng 2 (Phase 3).
+
+### 1. Challenge Validator & Intake (Tăng độ chịu lỗi & Đa ngôn ngữ) 🟡
+- [x] **Bilingual Answer-Leak Regex (EN + VI).** ✅ ĐÃ LÀM + PASS — thêm 4 pattern tiếng Việt vào `_ANSWER_LEAK_PATTERNS` (`validator.py`). Test mới `test_validator_rejects_answer_leak_vietnamese` pass.
+- [x] **Smart Question Count (tránh False-Positive khi quote).** ✅ ĐÃ LÀM + PASS — `_count_questions_outside_quotes()` bỏ qua `?` trong `"..."`/`'...'`. Test `test_validator_ignores_question_marks_inside_quotes` pass.
+- [x] **Prompt Injection Pattern Expansion.** ✅ ĐÃ LÀM + PASS — thêm `</user>`, `</assistant>`, `what is your original/system prompt`, `print your system prompt` vào `intake.py`. **Bug thật tìm thấy khi viết test:** pattern "what is your ... prompt" ban đầu chỉ cho 1 tính từ ("original" HOẶC "system"), bỏ lọt "what is your **original system** prompt" (2 tính từ) — cùng loại lỗi quantifier như Phase 1, đã sửa `{0,2}`.
+
+### 2. Debate Loop & Memory Integration (Gia tăng điểm Innovation/Demo) 🔴
+- [x] **Inject Long-term Memory vào Debate Prompt.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `persona_selector.py` giờ lấy thêm `weakness_taxonomy_from_profile(profile)` và lưu vào `ctx.state["prior_weakness_taxonomy"]`; `debate_loop.py` tiêm câu ngữ cảnh cụ thể vào turn 1 (*"This student has previously struggled with: ..."*) — chỉ ở turn mở màn vì lặp lại mỗi turn sẽ thành nhiễu. Đây chính là bằng chứng "become more helpful over time" xuất hiện ngay trong prompt, không chỉ trong dữ liệu Firestore ẩn.
+- [x] **Persona-Specific Fallback Questions.** ✅ ĐÃ LÀM + PASS — `_PERSONA_FALLBACK_QUESTIONS` (4 câu, 1 mỗi persona) thay `_SAFE_FALLBACK_QUESTION` tĩnh — giữ đúng chất persona ngay cả khi validator reject hết số lần retry.
+
+### 3. Cognitive Scorer & Data Mutation (Tối ưu dữ liệu cho Phase 3) 🟡
+- [x] **Scorer Rubric Rationale.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — schema `scorer.py` tách thành 2 object riêng `scores` (numeric, giữ nguyên contract cũ cho `_avg()`/Firestore/test) + `rationale` (string mỗi trục) — không phá hợp đồng dữ liệu hiện có. Verify qua Vertex AI thật, không lỗi parse.
+- [x] **Deterministic `essay_id` từ Intake.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `intake.py` mint `essay_id` 1 lần bằng `ctx.state.setdefault`, `mutator.py` dùng lại thay vì tự sinh `uuid4()` mới (chỉ fallback sinh mới nếu node bị gọi trực tiếp không qua intake — trường hợp unit test).
+- [x] **Score Trend Metric trong Profile.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `_score_trend()` trong `student_profile.py`, tính slope trung bình 3 bài gần nhất, ngưỡng "phẳng" `TREND_FLAT_BAND=0.3` tránh nhiễu số lẻ. 4 unit test mới (`improving`/`declining`/`stagnant`/`insufficient_data`) pass, verify thêm bằng chạy thật (`scripts/demo_tier1_run.py` → `score_trend: "improving"` đúng với slope (0+0.75)/2=0.375 > 0.3).
+
+### 4. LLM JSON Parsing Resilience (Tầng Foundation) 🟢
+- [x] **Defensive Markdown Stripping.** ✅ ĐÃ LÀM + PASS — `_strip_markdown_fence()` trong `llm.py`, bóc \`\`\`json và \`\`\` trước `json.loads()`. 3 unit test mới pass.
+
+**Kiểm chứng tổng:** `pytest tests/ -q` → **27/27 pass** (tăng từ 17, thêm 10 test mới cho các cải tiến). Bug thật thứ 3 (sau 2 bug quantifier ở Phase 1) tìm thấy và sửa ngay khi viết test cho pattern injection mới. `scripts/demo_tier1_run.py` chạy lại full 3-essay qua Vertex AI + Firestore thật, xác nhận `score_trend`, `essay_id` ổn định, và câu hỏi turn 1 giờ có ngữ cảnh lịch sử — không phá vỡ hành vi Phase 0-2 đã verify trước đó.
+
+---
+
 ## PHASE 3 — Tầng 2: Event-driven Class Aggregator & Teacher Co-Pilot 🔴
 
 > Phần khác biệt lớn nhất so với dự án cũ. **Không được để phase này bị bóp thời gian.**

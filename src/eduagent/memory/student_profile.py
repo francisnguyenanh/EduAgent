@@ -18,6 +18,8 @@ Firestore connection.
 from __future__ import annotations
 
 STUCK_STREAK_THRESHOLD = 3  # matches PRIORITY_WEIGHTS.stuck_streak semantics (Phase 3)
+TREND_WINDOW = 3  # how many recent essays feed score_trend
+TREND_FLAT_BAND = 0.3  # avg-score-per-essay change smaller than this counts as "stagnant", not noise
 
 
 def empty_profile(*, name: str, class_id: str) -> dict:
@@ -27,11 +29,28 @@ def empty_profile(*, name: str, class_id: str) -> dict:
         "essay_history": [],
         "persona_streak": {"current_persona": None, "times_repeated_without_improvement": 0},
         "flags": {"needs_attention": False, "reason": "", "last_updated": None},
+        "score_trend": "insufficient_data",
     }
 
 
 def _avg(scores: dict) -> float:
     return sum(scores.values()) / len(scores) if scores else 0.0
+
+
+def _score_trend(essay_history: list[dict]) -> str:
+    """'improving' / 'declining' / 'stagnant' / 'insufficient_data', from the
+    average slope of the last TREND_WINDOW essays' avg_score. Feeds directly
+    into the Intervention Priority Index's score_decline weight in Phase 3."""
+    recent = [e["avg_score"] for e in essay_history[-TREND_WINDOW:]]
+    if len(recent) < 2:
+        return "insufficient_data"
+    diffs = [recent[i + 1] - recent[i] for i in range(len(recent) - 1)]
+    avg_diff = sum(diffs) / len(diffs)
+    if avg_diff > TREND_FLAT_BAND:
+        return "improving"
+    if avg_diff < -TREND_FLAT_BAND:
+        return "declining"
+    return "stagnant"
 
 
 def merge_essay_into_profile(
@@ -86,7 +105,13 @@ def merge_essay_into_profile(
         "last_updated": timestamp,
     }
 
-    return {**profile, "essay_history": essay_history, "persona_streak": persona_streak, "flags": flags}
+    return {
+        **profile,
+        "essay_history": essay_history,
+        "persona_streak": persona_streak,
+        "flags": flags,
+        "score_trend": _score_trend(essay_history),
+    }
 
 
 def persona_history_from_profile(profile: dict) -> list[str]:

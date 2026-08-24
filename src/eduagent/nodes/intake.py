@@ -9,6 +9,7 @@ instructions" prompt (which is not reliable).
 from __future__ import annotations
 
 import re
+import uuid
 
 from google.adk.agents.context import Context
 
@@ -23,7 +24,11 @@ _INJECTION_PATTERNS = [
     re.compile(r"act as (if you (are|were)|an?)\b.{0,40}(instead|now)", re.IGNORECASE),
     re.compile(r"</?system>", re.IGNORECASE),
     re.compile(r"</?(instructions?|prompt)>", re.IGNORECASE),
+    re.compile(r"</?user>", re.IGNORECASE),
+    re.compile(r"</?assistant>", re.IGNORECASE),
     re.compile(r"reveal (your|the) (system )?prompt", re.IGNORECASE),
+    re.compile(r"what (is|was) your (original |system ){0,2}(prompt|instructions?)\b", re.IGNORECASE),
+    re.compile(r"print (your|the) (system )?prompt", re.IGNORECASE),
 ]
 
 _REDACTION_MARKER = "[redacted: possible instruction-override attempt]"
@@ -43,9 +48,15 @@ def strip_injection_attempts(text: str) -> tuple[str, list[str]]:
 
 async def intake(ctx: Context, node_input: str) -> dict:
     """Accepts raw essay text, stamps pipeline start. No mutation here --
-    the raw input is preserved for the audit trail even after sanitizing."""
+    the raw input is preserved for the audit trail even after sanitizing.
+
+    essay_id is minted here (not later in mutator) so it stays stable across
+    the whole run -- if a node downstream retries, it doesn't mint a second
+    id for what is logically the same essay attempt.
+    """
     ctx.state["raw_input"] = node_input
     ctx.state["stage"] = "intake"
+    ctx.state.setdefault("essay_id", str(uuid.uuid4()))
     return {"essay_text": node_input}
 
 

@@ -87,3 +87,32 @@ def test_weakness_taxonomy_deduplicates_preserving_order():
         weakness_detected=["unsourced claim", "ad hominem"],
     )
     assert weakness_taxonomy_from_profile(profile) == ["hasty generalization", "unsourced claim", "ad hominem"]
+
+
+def test_score_trend_insufficient_data_on_first_essay():
+    profile = empty_profile(name="An", class_id="c1")
+    profile = merge_essay_into_profile(profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(5), weakness_detected=[])
+    assert profile["score_trend"] == "insufficient_data"
+
+
+def test_score_trend_improving():
+    profile = empty_profile(name="An", class_id="c1")
+    profile = merge_essay_into_profile(profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(3), weakness_detected=[])
+    profile = merge_essay_into_profile(profile, essay_id="e2", timestamp="t2", persona_used="nitpicker", scores=_scores(6), weakness_detected=[])
+    profile = merge_essay_into_profile(profile, essay_id="e3", timestamp="t3", persona_used="expander", scores=_scores(9), weakness_detected=[])
+    assert profile["score_trend"] == "improving"
+
+
+def test_score_trend_declining():
+    profile = empty_profile(name="An", class_id="c1")
+    profile = merge_essay_into_profile(profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(9), weakness_detected=[])
+    profile = merge_essay_into_profile(profile, essay_id="e2", timestamp="t2", persona_used="nitpicker", scores=_scores(6), weakness_detected=[])
+    profile = merge_essay_into_profile(profile, essay_id="e3", timestamp="t3", persona_used="expander", scores=_scores(3), weakness_detected=[])
+    assert profile["score_trend"] == "declining"
+
+
+def test_score_trend_stagnant_within_flat_band():
+    profile = empty_profile(name="An", class_id="c1")
+    profile = merge_essay_into_profile(profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(5), weakness_detected=[])
+    profile = merge_essay_into_profile(profile, essay_id="e2", timestamp="t2", persona_used="nitpicker", scores=_scores(5), weakness_detected=[])
+    assert profile["score_trend"] == "stagnant"

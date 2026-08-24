@@ -10,7 +10,6 @@ attention flags, it doesn't just append a row.
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
 
 from google.adk.agents.context import Context
@@ -47,7 +46,15 @@ async def profile_mutator(ctx: Context) -> dict:
     student_id = ctx.state.get("student_id")
     updated_profile = None
     if student_id:
-        essay_id = str(uuid.uuid4())
+        # Minted once in intake.py so a retried node doesn't create a second
+        # essay_id for the same attempt; fall back to a fresh one only if a
+        # caller skipped intake entirely (e.g. a unit test invoking this node
+        # directly).
+        essay_id = ctx.state.get("essay_id")
+        if not essay_id:
+            import uuid
+
+            essay_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
         updated_profile = apply_essay_result(
             student_id,
