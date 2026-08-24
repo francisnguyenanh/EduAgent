@@ -26,7 +26,8 @@ from eduagent.api import (
 @pytest.fixture(autouse=True)
 def _clean_sessions():
     interactive._sessions.clear()
-    yield
+    with patch("eduagent.api.get_class_settings", return_value={"socratic_persona": "auto"}):
+        yield
     interactive._sessions.clear()
 
 

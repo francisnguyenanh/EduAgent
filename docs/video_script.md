@@ -24,27 +24,29 @@
 ## 0:30–1:45 — Tier 1: Multimodal Ingestion & Autonomous Socratic Pipeline (LIVE)
 
 1. **(0:30–0:50) Multimodal Ingestion:**
-   - Học sinh đăng nhập (`c1_stu01`).
+   - Học sinh đăng nhập (`c1_stu01`, Passcode: `eduagent2026`).
    - Tải lên ảnh bài luận viết tay thật (`messy_essay_videogames.jpg`) hoặc bấm nút nạp mẫu bài luận.
-   - Để nguyên Persona ở chế độ **`🎯 Auto-Detect Weakness`** và bấm **Start Debate**.
+   - Nhân vật Socratic Coach được tự động áp dụng theo cấu hình sư phạm của Giáo viên (mặc định: **`🎯 Auto-Detect Weakness`**) $\rightarrow$ Bấm **Start Debate**.
 2. **(0:50–1:15) Autonomous Routing & Persona Anchoring:**
    - Chỉ vào **Huy hiệu Định tuyến Tự hành (Autonomous Agent Routing)**:
      *"The agent autonomously diagnoses the student's reasoning flaw and routes to the matching Socratic Persona — here, The Devil's Advocate for one-sided argumentation."*
    - Tranh biện 3 lượt Socratic: Nhấn mạnh AI **không bao giờ mớm câu trả lời**, chỉ đặt câu hỏi đào sâu. Mọi câu hỏi đều được kiểm duyệt bởi Zero-LLM Challenge Validator độc lập.
 3. **(1:15–1:45) Cognitive Radar Chart & Metacognitive Loop:**
    - Phiên kết thúc $\rightarrow$ Chỉ vào **Biểu đồ Radar Điểm Nhận Thức (2D SVG Spider Chart)** đánh giá 4 trục: *Logical Coherence, Evidence Quality, Scope Awareness, Counterargument Handling*.
-   - Nhập 1 câu luận điểm đã sửa đổi vào phần **Metacognitive Self-Correction** và bấm Submit để nhận phản hồi nhận thức tức thì.
+   - Nhập 1 câu luận điểm đã sửa đổi vào phần **Metacognitive Self-Correction** và bấm Submit để nhận phản hồi nhận thức tức thì (+0.5 Growth Bonus).
 
 ---
 
 ## 1:45–2:45 — Tier 2: Class Aggregator & Teacher Co-Pilot (LIVE)
 
 1. **(1:45–2:10) Deterministic Priority Index & Fallacy Clusters:**
-   - Chuyển sang tài khoản Giáo viên (`c1_teacher`).
-   - Mở tab **Priority**: Chỉ vào bảng xếp hạng ưu tiên can thiệp (tính toán bằng công thức toán học xác định, không dùng LLM cảm tính) và biểu đồ phân cụm lỗi tư duy chung của cả lớp.
+   - Đăng xuất $\rightarrow$ Chuyển sang tài khoản Giáo viên (`c1_teacher`, Passcode: `eduagent2026`).
+   - Mở tab **Priority**: Chỉ vào bảng xếp hạng ưu tiên can thiệp (tính toán bằng công thức toán học xác định, không dùng LLM cảm tính) và bấm nút **`[📋 Copy Parent Update Note]`** để tạo ngay bản thảo thư gửi phụ huynh.
    - Mở tab **Roster**: Xem biểu đồ Sparkline xu hướng tiến bộ qua từng bài luận của từng học sinh.
 2. **(2:10–2:35) Dynamic Settings & Human-In-The-Loop:**
-   - Mở tab **Settings**: Chỉ vào ô cấu hình Google Sheet $\rightarrow$ Bấm **`🧪 Test Sheet Connection`** $\rightarrow$ Dòng trạng thái báo xanh thành công ngay lập tức!
+   - Mở tab **Settings**: 
+     * Chỉ vào **Socratic Coach Persona (Class-wide Enforcement)** — nơi giáo viên kiểm soát chế độ tranh biện cho toàn lớp (Auto hoặc chỉ định The Skeptic, Devil's Advocate,...).
+     * Chỉ vào ô cấu hình Google Sheet $\rightarrow$ Bấm **`🧪 Test Sheet Connection`** $\rightarrow$ Dòng trạng thái báo xanh thành công ngay lập tức!
    - Chuyển sang Gmail của giáo viên $\rightarrow$ Refresh Drafts $\rightarrow$ Chỉ vào bản thảo email tổng hợp lớp vừa được tự động soạn sẵn:
      *"The agent has zero permission to send emails on its own. The teacher retains the final human-in-the-loop decision to review and click Send."*
 

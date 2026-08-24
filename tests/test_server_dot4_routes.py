@@ -12,8 +12,8 @@ _C1_HEADERS = {"Authorization": f"Bearer {create_access_token('c1_teacher', 'tea
 
 
 def test_login_route_returns_200_and_identity(monkeypatch):
-    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "demo123")
-    response = client.post("/api/auth/login", json={"role": "student", "user_id": "c1_stu01", "password": "demo123"})
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
+    response = client.post("/api/auth/login", json={"role": "student", "user_id": "c1_stu01", "password": "eduagent2026"})
     assert response.status_code == 200
     body = response.json()
     assert body["class_id"] == "c1"
@@ -23,7 +23,7 @@ def test_login_route_returns_200_and_identity(monkeypatch):
 
 
 def test_login_route_returns_401_for_wrong_password(monkeypatch):
-    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "demo123")
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
     response = client.post("/api/auth/login", json={"role": "teacher", "user_id": "c1_teacher", "password": "wrong"})
     assert response.status_code == 401
 

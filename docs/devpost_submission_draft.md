@@ -84,8 +84,10 @@ We built the pipeline from scratch using:
 ## 5. "Try it out" links
 - **GitHub Repository:** `[Link tới GitHub repo của bạn]`
 - **Live Web Demo:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
-  * **Student Portal:** ID `c1_stu01` | Password `demo123`
-  * **Teacher Portal:** ID `c1_teacher` | Password `demo123`
+  * **Shared Passcode:** `eduagent2026` (Used for both Student & Teacher logins)
+  * **Student Portal:** ID `c1_stu01` (or any custom ID like `c1_judge01`) | Passcode: `eduagent2026`
+  * **Teacher Portal:** ID `c1_teacher` | Passcode: `eduagent2026`
+  * *Note on Sandbox Mode:* The selected portal button determines the user's role (Student vs Teacher). You can select Student Portal and log in with any custom ID matching `<class_id>_<name>` (e.g., `c1_judge_david`) using passcode `eduagent2026`. This spins up an isolated test student profile in Firestore which dynamically links to the Teacher Portal roster and priority matrix.
 - **Live Cloud Run Service (API Check):** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/health-check`
 
 ---
@@ -114,8 +116,9 @@ We built the pipeline from scratch using:
 * **Hosted project URL if available:** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`
 * **Testing instructions:**
   1. **Interact with the Live Web UI:** Open `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/`
-     * Login as Student using ID `c1_stu01` and Password `demo123` to try Socratic debate with OCR, presets, or Google Doc link.
-     * Login as Teacher using ID `c1_teacher` and Password `demo123` to view class analytics, priority index table with SVG sparklines, parent update notes, and configuration settings.
+     * Shared Demo Passcode: `eduagent2026` (Click the Student or Teacher Portal button to select your role before signing in)
+     * Login as Student using ID `c1_stu01` (or any custom `c1_<name>` like `c1_judge_david`) and Passcode `eduagent2026` to try Socratic debate with OCR, presets, or Google Doc link.
+     * Login as Teacher using ID `c1_teacher` and Passcode `eduagent2026` to view class analytics, priority index table with SVG sparklines, parent update notes, and configuration settings.
   2. To run local unit & integration tests, ensure Google Application Default Credentials (ADC) are configured, then execute:
      `pytest tests/ -q`
   3. To run the diagnostic doctor check, execute:

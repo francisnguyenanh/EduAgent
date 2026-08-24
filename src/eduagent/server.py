@@ -285,6 +285,30 @@ async def api_class_students(class_id: str, limit: int = 50, authorization: str 
     return {"class_id": class_id, "students": students}
 
 
+@app.get("/api/demo/sample-ocr-image")
+async def get_sample_ocr_image() -> dict:
+    """Returns the base64-encoded messy handwritten essay image for 1-click Judge testing."""
+    import base64
+    from pathlib import Path
+
+    possible_paths = [
+        Path(__file__).parent / "sample_images" / "messy_essay_videogames.jpg",
+        Path("eval/test_images/messy_essay_videogames.jpg"),
+        Path("/app/src/eduagent/sample_images/messy_essay_videogames.jpg"),
+    ]
+    for p in possible_paths:
+        if p.exists():
+            with open(p, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            return {
+                "filename": "messy_essay_videogames.jpg",
+                "mime_type": "image/jpeg",
+                "image_base64": b64,
+                "description": "Authentic handwritten student essay on video games with cross-outs and margin notes.",
+            }
+    raise HTTPException(status_code=404, detail="Sample image not found on server.")
+
+
 @app.get("/health-check")
 async def health_check() -> dict:
     """Cloud Run / uptime-check target -- deliberately does NOT touch

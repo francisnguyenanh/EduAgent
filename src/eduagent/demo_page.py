@@ -144,9 +144,9 @@ DEMO_PAGE_HTML = """<!doctype html>
       <p id="login-heading"></p>
       <label for="login_user_id">ID (e.g. <span id="id-example">c1_stu01</span>)</label>
       <input id="login_user_id" placeholder="c1_stu01">
-      <label for="login_password">Password</label>
-      <input id="login_password" type="password" placeholder="demo123">
-      <div class="hint">Demo build: mock login only, shared demo password (demo123) -- not a real auth system.</div>
+      <label for="login_password">Passcode / Password</label>
+      <input id="login_password" type="password" placeholder="eduagent2026">
+      <div class="hint">Demo build: mock login, shared passcode: <strong>eduagent2026</strong> (for both Student &amp; Teacher).</div>
       <button class="action" id="login-btn" onclick="doLogin()">Sign in</button>
       <button class="small" style="margin-top:0.75rem;" onclick="backToRolePick()">Back</button>
       <div id="login-error" class="error hidden"></div>
@@ -175,20 +175,25 @@ DEMO_PAGE_HTML = """<!doctype html>
         <label for="essay_text">Essay (type it, or upload a photo, or paste a Google Doc link)</label>
         <textarea id="essay_text" placeholder="Paste or write your essay here..."></textarea>
         <label for="gdoc_url">Or Google Doc share link (Anyone with link can view)</label>
-        <input id="gdoc_url" placeholder="https://docs.google.com/document/d/1A2B3C.../edit">
-        <label for="essay_image">Or upload a photo of a handwritten essay</label>
-        <input id="essay_image" type="file" accept="image/*">
-        
-        <div style="margin: 0.75rem 0;">
-          <label for="persona_select" style="font-weight:600;">Socratic Coach Persona:</label>
-          <select id="persona_select" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:0.9rem;">
-            <option value="auto">🎯 Auto-Detect Weakness (AI diagnoses reasoning flaws)</option>
-            <option value="skeptic">🧐 The Skeptic (Probes evidence, data, citations)</option>
-            <option value="devils_advocate">😈 The Devil's Advocate (Presents opposing counter-arguments)</option>
-            <option value="nitpicker">🔬 The Nitpicker (Challenges assumptions & logical fallacies)</option>
-            <option value="expander">🔭 The Expander (Tests edge cases, generalizations & scope)</option>
-          </select>
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <input id="gdoc_url" style="flex:1; min-width:260px;" placeholder="https://docs.google.com/document/d/1A2B3C.../edit" oninput="updateGDocPreviewBtn()">
+          <a id="btn_open_gdoc" href="https://docs.google.com/document/d/11Zm7Y5xBd5hzvSXr5WcfS4QyozCg7kfZGfIT1Me4TBY/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style="text-decoration:none; display:none; align-items:center; gap:0.3rem; padding:0.5rem 0.8rem; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:var(--accent); font-weight:600; font-size:0.8rem;">
+            📄 Open Google Doc ↗
+          </a>
         </div>
+        <label for="essay_image">Or upload a photo of a handwritten essay</label>
+        <input id="essay_image" type="file" accept="image/*" onchange="handleImagePicked(this)">
+        
+        <div id="ocr_preview_container" class="hidden" style="margin-top:0.6rem; padding:0.6rem; border:1px dashed var(--border); border-radius:8px; background:rgba(0,0,0,0.02);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+            <span style="font-size:0.78rem; font-weight:600; color:var(--muted);" id="ocr_preview_label">📷 Handwritten Essay Preview:</span>
+            <button type="button" class="small" style="padding:0.2rem 0.5rem; font-size:0.72rem;" onclick="clearOcrPreview()">Remove image</button>
+          </div>
+          <img id="ocr_preview_img" src="" alt="Handwritten Essay Preview" style="max-width:100%; max-height:260px; object-fit:contain; border-radius:6px; border:1px solid var(--border); display:block; margin:0 auto; background:#fff;">
+          <div id="ocr_sample_note" class="hint" style="text-align:center; margin-top:0.3rem;">Real handwriting sample with cross-outs and natural paper angle.</div>
+        </div>
+        
+        <!-- Socratic Persona is now set by the Teacher in Settings tab -->
 
         <button class="action" id="start-btn" onclick="startDebate()">Start Debate</button>
         <div id="start-error" class="error hidden"></div>
@@ -264,6 +269,15 @@ DEMO_PAGE_HTML = """<!doctype html>
       <label for="setting_digest_email">Digest notification email (Gmail draft recipient)</label>
       <input id="setting_digest_email" placeholder="teacher@school.edu">
 
+      <label for="setting_socratic_persona" style="font-weight:600; margin-top:0.75rem; display:block;">Socratic Coach Persona (Class-wide Enforcement)</label>
+      <select id="setting_socratic_persona" style="width:100%; padding:0.55rem 0.7rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font:inherit; font-size:0.9rem; margin-top:0.25rem;">
+        <option value="auto">🎯 Auto-Detect Weakness (AI diagnoses reasoning flaws per student)</option>
+        <option value="skeptic">🧐 The Skeptic (Probes evidence, data, citations)</option>
+        <option value="devils_advocate">😈 The Devil's Advocate (Presents opposing counter-arguments)</option>
+        <option value="nitpicker">🔬 The Nitpicker (Challenges assumptions & logical fallacies)</option>
+        <option value="expander">🔭 The Expander (Tests edge cases, generalizations & scope)</option>
+      </select>
+
       <label for="setting_sheet_id">Audit Log Google Sheet (Link or Spreadsheet ID)</label>
       <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
         <input id="setting_sheet_id" style="flex:1; min-width:280px; margin:0;" placeholder="https://docs.google.com/spreadsheets/d/1pUGTCIz.../edit or ID">
@@ -285,6 +299,7 @@ DEMO_PAGE_HTML = """<!doctype html>
 <script>
 let sessionId = null;
 let auth = null; // {role, class_id, user_id, display_name}
+let presetImageBase64 = null;
 
 function pickRole(role) {
   auth = {role};
@@ -308,7 +323,7 @@ async function autoLogin(userId, role, displayName) {
       body: JSON.stringify({
         role: role,
         user_id: userId,
-        password: 'demo123',
+        password: 'eduagent2026',
       }),
     });
     if (resp.ok) {
@@ -329,7 +344,7 @@ async function doLogin() {
   btn.disabled = true;
   try {
     const enteredId = (document.getElementById('login_user_id').value || '').trim() || (auth && auth.role === 'teacher' ? 'c1_teacher' : 'c1_stu01');
-    const enteredPass = (document.getElementById('login_password').value || '').trim() || 'demo123';
+    const enteredPass = (document.getElementById('login_password').value || '').trim() || 'eduagent2026';
     const resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -508,7 +523,45 @@ function fileToBase64(file) {
   });
 }
 
+function updateGDocPreviewBtn() {
+  const val = (document.getElementById('gdoc_url').value || '').trim();
+  const btn = document.getElementById('btn_open_gdoc');
+  if (btn) {
+    if (val.startsWith('http')) {
+      btn.href = val;
+      btn.style.display = 'inline-flex';
+    } else {
+      btn.style.display = 'none';
+    }
+  }
+}
+
+async function handleImagePicked(input) {
+  if (input.files && input.files[0]) {
+    presetImageBase64 = null;
+    const file = input.files[0];
+    const b64 = await fileToBase64(file);
+    document.getElementById('ocr_preview_img').src = 'data:' + (file.type || 'image/jpeg') + ';base64,' + b64;
+    document.getElementById('ocr_preview_label').textContent = '📷 Uploaded Photo Preview: ' + file.name;
+    document.getElementById('ocr_preview_container').classList.remove('hidden');
+    document.getElementById('essay_text').value = '';
+    document.getElementById('gdoc_url').value = '';
+    updateGDocPreviewBtn();
+  }
+}
+
+function clearOcrPreview() {
+  presetImageBase64 = null;
+  const imgInput = document.getElementById('essay_image');
+  if (imgInput) imgInput.value = '';
+  const previewImg = document.getElementById('ocr_preview_img');
+  if (previewImg) previewImg.src = '';
+  const container = document.getElementById('ocr_preview_container');
+  if (container) container.classList.add('hidden');
+}
+
 function loadSampleEssay(type) {
+  clearOcrPreview();
   if (type === 'climate') {
     document.getElementById('essay_text').value = "Electric vehicles are completely useless for saving the environment because manufacturing their batteries creates huge amounts of pollution, and electricity comes from burning coal anyway. Therefore, governments should immediately stop all subsidies for electric cars.";
     document.getElementById('gdoc_url').value = '';
@@ -518,12 +571,15 @@ function loadSampleEssay(type) {
     document.getElementById('gdoc_url').value = '';
     document.getElementById('essay_image').value = '';
   }
+  updateGDocPreviewBtn();
 }
 
 function clearEssayForm() {
   document.getElementById('essay_text').value = '';
   document.getElementById('gdoc_url').value = '';
   document.getElementById('essay_image').value = '';
+  clearOcrPreview();
+  updateGDocPreviewBtn();
 }
 
 function loadSampleReply() {
@@ -541,25 +597,23 @@ async function startDebate() {
     const imageFile = document.getElementById('essay_image').files[0];
     const gdocUrl = (document.getElementById('gdoc_url').value || '').trim();
     const studentId = auth.user_id;
-    const personaVal = document.getElementById('persona_select').value;
-    const personaId = personaVal === 'auto' ? undefined : personaVal;
     let resp;
     if (gdocUrl) {
       resp = await fetch('/api/debate/start-with-gdoc', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({gdoc_url: gdocUrl, student_id: studentId, name: auth.display_name, class_id: auth.class_id, persona_id: personaId}),
+        body: JSON.stringify({gdoc_url: gdocUrl, student_id: studentId, name: auth.display_name, class_id: auth.class_id}),
       });
-    } else if (imageFile) {
-      const imageBase64 = await fileToBase64(imageFile);
+    } else if (imageFile || presetImageBase64) {
+      const imageBase64 = imageFile ? await fileToBase64(imageFile) : presetImageBase64;
+      const mimeType = imageFile ? (imageFile.type || 'image/jpeg') : 'image/jpeg';
       resp = await fetch('/api/debate/start-with-image', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           image_base64: imageBase64,
-          image_mime_type: imageFile.type || 'image/jpeg',
+          image_mime_type: mimeType,
           student_id: studentId, name: auth.display_name, class_id: auth.class_id,
-          persona_id: personaId,
         }),
       });
     } else {
@@ -571,7 +625,6 @@ async function startDebate() {
           student_id: studentId,
           name: auth.display_name,
           class_id: auth.class_id,
-          persona_id: personaId,
         }),
       });
     }
@@ -850,14 +903,26 @@ async function presetScenario(scenario) {
     enterApp();
     showTab('student');
     clearEssayForm();
-    document.getElementById('essay_text').value = '[Simulated handwriting transcript]: Using artificial intelligence in schools offers major learning advantages, but excessive reliance risks diminishing students\\' independent critical reasoning.';
-    lastEssayInput = document.getElementById('essay_text').value;
+    try {
+      const resp = await fetch('/api/demo/sample-ocr-image');
+      if (resp.ok) {
+        const data = await resp.json();
+        presetImageBase64 = data.image_base64;
+        document.getElementById('ocr_preview_img').src = 'data:' + data.mime_type + ';base64,' + data.image_base64;
+        document.getElementById('ocr_preview_label').textContent = '📷 Sample Image Loaded: ' + data.filename;
+        document.getElementById('ocr_preview_container').classList.remove('hidden');
+      }
+    } catch (e) {
+      console.error('Failed to load sample OCR image:', e);
+    }
   } else if (scenario === 'gdoc') {
     await autoLogin('c1_stu01', 'student', 'An');
     enterApp();
     showTab('student');
     clearEssayForm();
-    document.getElementById('gdoc_url').value = 'https://docs.google.com/document/d/1yD3xFakeDemoDocForEvaluation/edit';
+    const gdocLink = 'https://docs.google.com/document/d/11Zm7Y5xBd5hzvSXr5WcfS4QyozCg7kfZGfIT1Me4TBY/edit?usp=sharing';
+    document.getElementById('gdoc_url').value = gdocLink;
+    updateGDocPreviewBtn();
   } else if (scenario === 'teacher') {
     await autoLogin('c1_teacher', 'teacher', 'Mr. Minh');
     enterApp();
@@ -1049,6 +1114,7 @@ async function loadSettings() {
     document.getElementById('setting_stuck_threshold').value = data.settings.stuck_streak_threshold;
     document.getElementById('setting_digest_email').value = data.settings.digest_notify_email || '';
     document.getElementById('setting_sheet_id').value = data.settings.audit_spreadsheet_id || '';
+    document.getElementById('setting_socratic_persona').value = data.settings.socratic_persona || 'auto';
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
@@ -1068,6 +1134,7 @@ async function saveSettings() {
         stuck_streak_threshold: parseInt(document.getElementById('setting_stuck_threshold').value, 10),
         digest_notify_email: document.getElementById('setting_digest_email').value.trim(),
         audit_spreadsheet_id: document.getElementById('setting_sheet_id').value.trim(),
+        socratic_persona: document.getElementById('setting_socratic_persona').value,
       }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);

@@ -19,9 +19,14 @@
 
 You can experience the fully deployed system immediately without any local setup:
 * **Live Web App:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
-* **Demo Login Credentials:**
-  * **Student Portal:** Student ID: `c1_stu01` | Password: `demo123`
-  * **Teacher Portal:** Teacher ID: `c1_teacher` | Password: `demo123`
+* **Demo Passcode:** `eduagent2026` (Shared passcode for both Student & Teacher logins)
+  * **Student Portal:** Student ID: `c1_stu01` (or custom e.g. `c1_judge01`) | Passcode: `eduagent2026`
+  * **Teacher Portal:** Teacher ID: `c1_teacher` | Passcode: `eduagent2026`
+
+> [!NOTE]
+> **Mock Multi-Tenant Sandbox Mode:**
+> The system uses a stateless mock login based on your selected portal (Student vs Teacher). You can choose **Student Portal** and enter **any arbitrary ID** following the `<class_id>_<name>` format (e.g., `c1_judge_mark`) with passcode `eduagent2026` to log in. 
+> Firestore will dynamically spin up an isolated student profile for that custom ID. Once you complete a Socratic debate under this ID, the new student record will immediately propagate to the **Teacher Portal**'s priority matrix and class roster!
 
 
 ---
@@ -263,7 +268,7 @@ Before leaving this project running unattended for any length of time:
 - **Gmail**: OAuth scope `gmail.compose` only; **the codebase itself never calls `.send()`** anywhere in the digest flow (see ADR-001) — enforced by an AST-based test (`tests/test_gmail_mcp_never_sends.py`), not just code review discipline. The actual HITL gate is the teacher clicking Send in their own Gmail client, a human action entirely outside this system's code path.
 - **Sheets**: `append_audit_row()` is the only exported write — no update/delete, so the audit trail can't be quietly edited by a bug or a future feature.
 - **Cloud Run**: this project's live deployment uses `--allow-unauthenticated` (so a judge can open the Web UI directly), which means Cloud Run IAM does not gate `POST /`. Instead, `server.py::_verify_pubsub_push_auth` verifies the Pub/Sub push subscription's OIDC token in the application layer using `google.oauth2.id_token.verify_oauth2_token` (real signature verification against Google's public keys, not a shared secret) before `process_event()` ever runs — see ADR-014. A redeploy that doesn't need a public UI should prefer `--no-allow-unauthenticated` instead, which needs no application-layer check.
-- **Authentication & Authorization**: `auth.py` provides a lightweight, stateless role-based authentication model with a shared demo password (`demo123`) designed specifically for streamlined hackathon judging without external IdP dependencies. Scoped HMAC-signed session tokens enforce multi-tenant isolation, ensuring a logged-in user in class `c1` cannot inspect or modify rosters/digests in other classes (IDOR prevention, see ADR-013).
+- **Authentication & Authorization**: `auth.py` provides a lightweight, stateless role-based authentication model with a shared demo passcode (`eduagent2026`) designed specifically for streamlined hackathon judging without external IdP dependencies. Scoped HMAC-signed session tokens enforce multi-tenant isolation, ensuring a logged-in user in class `c1` cannot inspect or modify rosters/digests in other classes (IDOR prevention, see ADR-013).
 - **Layered Prompt-Injection Defense**: Regex sanitization (`strip_injection_attempts`) executes at both the HTTP API boundary (`api.py`) and the ADK workflow graph (`intake.py`), ensuring that essays, OCR outputs, GDocs, and turn-by-turn student replies are stripped of instruction-override attempts before LLM prompt construction.
 - **Input Boundaries & Cost-DoS Protection**: Strict upper bounds are enforced on all ingress vectors (max 20,000 chars for essays, max 4,000 chars for debate replies, max 10MB for base64 handwriting images, max 100KB for Google Doc fetches).
 - **XSS & Output Hygiene**: The Web UI uses contextual HTML escaping (`esc()`), strict `textContent` DOM node population, and event delegation to prevent stored XSS attacks across student submissions and teacher dashboards.

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-_MOCK_PASSWORD = os.getenv("EDUAGENT_MOCK_PASSWORD", "demo123")
+_MOCK_PASSWORD = os.getenv("EDUAGENT_MOCK_PASSWORD", "eduagent2026")
 _SESSION_SECRET = os.getenv("EDUAGENT_SESSION_SECRET", "eduagent-demo-secret-key-2026").encode("utf-8")
 
 

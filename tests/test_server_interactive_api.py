@@ -148,3 +148,13 @@ def test_api_class_students_firestore_failure_returns_503():
         response = client.get("/api/classes/c1/students", headers=_C1_HEADERS)
     assert response.status_code == 503
 
+
+def test_api_get_sample_ocr_image_returns_base64():
+    response = client.get("/api/demo/sample-ocr-image")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filename"] == "messy_essay_videogames.jpg"
+    assert data["mime_type"] == "image/jpeg"
+    assert len(data["image_base64"]) > 1000
+
+

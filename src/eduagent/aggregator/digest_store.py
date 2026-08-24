@@ -80,6 +80,7 @@ DEFAULT_CLASS_SETTINGS = {
     "stuck_streak_threshold": 3,
     "digest_notify_email": "",
     "audit_spreadsheet_id": "",
+    "socratic_persona": "auto",
 }
 
 

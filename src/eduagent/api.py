@@ -103,6 +103,7 @@ class ClassSettingsRequest(BaseModel):
     stuck_streak_threshold: int | None = None
     digest_notify_email: str | None = None
     audit_spreadsheet_id: str | None = None
+    socratic_persona: str | None = None
 
 
 class TestSheetsRequest(BaseModel):
@@ -154,7 +155,20 @@ def _start_debate_from_essay_text(
     persona_history = persona_history_from_profile(profile) if profile else []
     prior_weaknesses = weakness_taxonomy_from_profile(profile) if profile else []
 
-    selected_persona_id = persona_id if (persona_id and persona_id in ("skeptic", "devils_advocate", "nitpicker", "expander")) else None
+    # Look up teacher settings for persona enforcement (Student cannot pick, teacher enforces it)
+    enforced_persona = "auto"
+    inferred_class_id = class_id
+    if not inferred_class_id and student_id and "_" in student_id:
+        inferred_class_id = student_id.split("_")[0]
+    
+    if inferred_class_id:
+        try:
+            settings = get_class_settings(class_id=inferred_class_id)
+            enforced_persona = settings.get("socratic_persona", "auto")
+        except Exception:
+            _logger.exception("Failed to load class settings for debate start -- defaulting to auto persona")
+
+    selected_persona_id = enforced_persona if enforced_persona in ("skeptic", "devils_advocate", "nitpicker", "expander") else None
     if not selected_persona_id:
         selected_persona_id = choose_persona(summary.get("fallacies_draft", []), persona_history, essay_seed=clean_essay_text)
     persona = get_persona(selected_persona_id)

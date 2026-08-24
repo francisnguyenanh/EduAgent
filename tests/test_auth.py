@@ -26,8 +26,8 @@ def test_split_class_id_rejects_leading_underscore():
 
 
 def test_login_succeeds_with_correct_password(monkeypatch):
-    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "demo123")
-    result = login(LoginRequest(role="student", user_id="c1_stu01", password="demo123"))
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
+    result = login(LoginRequest(role="student", user_id="c1_stu01", password="eduagent2026"))
     assert result.role == "student"
     assert result.class_id == "c1"
     assert result.user_id == "c1_stu01"
@@ -35,12 +35,12 @@ def test_login_succeeds_with_correct_password(monkeypatch):
 
 
 def test_login_rejects_wrong_password(monkeypatch):
-    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "demo123")
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
     with pytest.raises(LoginError):
         login(LoginRequest(role="teacher", user_id="c1_teacher", password="wrong"))
 
 
 def test_login_rejects_unknown_role(monkeypatch):
-    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "demo123")
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
     with pytest.raises(LoginError):
-        login(LoginRequest(role="admin", user_id="c1_teacher", password="demo123"))
+        login(LoginRequest(role="admin", user_id="c1_teacher", password="eduagent2026"))
