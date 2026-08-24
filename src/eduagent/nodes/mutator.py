@@ -6,15 +6,25 @@ essay_history/persona_streak instead of overwriting. This is the concrete
 answer to the track's judging question "does the agent synthesize or mutate
 data, rather than just reading it?" -- the write itself computes streaks and
 attention flags, it doesn't just append a row.
+
+Phase 3: after the Firestore write succeeds, publishes `essay.evaluated` to
+Pub/Sub so the Tier 2 Class Aggregator can react. Publish failure is logged
+but never raised -- the essay result is already durably saved; losing the
+Tier 2 trigger is recoverable (Phase 4 hardens this with retry), losing the
+student's actual work is not.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from google.adk.agents.context import Context
 
+from eduagent.events import publish_essay_evaluated
 from eduagent.memory.firestore_memory import apply_essay_result
+
+_logger = logging.getLogger(__name__)
 
 
 def build_profile_delta(*, persona_id: str, fallacies_draft: list[str], scores: dict, validation_result: dict) -> dict:
@@ -67,6 +77,18 @@ async def profile_mutator(ctx: Context) -> dict:
             weakness_detected=fallacies_draft,
         )
         ctx.state["profile_after_mutation"] = updated_profile
+
+        try:
+            message_id = publish_essay_evaluated(
+                event_id=essay_id,
+                student_id=student_id,
+                class_id=ctx.state.get("class_id", "unknown_class"),
+                essay_id=essay_id,
+            )
+            ctx.state["essay_evaluated_message_id"] = message_id
+        except Exception:
+            _logger.exception("Failed to publish essay.evaluated for essay_id=%s", essay_id)
+            ctx.state["essay_evaluated_message_id"] = None
 
     ctx.state["profile_mutated"] = updated_profile is not None
 

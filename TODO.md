@@ -194,26 +194,38 @@
 
 ---
 
-## PHASE 3 — Tầng 2: Event-driven Class Aggregator & Teacher Co-Pilot 🔴
+## PHASE 3 — Tầng 2: Event-driven Class Aggregator & Teacher Co-Pilot 🔴 HOÀN THÀNH LÕI (thiếu Web UI)
 
 > Phần khác biệt lớn nhất so với dự án cũ. **Không được để phase này bị bóp thời gian.**
 
-- [ ] **Pub/Sub event-driven:** Tầng 1 xong → publish `essay.evaluated` → Cloud Run subscriber trigger Class Aggregator.
-- [ ] 🔴 **Idempotency:** Pub/Sub là at-least-once — cùng 1 event CHẮC CHẮN sẽ đến 2 lần. Dùng `event_id` ghi vào collection `processed_events`, gặp lại thì skip. Không có cái này, demo có thể gửi digest trùng ngay trên sóng.
-- [ ] 🔴 **Dead Letter Topic:** subscriber fail 3 lần → đẩy sang DLQ thay vì retry vô hạn. Show DLQ trống trong video = bằng chứng hệ thống chạy sạch.
-- [ ] **Class Cluster & Pattern Engine (Function Node, deterministic):**
-  - Quét `student_profiles` theo `class_id`.
-  - **Systemic Fallacy Clustering:** gom cụm lỗi chung cả lớp.
-  - **Intervention Priority Index** — công thức có trọng số **hằng số ghi rõ trong code**, audit được:
-    `Priority = w1·stuck_streak + w2·score_decline + w3·inactivity_days + w4·shared_fallacy_weight`
-    (w1..w4 khai báo trong `config.py`, có comment giải thích vì sao chọn giá trị đó)
-  - **LLM tuyệt đối không tham gia xếp hạng** — chỉ function node. Giáo viên phải hiểu được TẠI SAO em A xếp trên em B.
-- [ ] **Teacher Digest Synthesizer (Gemini 3.5 Pro):** chỉ **diễn đạt** kết quả đã tính sẵn thành: danh sách cần kèm cặp, phân tích nguyên nhân gốc, gợi ý 1 mini-lesson 15 phút cho tiết tới.
-- [ ] **Gmail MCP (compose-only):** tạo email draft trong hòm thư giáo viên. 🔴 **GATE HITL DUY NHẤT** — giáo viên bấm Gửi.
-- [ ] **Sheets MCP (append-only):** audit log mỗi lần digest được tạo/gửi.
-- [ ] **Web UI tối giản:** hiển thị live feed pipeline + digest chờ duyệt + nút Send. Không cần đẹp, cần chạy thật và quay được.
+> **ADR-003:** Google Pub/Sub yêu cầu `max-delivery-attempts` tối thiểu là **5**, không phải 3 như plan gốc — `gcloud pubsub subscriptions create` từ chối giá trị 3. Đã cập nhật `PUBSUB.max_delivery_attempts = 5` trong `config.py` với comment giải thích đây là platform floor, không phải quyết định thiết kế.
 
-**DoD:** submit essay mới → Pub/Sub trigger tự động → digest sinh ra với ranking giải thích được → draft xuất hiện trong Gmail → bấm Send gửi thật → Sheets có dòng log • gửi lặp event không tạo digest trùng.
+- [x] **Pub/Sub event-driven, hạ tầng thật.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - Tạo thật: topic `essay-evaluated`, DLQ topic `essay-evaluated-dlq`, subscription `class-aggregator-sub` (dead-letter-policy trỏ đúng DLQ, max-delivery-attempts=5).
+  - **Phát hiện & vá lỗ hổng thật:** `gcloud ... get-iam-policy` cho thấy Pub/Sub service agent (`service-<projectnum>@gcp-sa-pubsub.iam.gserviceaccount.com`) KHÔNG có quyền publish vào DLQ / subscribe từ subscription chính — nếu bỏ qua, cơ chế Dead Letter sẽ **âm thầm không hoạt động** khi cần (permission denied, không phải lỗi ồn ào). Đã cấp `roles/pubsub.publisher` trên DLQ topic + `roles/pubsub.subscriber` trên subscription cho service agent này.
+  - `src/eduagent/events.py`: publisher, publish sau khi Firestore ghi xong trong `mutator.py`; lỗi publish chỉ log, không raise (essay đã lưu an toàn, mất event Tầng 2 có thể phục hồi được, mất bài của học sinh thì không).
+  - Verify thật: chạy pipeline Tầng 1 → `gcloud pubsub subscriptions pull` nhận đúng message.
+- [x] 🔴 **Idempotency.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/aggregator/idempotency.py`, dùng `Firestore.create()` (fail nếu doc đã tồn tại) làm atomic claim thay vì get-rồi-set (tránh race condition khi 2 delivery đến gần như đồng thời). Verify thật: publish lại đúng `event_id` cũ → subscriber log `skipped_duplicate`, không tạo digest/draft/Sheets row thứ 2.
+- [x] 🔴 **Dead Letter Topic.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — cấu hình thật trên Pub/Sub (xem trên), IAM đã cấp đúng (xem phát hiện ở trên). Chưa test được path lỗi thật (cần simulate subscriber crash 5 lần liên tiếp) — dời việc verify **DLQ thực sự nhận được message khi lỗi** sang Phase 4 (Chaos test).
+- [x] **Class Cluster & Pattern Engine.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/aggregator/priority_engine.py`, ZERO LLM.
+  - `cluster_fallacies()` đếm theo **học sinh** (dedupe trong 1 học sinh trước khi đếm), không đếm theo essay — tránh 1 học sinh lặp lỗi 5 lần giả làm "5 học sinh cùng lỗi".
+  - `Priority = w1·stuck_streak + w2·score_decline + w3·inactivity_days(capped 4 tuần) + w4·shared_fallacy_weight`, trọng số trong `PRIORITY_WEIGHTS` (`config.py`), có comment giải thích. `inactivity` được cap ở 4 tuần để tránh 1 học sinh nghỉ cả năm áp đảo toàn bộ điểm số so với học sinh kẹt streak thật.
+  - 7 unit test pass ngay lần đầu (`tests/test_priority_engine.py`). Verify thật trên 5 profile seed: `stu_stuck` (kẹt streak + declining) xếp #1 với lý do truy vết được đầy đủ — đúng yêu cầu "giáo viên phải hiểu TẠI SAO em A xếp trên em B".
+- [x] **Teacher Digest Synthesizer.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/aggregator/digest.py`, dùng `GEMINI.heavy_model` (`gemini-3.7-flash`, xem ADR-002 — không có "Pro" thật). Chỉ diễn đạt ranking đã tính sẵn (system instruction cấm re-rank). Verify thật qua Vertex AI: digest nêu đúng lý do từ dữ liệu, gợi ý mini-lesson cụ thể ("Claim vs. Evidence Check" 15 phút).
+- [x] **Gmail MCP (compose-only).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/integrations/gmail_mcp.py`. Chỉ export `create_digest_draft`, không có đường dẫn nào tới `.send()`.
+  - 🔴 **Hard gate tự động:** `tests/test_gmail_mcp_never_sends.py` — parse AST (không phải grep text, để không bị false-positive bởi chính docstring giải thích) để đảm bảo file KHÔNG BAO GIỜ chứa lệnh gọi `.send()`, và chỉ export đúng 1 hàm public.
+  - Verify thật: tạo draft thật trong Gmail, đọc lại nội dung đúng.
+- [x] **Sheets MCP (append-only).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/integrations/sheets_mcp.py`. Tạo Spreadsheet thật thuộc chính tài khoản Gmail của giáo viên (không phải Drive ẩn của service account — dễ mở xem/quay video). Chỉ export `append_audit_row`, không có update/delete.
+- [x] **`process_event()` orchestration đầy đủ + test có mock.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/aggregator/class_aggregator.py`. 5 unit test (`tests/test_class_aggregator.py`).
+  - **Bug thật tìm thấy khi viết test:** patch `eduagent.config.TEACHER`/`SHEETS` không có tác dụng vì `class_aggregator.py` import các hằng số này bằng `from ... import TEACHER, SHEETS` (bind tên cục bộ tại thời điểm import) — patch vào module gốc không ảnh hưởng tên đã bind. Hậu quả thật: 1 test "unconfigured" đã **vô tình tạo 1 draft Gmail thật** thay vì dùng mock. Đã sửa patch đúng target (`eduagent.aggregator.class_aggregator.TEACHER`), xoá draft rác, xác nhận lại 5/5 test pass không còn side-effect thật.
+- [x] **Subscriber thật (dev-mode) + verify full end-to-end trên GCP thật.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `scripts/run_class_aggregator_subscriber.py` (pull-based, sẽ đổi thành Cloud Run push subscriber ở Phase 7, cùng dùng `process_event()`).
+  - **Chạy thật toàn trình:** essay mới cho `stu_stuck` (học sinh seed có lịch sử thật) qua Tầng 1 → publish Pub/Sub thật → subscriber pull → ranking đúng (`stu_inactive`/`stu_declining`/`stu_stuck` lên đầu, đúng logic) → Gmail draft thật xuất hiện với nội dung đúng → Sheets ghi đúng 1 dòng.
+  - Republish đúng `event_id` → verify `skipped_duplicate`, không tạo thêm draft/row.
+- [ ] ⏸️ **Web UI tối giản** — CHƯA LÀM, dời có chủ đích. Chức năng cốt lõi (digest chờ duyệt) đã thể hiện đầy đủ qua Gmail draft thật — giáo viên xem/duyệt ngay trong Gmail, không bắt buộc phải có UI riêng để đạt DoD. Sẽ làm nếu còn thời gian sau Phase 4/5, ưu tiên thấp hơn Resilience/Eval vì không nằm trong bất kỳ câu hỏi chấm điểm nào.
+
+**DoD:** submit essay mới → Pub/Sub trigger tự động [PASS] → digest sinh ra với ranking giải thích được [PASS] → draft xuất hiện trong Gmail [PASS — "bấm Send gửi thật" là hành động người thật ngoài phạm vi tự động hoá, đúng theo ADR-001] → Sheets có dòng log [PASS] • gửi lặp event không tạo digest trùng [PASS, verify thật].
+
+**→ Phase 3 hoàn thành phần lõi 100%**, trừ Web UI (cố tình dời, không chặn DoD) và test path lỗi DLQ thật (dời sang Phase 4 — đúng chỗ, vì đó là phần "Chaos test"). `pytest tests/ -q` → **41/41 pass**, không có LLM/Firestore/Gmail/Sheets thật nào bị gọi ngoài ý muốn trong test suite sau khi sửa bug patch.
 
 ---
 

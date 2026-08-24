@@ -43,7 +43,21 @@ class PubSubConfig:
     essay_evaluated_topic: str = "essay-evaluated"
     class_aggregator_subscription: str = "class-aggregator-sub"
     dead_letter_topic: str = "essay-evaluated-dlq"
-    max_delivery_attempts: int = 3
+    # ADR-003: Google Pub/Sub enforces a platform minimum of 5 for
+    # max-delivery-attempts (a subscription create with 3 was rejected) --
+    # the TODO.md plan's "fail 3 times -> DLQ" is implemented as 5, the
+    # platform floor, not a design choice.
+    max_delivery_attempts: int = 5
+
+
+@dataclass(frozen=True)
+class SheetsConfig:
+    audit_spreadsheet_id: str = os.getenv("EDUAGENT_AUDIT_SPREADSHEET_ID", "")
+
+
+@dataclass(frozen=True)
+class TeacherConfig:
+    email: str = os.getenv("EDUAGENT_TEACHER_EMAIL", "")
 
 
 @dataclass(frozen=True)
@@ -78,5 +92,7 @@ class ValidatorConfig:
 GEMINI = GeminiConfig()
 FIRESTORE = FirestoreConfig()
 PUBSUB = PubSubConfig()
+SHEETS = SheetsConfig()
+TEACHER = TeacherConfig()
 PRIORITY_WEIGHTS = PriorityWeights()
 VALIDATOR = ValidatorConfig()

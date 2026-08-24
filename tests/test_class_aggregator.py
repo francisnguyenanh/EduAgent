@@ -1,0 +1,94 @@
+"""Unit tests for the Class Aggregator orchestration -- mocks every external
+call (Firestore, Gmail, Sheets, LLM) so this suite runs fast and offline.
+Real end-to-end wiring is verified separately via scripts/demo_tier2_run.py
+against live GCP services.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from unittest.mock import AsyncMock, patch
+
+from eduagent.aggregator.class_aggregator import format_digest_email, process_event
+
+_FAKE_DIGEST = {
+    "headline": "Binh needs attention.",
+    "priority_students": [{"student_id": "stu_stuck", "why": "stuck streak"}],
+    "class_wide_pattern": "hasty generalization is common.",
+    "mini_lesson_suggestion": "Do a 15-minute exercise.",
+}
+
+_FAKE_PROFILES = {
+    "stu_stuck": {
+        "name": "Binh",
+        "class_id": "c1",
+        "essay_history": [
+            {"essay_id": "e1", "timestamp": "2026-08-01T00:00:00+00:00", "persona_used": "skeptic", "scores": {"logical_coherence": 5, "evidence_quality": 5, "counterargument_handling": 5, "scope_awareness": 5}, "avg_score": 5, "weakness_detected": ["hasty generalization"]}
+        ],
+        "persona_streak": {"current_persona": "skeptic", "times_repeated_without_improvement": 3},
+        "flags": {"needs_attention": True, "reason": "stuck", "last_updated": "2026-08-01T00:00:00+00:00"},
+        "score_trend": "stagnant",
+    }
+}
+
+
+def test_format_digest_email_includes_all_sections():
+    text = format_digest_email(_FAKE_DIGEST)
+    assert "Binh needs attention." in text
+    assert "stu_stuck" in text
+    assert "hasty generalization is common." in text
+    assert "15-minute exercise" in text
+
+
+def test_process_event_skips_duplicate_delivery():
+    with patch("eduagent.aggregator.class_aggregator.claim_event", return_value=False):
+        result = asyncio.run(process_event({"event_id": "e1", "student_id": "s1", "class_id": "c1", "essay_id": "e1"}))
+    assert result == {"status": "skipped_duplicate", "event_id": "e1"}
+
+
+def test_process_event_handles_empty_class():
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value={}),
+    ):
+        result = asyncio.run(process_event({"event_id": "e2", "student_id": "s1", "class_id": "c1", "essay_id": "e1"}))
+    assert result["status"] == "no_profiles"
+
+
+def test_process_event_full_happy_path_calls_gmail_and_sheets():
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
+        patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
+        patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+        patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value="draft123") as mock_gmail,
+        patch("eduagent.integrations.sheets_mcp.append_audit_row") as mock_sheets_append,
+    ):
+        mock_teacher.email = "teacher@example.com"
+        mock_sheets.audit_spreadsheet_id = "sheet123"
+
+        result = asyncio.run(process_event({"event_id": "e3", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+
+    assert result["status"] == "processed"
+    assert result["gmail_draft_id"] == "draft123"
+    assert result["ranked_students"][0]["student_id"] == "stu_stuck"
+    mock_gmail.assert_called_once()
+    mock_sheets_append.assert_called_once()
+
+
+def test_process_event_skips_gmail_and_sheets_when_unconfigured():
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
+        patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
+        patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+    ):
+        mock_teacher.email = ""
+        mock_sheets.audit_spreadsheet_id = ""
+
+        result = asyncio.run(process_event({"event_id": "e4", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+
+    assert result["status"] == "processed"
+    assert result["gmail_draft_id"] is None
