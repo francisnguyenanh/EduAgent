@@ -32,11 +32,18 @@ _logger = logging.getLogger(__name__)
 app = FastAPI(title="eduagent-class-aggregator")
 
 
-@app.get("/healthz")
-async def healthz() -> dict:
+@app.get("/health-check")
+async def health_check() -> dict:
     """Cloud Run / uptime-check target -- deliberately does NOT touch
     Firestore/Pub/Sub/Vertex AI, so a transient GCP hiccup elsewhere doesn't
-    make Cloud Run think this revision itself is unhealthy and restart it."""
+    make Cloud Run think this revision itself is unhealthy and restart it.
+
+    NOT named '/healthz': real deploy testing found that exact path is
+    intercepted by Cloud Run's underlying Knative/Istio infrastructure
+    before requests ever reach this container or even the IAM auth check --
+    every other path (including '/healthz/' with a trailing slash) proxies
+    through correctly, only the literal '/healthz' does not.
+    """
     return {"status": "ok"}
 
 

@@ -21,8 +21,8 @@ def _push_envelope(event: dict) -> dict:
     return {"message": {"data": data, "messageId": "m1"}, "subscription": "projects/p/subscriptions/s"}
 
 
-def test_healthz_returns_ok_without_touching_gcp():
-    response = client.get("/healthz")
+def test_health_check_returns_ok_without_touching_gcp():
+    response = client.get("/health-check")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 

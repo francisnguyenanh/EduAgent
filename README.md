@@ -146,7 +146,7 @@ Writes `eval/results/eval_report.{json,md}` — see section 6 for the last commi
 
 ```bash
 PYTHONPATH=src uvicorn eduagent.server:app --host 0.0.0.0 --port 8080
-curl localhost:8080/healthz   # -> {"status": "ok"}
+curl localhost:8080/health-check   # -> {"status": "ok"}
 ```
 
 ### 3.10 Deploy to Cloud Run
@@ -165,6 +165,16 @@ gcloud run deploy eduagent-class-aggregator \
 
 `--no-allow-unauthenticated` plus Pub/Sub's own service-agent OIDC token is what keeps this endpoint from being a public, unauthenticated trigger for essay-grading side effects — do not deploy with `--allow-unauthenticated` for anything beyond a throwaway smoke test.
 
+**Live deployment (this project):** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app` (region `asia-southeast1`, same region as Firestore). Verified against the real service:
+
+```bash
+TOKEN=$(gcloud auth print-identity-token)
+curl -H "Authorization: Bearer $TOKEN" https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app/health-check
+# -> {"status":"ok"}
+```
+
+See ADR-011 for a real deploy-time finding: the endpoint is `/health-check`, not the more conventional `/healthz`.
+
 ---
 
 ## 4. Architecture Decision Records
@@ -181,6 +191,7 @@ gcloud run deploy eduagent-class-aggregator \
 | ADR-008 | Low-confidence OCR output is routed to `pending_essays` (reusing the Phase 4 mechanism for `scores_degraded`), never written into `student_profiles`. | Content Gemini itself is not confident about should never silently become part of a student's permanent, teacher-visible record — same principle as never writing a fabricated score on an LLM outage. | Writing the essay through with a visible-but-ignored confidence flag — too easy for a Web UI/teacher review step to miss. |
 | ADR-009 | Multimodal (image) Vertex AI calls use a 60s timeout, not the 30s used for text-only JSON calls. | A real ~2.6MB test photo hit `504 DEADLINE_EXCEEDED` at 30s despite being perfectly legible — image payloads genuinely take longer to process than text prompts. | Keeping one shared timeout constant "for simplicity" — verified wrong against a real (not synthetic) photo. |
 | ADR-010 | Digest history documents use `digest_id = event_id` (the triggering Pub/Sub event's id), not a freshly generated UUID. | Reuses the idempotency guarantee already established for `processed_events` (Phase 3) — a redelivered event overwrites the same digest document instead of creating a duplicate history entry. | Minting a new UUID per digest write, which would require a separate dedup mechanism for the history collection. |
+| ADR-011 | The Cloud Run health-check endpoint is named `/health-check`, not the more conventional `/healthz`. | Real deploy testing on this project found that the exact literal path `/healthz` gets intercepted and answered with a generic Google-branded 404 by Cloud Run's underlying Knative/Istio infrastructure *before* the request ever reaches the container or even the IAM auth check — confirmed by testing every other path variant (`/healthz/` with a trailing slash, `/HEALTHZ`, and several unrelated nonexistent paths), all of which correctly reached the app/IAM layer. | Assuming `/healthz` is always safe because it's a common convention elsewhere (Kubernetes, many other PaaS) — proven wrong specifically on Cloud Run's serving stack via live testing, not documentation. |
 
 (ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the "Cải tiến Đợt 2" and Phase 5/6 work — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence behind each one.)
 
