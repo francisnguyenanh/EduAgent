@@ -125,6 +125,12 @@ DEMO_PAGE_HTML = """<!doctype html>
 
     <section id="panel-student" class="panel">
       <div id="student-form">
+        <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap; align-items:center;">
+          <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Presets for Testing:</span>
+          <button type="button" class="small" onclick="loadSampleEssay('climate')">📝 Sample: Electric Vehicles</button>
+          <button type="button" class="small" onclick="loadSampleEssay('ai')">📝 Sample: AI in Education</button>
+          <button type="button" class="small" onclick="clearEssayForm()">Clear</button>
+        </div>
         <label for="essay_text">Essay (type it, or upload a photo, or paste a Google Doc link)</label>
         <textarea id="essay_text" placeholder="Paste or write your essay here..."></textarea>
         <label for="gdoc_url">Or Google Doc share link (Anyone with link can view)</label>
@@ -138,8 +144,11 @@ DEMO_PAGE_HTML = """<!doctype html>
         <div id="turns"></div>
         <div id="reply-area">
           <label for="student_reply">Your reply</label>
-          <textarea id="student_reply"></textarea>
-          <button class="action" id="reply-btn" onclick="sendReply()">Send Reply</button>
+          <textarea id="student_reply" placeholder="Defend your position against the persona's challenge..."></textarea>
+          <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.75rem;">
+            <button class="action" style="margin-top:0;" id="reply-btn" onclick="sendReply()">Send Reply</button>
+            <button type="button" class="small" onclick="loadSampleReply()">💡 Fill Sample Argument</button>
+          </div>
         </div>
         <div id="turn-error" class="error hidden"></div>
         <div id="complete-result" class="hidden">
@@ -309,6 +318,28 @@ function fileToBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function loadSampleEssay(type) {
+  if (type === 'climate') {
+    document.getElementById('essay_text').value = "Electric vehicles are completely useless for saving the environment because manufacturing their batteries creates huge amounts of pollution, and electricity comes from burning coal anyway. Therefore, governments should immediately stop all subsidies for electric cars.";
+    document.getElementById('gdoc_url').value = '';
+    document.getElementById('essay_image').value = '';
+  } else if (type === 'ai') {
+    document.getElementById('essay_text').value = "Schools should completely ban all AI writing tools like ChatGPT because if students use AI, they will lose their ability to think critically and write on their own, ultimately leading to the total decline of human intelligence.";
+    document.getElementById('gdoc_url').value = '';
+    document.getElementById('essay_image').value = '';
+  }
+}
+
+function clearEssayForm() {
+  document.getElementById('essay_text').value = '';
+  document.getElementById('gdoc_url').value = '';
+  document.getElementById('essay_image').value = '';
+}
+
+function loadSampleReply() {
+  document.getElementById('student_reply').value = "While battery production does create upfront emissions, peer-reviewed life-cycle analyses show that EVs generate 50% to 70% lower net carbon emissions over their full lifespan compared to traditional gasoline vehicles, especially as the electrical grid transitions to renewable energy.";
 }
 
 async function startDebate() {
