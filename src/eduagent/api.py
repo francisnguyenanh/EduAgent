@@ -42,6 +42,7 @@ from eduagent.interactive import (
 )
 from eduagent.memory.firestore_memory import get_profile
 from eduagent.memory.student_profile import persona_history_from_profile, weakness_taxonomy_from_profile
+from eduagent.nodes.intake import strip_injection_attempts
 from eduagent.nodes.ocr import transcribe_essay_image
 from eduagent.nodes.persona_selector import choose_persona
 from eduagent.nodes.summarizer import summarize_essay
@@ -50,6 +51,11 @@ from eduagent.skills.parent_note import draft_parent_note
 from eduagent.skills.personas import get_persona
 
 _logger = logging.getLogger(__name__)
+
+# ĐỢT 6: Input caps & boundaries to prevent cost-DoS, prompt-injection, and 504 timeouts
+MAX_ESSAY_CHARS = 20_000
+MAX_IMAGE_B64_CHARS = 14_000_000  # ~10MB binary equivalent
+MAX_STUDENT_REPLY_CHARS = 4_000
 
 
 class DebateStartRequest(BaseModel):
@@ -106,8 +112,16 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id:
     true ADK interrupt/resume. `ocr_meta`, when the essay came from a photo,
     is passed through unchanged into the response for the caller to display
     (confidence/uncertain_segments) -- it never affects persona/debate logic."""
-    language = detect_language(essay_text)
-    summary, summary_degraded = summarize_essay(essay_text, student_id=student_id)
+    if len(essay_text) > MAX_ESSAY_CHARS:
+        raise ValueError(f"Essay too long: {len(essay_text)} characters (maximum allowed is {MAX_ESSAY_CHARS}).")
+
+    # ĐỢT 6 P0 fix: ensure live API inputs pass through deterministic prompt-injection stripping
+    clean_essay_text, injection_matches = strip_injection_attempts(essay_text)
+    if injection_matches:
+        _logger.warning("Sanitized prompt injection attempt from live essay input", extra={"matches": injection_matches, "student_id": student_id})
+
+    language = detect_language(clean_essay_text)
+    summary, summary_degraded = summarize_essay(clean_essay_text, student_id=student_id)
 
     try:
         profile = get_profile(student_id) if student_id else None
@@ -128,7 +142,7 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id:
     start_debate_session(
         session_id,
         persona_id=persona_id,
-        essay_text=essay_text,
+        essay_text=clean_essay_text,
         summary=summary,
         prior_weaknesses=prior_weaknesses,
         language=language,
@@ -166,6 +180,9 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
     the returned `ocr` block -- unlike the batch pipeline, there is no
     pending_essays parking here since no score/profile mutation happens on
     this path at all (see module docstring)."""
+    if len(payload.image_base64) > MAX_IMAGE_B64_CHARS:
+        raise ValueError(f"Image payload too large ({len(payload.image_base64)} chars, max {MAX_IMAGE_B64_CHARS}).")
+
     image_bytes = base64.b64decode(payload.image_base64)
     ocr_result = transcribe_essay_image(image_bytes, payload.image_mime_type, student_id=payload.student_id)
 
@@ -203,7 +220,14 @@ def start_debate_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
 
 
 def submit_debate_turn(payload: DebateTurnRequest) -> dict:
-    turn = step_debate_turn(payload.session_id, payload.student_reply)
+    if len(payload.student_reply) > MAX_STUDENT_REPLY_CHARS:
+        raise ValueError(f"Student reply too long: {len(payload.student_reply)} characters (maximum allowed is {MAX_STUDENT_REPLY_CHARS}).")
+
+    clean_reply, matches = strip_injection_attempts(payload.student_reply)
+    if matches:
+        _logger.warning("Sanitized prompt injection attempt from student reply", extra={"matches": matches, "session_id": payload.session_id})
+
+    turn = step_debate_turn(payload.session_id, clean_reply)
     turns_so_far = len(get_debate_session(payload.session_id)["turns"])
     completed = turns_so_far >= _max_turns()
     response = {"turn": turn, "turn_number": turns_so_far, "completed": completed}
@@ -253,6 +277,7 @@ def login(payload: LoginRequest) -> dict:
         "class_id": result.class_id,
         "user_id": result.user_id,
         "display_name": result.display_name,
+        "token": result.token,
     }
 
 

@@ -73,7 +73,7 @@ def summarize_essay(essay_text: str, *, essay_id: str | None = None, student_id:
         summary = generate_json(
             model=GEMINI.flash_model,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt=f"Extract structure from this student essay:\n\n{essay_text}",
+            prompt=f"Extract structure from this student essay:\n\n<student_essay>\n{essay_text}\n</student_essay>",
             response_schema=_SCHEMA,
             # ĐỢT 3 token/latency optimization: structure extraction is a
             # lookup/extraction task, not one that benefits from extended

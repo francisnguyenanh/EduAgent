@@ -83,7 +83,7 @@ def score_essay(
         return dict(_ZERO_SCORES), dict(_EMPTY_RATIONALE), _DEGRADED_STUDENT_FEEDBACK, False
 
     prompt = (
-        f"Essay:\n{essay_text}\n\n"
+        f"Essay:\n<student_essay>\n{essay_text}\n</student_essay>\n\n"
         f"Extracted structure: {summary}\n\n"
         f"Debate transcript (persona questions + student replies, if any): {debate_turns}"
     )

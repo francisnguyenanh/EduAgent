@@ -72,7 +72,7 @@ def _build_prompt(
         # transcript so far, not the source text verbatim again (ĐỢT 3 #1:
         # re-sending a long raw essay on every turn was pure repeated token
         # cost with no reasoning benefit turns 2+ actually used).
-        parts.insert(0, f"Original essay:\n{essay_text}")
+        parts.insert(0, f"Original essay:\n<student_essay>\n{essay_text}\n</student_essay>")
     if turn == 1 and prior_weaknesses:
         # Memory injection (Phase 2 -> Phase 3 follow-up): only surfaced on
         # the opening turn, where "have you improved on this before" is a
@@ -87,9 +87,9 @@ def _build_prompt(
     for t in prior_turns[-_RECENT_TURNS_WINDOW:]:
         parts.append(f"Turn {t['turn']} question: {t['question']}")
         if t.get("student_response"):
-            parts.append(f"Student's reply: {t['student_response']}")
+            parts.append(f"Student's reply: <student_reply>{t['student_response']}</student_reply>")
     if student_response:
-        parts.append(f"Student's latest reply (respond to THIS): {student_response}")
+        parts.append(f"Student's latest reply (respond to THIS): <student_reply>{student_response}</student_reply>")
     return "\n\n".join(parts)
 
 

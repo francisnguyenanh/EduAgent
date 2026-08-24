@@ -1,0 +1,20 @@
+# Exact pinned dependency lockfile for reproducible deployments and CI.
+google-adk==2.3.0
+google-genai==2.9.0
+google-cloud-firestore==2.28.0
+google-cloud-pubsub==2.23.0
+google-cloud-trace==1.14.0
+pydantic==2.10.6
+pytest==8.3.4
+python-dotenv==1.2.1
+google-auth-oauthlib==1.4.0
+google-api-python-client==2.197.0
+tenacity==9.1.2
+opentelemetry-sdk==1.42.0
+opentelemetry-exporter-gcp-trace==1.15.0
+Pillow==10.4.0
+fastapi==0.115.8
+uvicorn==0.30.6
+requests==2.32.3
+google-cloud-run==0.16.0
+google-cloud-artifact-registry==1.22.0

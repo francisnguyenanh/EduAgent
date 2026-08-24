@@ -20,7 +20,7 @@ import base64
 import json
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from eduagent.aggregator.class_aggregator import process_event
@@ -46,6 +46,7 @@ from eduagent.api import (
     submit_debate_turn,
     update_settings,
 )
+from eduagent.auth import verify_access_token
 from eduagent.demo_page import DEMO_PAGE_HTML
 from eduagent.logging_config import configure_json_logging
 from eduagent.memory.firestore_memory import list_students_by_class
@@ -54,6 +55,27 @@ configure_json_logging()
 _logger = logging.getLogger(__name__)
 
 app = FastAPI(title="eduagent-class-aggregator")
+
+
+def _verify_class_auth(class_id: str, authorization: str | None) -> dict:
+    """ĐỢT 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
+    for the exact class_id in the URL path."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required: missing or invalid Bearer token.")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        claims = verify_access_token(token)
+    except LoginError as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid authentication token: {exc}")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Failed to verify authentication token.")
+
+    if claims.get("class_id") != class_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Forbidden: token for class {claims.get('class_id')!r} cannot access class {class_id!r}.",
+        )
+    return claims
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -76,7 +98,8 @@ async def api_login(payload: LoginRequest) -> dict:
 
 
 @app.get("/api/classes/{class_id}/priority")
-async def api_class_priority(class_id: str) -> dict:
+async def api_class_priority(class_id: str, authorization: str | None = Header(None)) -> dict:
+    _verify_class_auth(class_id, authorization)
     try:
         return class_priority(class_id)
     except Exception:
@@ -85,7 +108,8 @@ async def api_class_priority(class_id: str) -> dict:
 
 
 @app.get("/api/classes/{class_id}/settings")
-async def api_get_settings(class_id: str) -> dict:
+async def api_get_settings(class_id: str, authorization: str | None = Header(None)) -> dict:
+    _verify_class_auth(class_id, authorization)
     try:
         return get_settings(class_id)
     except Exception:
@@ -94,7 +118,8 @@ async def api_get_settings(class_id: str) -> dict:
 
 
 @app.put("/api/classes/{class_id}/settings")
-async def api_update_settings(class_id: str, payload: ClassSettingsRequest) -> dict:
+async def api_update_settings(class_id: str, payload: ClassSettingsRequest, authorization: str | None = Header(None)) -> dict:
+    _verify_class_auth(class_id, authorization)
     try:
         return update_settings(class_id, payload)
     except Exception:
@@ -103,7 +128,8 @@ async def api_update_settings(class_id: str, payload: ClassSettingsRequest) -> d
 
 
 @app.post("/api/parent-note")
-async def api_parent_note(payload: ParentNoteRequest) -> dict:
+async def api_parent_note(payload: ParentNoteRequest, authorization: str | None = Header(None)) -> dict:
+    _verify_class_auth(payload.class_id, authorization)
     try:
         return parent_note(payload)
     except ValueError as exc:
@@ -117,6 +143,8 @@ async def api_parent_note(payload: ParentNoteRequest) -> dict:
 async def api_debate_start(payload: DebateStartRequest) -> dict:
     try:
         return start_debate(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         _logger.exception("start_debate failed")
         raise HTTPException(status_code=502, detail="Failed to start debate session -- check server logs.")
@@ -126,6 +154,8 @@ async def api_debate_start(payload: DebateStartRequest) -> dict:
 async def api_debate_start_with_image(payload: DebateStartFromImageRequest) -> dict:
     try:
         return start_debate_from_image(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         _logger.exception("start_debate_from_image failed")
         raise HTTPException(status_code=502, detail="Failed to start debate session from image -- check server logs.")
@@ -157,7 +187,8 @@ async def api_debate_turn(payload: DebateTurnRequest) -> dict:
 
 
 @app.get("/api/classes/{class_id}/analytics")
-async def api_class_analytics(class_id: str, limit: int = 10) -> dict:
+async def api_class_analytics(class_id: str, limit: int = 10, authorization: str | None = Header(None)) -> dict:
+    _verify_class_auth(class_id, authorization)
     try:
         digests = list_recent_digests(class_id=class_id, limit=limit)
     except Exception:
@@ -167,10 +198,11 @@ async def api_class_analytics(class_id: str, limit: int = 10) -> dict:
 
 
 @app.get("/api/classes/{class_id}/students")
-async def api_class_students(class_id: str, limit: int = 50) -> dict:
+async def api_class_students(class_id: str, limit: int = 50, authorization: str | None = Header(None)) -> dict:
     """ĐỢT 3: class roster ordered by most-recently-active student, backed
     by the composite index in firestore.indexes.json -- see
     memory/firestore_memory.py::list_students_by_class."""
+    _verify_class_auth(class_id, authorization)
     try:
         students = list_students_by_class(class_id, limit=limit)
     except Exception:

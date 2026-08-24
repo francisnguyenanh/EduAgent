@@ -10,9 +10,11 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from eduagent.api import DebateSessionComplete, UnknownSessionError
+from eduagent.auth import create_access_token
 from eduagent.server import app
 
 client = TestClient(app)
+_C1_HEADERS = {"Authorization": f"Bearer {create_access_token('c1_teacher', 'teacher', 'c1')}"}
 
 
 def test_demo_page_served_at_root_and_slash_demo():
@@ -116,7 +118,7 @@ def test_api_debate_turn_already_complete_returns_409():
 def test_api_class_analytics_returns_digests():
     fake_digests = [{"digest_id": "e1", "ranked_students": [], "common_fallacies": [], "timestamp": "t1"}]
     with patch("eduagent.server.list_recent_digests", return_value=fake_digests) as mock_list:
-        response = client.get("/api/classes/c1/analytics")
+        response = client.get("/api/classes/c1/analytics", headers=_C1_HEADERS)
 
     assert response.status_code == 200
     assert response.json() == {"class_id": "c1", "digests": fake_digests}
@@ -125,14 +127,14 @@ def test_api_class_analytics_returns_digests():
 
 def test_api_class_analytics_firestore_failure_returns_503():
     with patch("eduagent.server.list_recent_digests", side_effect=RuntimeError("boom")):
-        response = client.get("/api/classes/c1/analytics")
+        response = client.get("/api/classes/c1/analytics", headers=_C1_HEADERS)
     assert response.status_code == 503
 
 
 def test_api_class_students_returns_roster():
     fake_students = [{"student_id": "stu_1", "name": "An", "flags": {"last_updated": "t1"}}]
     with patch("eduagent.server.list_students_by_class", return_value=fake_students) as mock_list:
-        response = client.get("/api/classes/c1/students")
+        response = client.get("/api/classes/c1/students", headers=_C1_HEADERS)
 
     assert response.status_code == 200
     assert response.json() == {"class_id": "c1", "students": fake_students}
@@ -141,5 +143,6 @@ def test_api_class_students_returns_roster():
 
 def test_api_class_students_firestore_failure_returns_503():
     with patch("eduagent.server.list_students_by_class", side_effect=RuntimeError("boom")):
-        response = client.get("/api/classes/c1/students")
+        response = client.get("/api/classes/c1/students", headers=_C1_HEADERS)
     assert response.status_code == 503
+

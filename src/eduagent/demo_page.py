@@ -275,6 +275,24 @@ function showTab(name) {
   if (name === 'settings') loadSettings();
 }
 
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function authHeaders(extra = {}) {
+  const h = {'Content-Type': 'application/json', ...extra};
+  if (auth && auth.token) {
+    h['Authorization'] = 'Bearer ' + auth.token;
+  }
+  return h;
+}
+
 // ĐỢT 5 #2: one avatar/color per Socratic persona so the 4 debate
 // personalities read as distinct characters in the chat, not interchangeable
 // grey boxes -- matches PERSONAS in skills/personas.py by persona_id.
@@ -293,21 +311,52 @@ function renderTurn(turnNumber, personaId, questionText) {
   const style = personaStyle(personaId);
   const row = document.createElement('div');
   row.className = 'bubble-row';
-  row.innerHTML = `
-    <div class="avatar" style="background:${style.color};">${style.emoji}</div>
-    <div class="speech-bubble">
-      <div class="meta">Turn ${turnNumber} -- ${style.label}</div>
-      <div>${questionText}</div>
-    </div>`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.style.background = style.color;
+  avatar.textContent = style.emoji;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'speech-bubble';
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = `Turn ${turnNumber} -- ${style.label}`;
+
+  const text = document.createElement('div');
+  text.textContent = questionText;
+
+  bubble.appendChild(meta);
+  bubble.appendChild(text);
+  row.appendChild(avatar);
+  row.appendChild(bubble);
   document.getElementById('turns').appendChild(row);
 }
 
 function renderStudentReply(replyText) {
   const row = document.createElement('div');
   row.className = 'bubble-row student';
-  row.innerHTML = `
-    <div class="avatar" style="background:var(--muted);">🗯️</div>
-    <div class="speech-bubble"><div class="meta">You</div><div>${replyText}</div></div>`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.style.background = 'var(--muted)';
+  avatar.textContent = '🗯️';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'speech-bubble';
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = 'You';
+
+  const text = document.createElement('div');
+  text.textContent = replyText;
+
+  bubble.appendChild(meta);
+  bubble.appendChild(text);
+  row.appendChild(avatar);
+  row.appendChild(bubble);
   document.getElementById('turns').appendChild(row);
 }
 
@@ -443,9 +492,9 @@ function renderCompleteResult(result) {
   if (result && result.scores) {
     radarEl.innerHTML = Object.entries(result.scores).map(([axis, value]) => `
       <div class="radar-row">
-        <div class="radar-label">${AXIS_LABELS[axis] || axis}</div>
+        <div class="radar-label">${esc(AXIS_LABELS[axis] || axis)}</div>
         <div class="radar-track"><div class="radar-fill" style="width:${Math.max(0, Math.min(10, value)) * 10}%;"></div></div>
-        <div class="radar-value">${value}/10</div>
+        <div class="radar-value">${esc(value)}/10</div>
       </div>`).join('');
   }
   feedbackEl.textContent = (result && result.student_feedback) || 'Debate complete -- great effort working through all 3 turns!';
@@ -458,7 +507,9 @@ async function loadPriority() {
   errEl.classList.add('hidden');
   resultsEl.innerHTML = '';
   try {
-    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/priority`);
+    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/priority`, {
+      headers: authHeaders(),
+    });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     if (!data.ranking || data.ranking.length === 0) {
@@ -467,11 +518,11 @@ async function loadPriority() {
     }
     let rows = data.ranking.map(r => `
       <tr>
-        <td>${r.name || r.student_id}</td>
-        <td>${r.priority}</td>
-        <td>${r.reason.score_trend}${r.reason.stuck_streak_count ? ', stuck x' + r.reason.stuck_streak_count : ''}${r.reason.inactivity_days ? ', ' + r.reason.inactivity_days + 'd inactive' : ''}</td>
-        <td><button class="small" onclick="copyParentNote('${r.student_id}', this)">Copy Parent Update Note</button>
-            <div class="note-box hidden" id="note-${r.student_id}"></div></td>
+        <td>${esc(r.name || r.student_id)}</td>
+        <td>${esc(r.priority)}</td>
+        <td>${esc(r.reason.score_trend)}${r.reason.stuck_streak_count ? ', stuck x' + esc(r.reason.stuck_streak_count) : ''}${r.reason.inactivity_days ? ', ' + esc(r.reason.inactivity_days) + 'd inactive' : ''}</td>
+        <td><button class="small btn-parent-note" data-student-id="${esc(r.student_id)}">Copy Parent Update Note</button>
+            <div class="note-box hidden" id="note-${esc(r.student_id)}"></div></td>
       </tr>`).join('');
     resultsEl.innerHTML = `<table><thead><tr><th>Student</th><th>Priority</th><th>Why</th><th>Parent Co-Pilot</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) {
@@ -480,23 +531,40 @@ async function loadPriority() {
   }
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  const priorityEl = document.getElementById('priority-results');
+  if (priorityEl) {
+    priorityEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-parent-note');
+      if (btn) {
+        const studentId = btn.getAttribute('data-student-id');
+        if (studentId) copyParentNote(studentId, btn);
+      }
+    });
+  }
+});
+
 async function copyParentNote(studentId, btn) {
   const box = document.getElementById('note-' + studentId);
   btn.disabled = true;
-  box.classList.remove('hidden');
-  box.textContent = 'Drafting...';
+  if (box) {
+    box.classList.remove('hidden');
+    box.textContent = 'Drafting...';
+  }
   try {
     const resp = await fetch('/api/parent-note', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: authHeaders(),
       body: JSON.stringify({class_id: auth.class_id, student_id: studentId}),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
-    box.textContent = data.note;
-    try { await navigator.clipboard.writeText(data.note); box.textContent += '  (copied to clipboard)'; } catch (_) { /* clipboard permission not granted -- note is still shown to copy by hand */ }
+    if (box) {
+      box.textContent = data.note;
+      try { await navigator.clipboard.writeText(data.note); box.textContent += '  (copied to clipboard)'; } catch (_) { /* clipboard permission not granted */ }
+    }
   } catch (e) {
-    box.textContent = 'Error: ' + e.message;
+    if (box) box.textContent = 'Error: ' + e.message;
   } finally {
     btn.disabled = false;
   }
@@ -508,7 +576,9 @@ async function loadAnalytics() {
   errEl.classList.add('hidden');
   resultsEl.innerHTML = '';
   try {
-    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/analytics`);
+    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/analytics`, {
+      headers: authHeaders(),
+    });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     if (!data.digests || data.digests.length === 0) {
@@ -517,9 +587,9 @@ async function loadAnalytics() {
     }
     let rows = data.digests.map(d => `
       <tr>
-        <td>${d.timestamp || ''}</td>
-        <td>${(d.ranked_students || []).map(s => s.name || s.student_id).join(', ')}</td>
-        <td>${(d.common_fallacies || []).join(', ')}</td>
+        <td>${esc(d.timestamp || '')}</td>
+        <td>${esc((d.ranked_students || []).map(s => s.name || s.student_id).join(', '))}</td>
+        <td>${esc((d.common_fallacies || []).join(', '))}</td>
       </tr>`).join('');
     resultsEl.innerHTML = `<table><thead><tr><th>Timestamp</th><th>Priority ranking</th><th>Common fallacies</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) {
@@ -531,15 +601,10 @@ async function loadAnalytics() {
 const TREND_COLORS = {improving: '#1e7a34', declining: '#b3261e', stagnant: '#b8860b', insufficient_data: '#5b6472'};
 
 function sparklineSvg(essayHistory, trend) {
-  // ĐỢT 4 storage/retrieval visual: a per-student avg_score-over-time
-  // sparkline, drawn from essay_history (already returned in full by
-  // list_students_by_class -- no new endpoint/query needed). Inline SVG,
-  // no charting library, consistent with this project's zero-new-dependency
-  // discipline (demo_page.py's own module docstring).
   const points = (essayHistory || []).map(e => e.avg_score).filter(v => typeof v === 'number');
   if (points.length < 2) return '<span class="hint">not enough essays yet</span>';
   const w = 140, h = 36, pad = 4;
-  const maxV = 10, minV = 0; // rubric axes are fixed 0-10 (scorer.py) -- a fixed scale keeps sparklines comparable across students
+  const maxV = 10, minV = 0;
   const stepX = (w - 2 * pad) / (points.length - 1);
   const coords = points.map((v, i) => {
     const x = pad + i * stepX;
@@ -551,7 +616,7 @@ function sparklineSvg(essayHistory, trend) {
   const lastPoint = coords[coords.length - 1];
   const titleText = points.map(v => v.toFixed(1)).join(' -> ');
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">
-    <title>${titleText}</title>
+    <title>${esc(titleText)}</title>
     <polyline points="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
     <circle cx="${lastPoint[0].toFixed(1)}" cy="${lastPoint[1].toFixed(1)}" r="2.5" fill="${color}" />
   </svg>`;
@@ -563,7 +628,9 @@ async function loadRoster() {
   errEl.classList.add('hidden');
   resultsEl.innerHTML = '';
   try {
-    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/students`);
+    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/students`, {
+      headers: authHeaders(),
+    });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     if (!data.students || data.students.length === 0) {
@@ -572,11 +639,11 @@ async function loadRoster() {
     }
     let rows = data.students.map(s => `
       <tr>
-        <td>${s.name || s.student_id}</td>
+        <td>${esc(s.name || s.student_id)}</td>
         <td>${sparklineSvg(s.essay_history, s.score_trend)}</td>
-        <td>${s.score_trend || ''}</td>
+        <td>${esc(s.score_trend || '')}</td>
         <td>${s.flags && s.flags.needs_attention ? 'Yes' : 'No'}</td>
-        <td>${(s.flags && s.flags.last_updated) || ''}</td>
+        <td>${esc((s.flags && s.flags.last_updated) || '')}</td>
       </tr>`).join('');
     resultsEl.innerHTML = `<h3 style="margin-top:1.5rem;">Class Roster</h3><table><thead><tr><th>Student</th><th>Score trend chart</th><th>Trend</th><th>Needs attention</th><th>Last updated</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) {
@@ -590,7 +657,9 @@ async function loadSettings() {
   errEl.classList.add('hidden');
   document.getElementById('settings-ok').classList.add('hidden');
   try {
-    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/settings`);
+    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/settings`, {
+      headers: authHeaders(),
+    });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     document.getElementById('setting_show_radar').checked = !!data.settings.show_score_radar_to_students;
@@ -609,7 +678,7 @@ async function saveSettings() {
   try {
     const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/settings`, {
       method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
+      headers: authHeaders(),
       body: JSON.stringify({
         show_score_radar_to_students: document.getElementById('setting_show_radar').checked,
         stuck_streak_threshold: parseInt(document.getElementById('setting_stuck_threshold').value, 10),

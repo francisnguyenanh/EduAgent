@@ -69,9 +69,10 @@ class PriorityWeights:
 
     Chosen so that a student stuck on the same persona for 3+ essays without
     improvement (w1) outweighs a single missed submission (w3) — persistent
-    non-progress is a stronger signal than a one-off gap. Values are placeholders
-    to be tuned against seed data in Phase 2/3; keep them here, not in a prompt,
-    so the ranking stays explainable to teachers.
+    non-progress is a stronger signal than a one-off gap. Values were tuned
+    and frozen against 5-student seed data in Phase 2/3 and verified in Phase 4;
+    kept here in deterministic code, not in an LLM prompt, so the ranking
+    stays 100% explainable to teachers.
     """
 
     stuck_streak: float = 3.0

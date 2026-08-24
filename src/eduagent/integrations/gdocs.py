@@ -64,11 +64,17 @@ def fetch_gdoc_text(url_or_id: str, timeout: float = 10.0) -> str:
                     "Google Doc is private. Please set sharing to 'Anyone with the link can view'."
                 )
 
-            data = response.read()
+            MAX_READ_BYTES = 100_000
+            MAX_TEXT_CHARS = 20_000
+
+            data = response.read(MAX_READ_BYTES)
             text = data.decode("utf-8-sig", errors="replace").strip()
 
             if not text:
                 raise ValueError("Google Doc appears to be empty.")
+
+            if len(text) > MAX_TEXT_CHARS:
+                text = text[:MAX_TEXT_CHARS]
 
             return text
 
