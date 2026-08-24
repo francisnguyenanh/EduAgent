@@ -82,15 +82,24 @@ DEMO_PAGE_HTML = """<!doctype html>
   .judge-bar-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .judge-btn { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); color: #fff; border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
   .judge-btn:hover { background: #fff; color: #1e3a8a; font-weight: 600; }
+  .typing-bubble { display: flex; align-items: center; gap: 0.4rem; padding: 0.6rem 0.9rem; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; width: fit-content; color: var(--muted); font-size: 0.82rem; font-style: italic; }
+  .typing-dots { display: inline-flex; gap: 4px; align-items: center; margin-left: 0.3rem; }
+  .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: typingBounce 1.4s infinite ease-in-out both; }
+  .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+  .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+  @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; } 40% { transform: scale(1.1); opacity: 1; } }
+
   @media print {
     body { background: #fff !important; color: #000 !important; }
-    header, .judge-bar, .tabs, button, .hint, .who { display: none !important; }
+    header, .judge-bar, .tabs, button, .hint, .who, #student-form, #debate-area, #panel-teacher, #panel-settings, #panel-student { display: none !important; }
     main { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
-    .panel { border: none !important; box-shadow: none !important; padding: 0 !important; display: block !important; }
+    .panel { display: none !important; }
+    #panel-priority { display: block !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
     table { width: 100% !important; border: 1px solid #ccc !important; font-size: 10pt !important; }
     th, td { border: 1px solid #ccc !important; padding: 6px !important; color: #000 !important; }
     .print-header { display: block !important; margin-bottom: 1.5rem; }
   }
+
   .print-header { display: none; }
 </style>
 </head>
@@ -111,16 +120,16 @@ DEMO_PAGE_HTML = """<!doctype html>
   <div class="judge-bar" id="judge-bar">
     <div class="judge-bar-title">✨ Judge 1-Click Showcase:</div>
     <div class="judge-bar-btns">
-      <button class="judge-btn" onclick="presetScenario('stuck')">🎯 1. Kẹt Streak (Bình)</button>
-      <button class="judge-btn" onclick="presetScenario('ocr')">📷 2. Viết Tay (OCR)</button>
-      <button class="judge-btn" onclick="presetScenario('gdoc')">🔗 3. Google Doc</button>
-      <button class="judge-btn" onclick="presetScenario('teacher')">👨‍🏫 4. Giáo Viên &amp; Note</button>
+      <button class="judge-btn" onclick="presetScenario('stuck')">🎯 1. Stuck Streak (Binh)</button>
+      <button class="judge-btn" onclick="presetScenario('ocr')">📷 2. Handwritten Essay (OCR)</button>
+      <button class="judge-btn" onclick="presetScenario('gdoc')">🔗 3. Google Doc Ingestion</button>
+      <button class="judge-btn" onclick="presetScenario('teacher')">👨‍🏫 4. Teacher Dashboard &amp; Note</button>
     </div>
   </div>
 
   <div class="print-header">
-    <h2 style="margin:0 0 0.25rem 0;">Báo Cáo Sư Phạm &amp; Ma Trận Ưu Tiên Can Thiệp</h2>
-    <p style="color:#666; font-size:9pt; margin:0 0 1rem 0;">EduAgent Automated Executive Briefing &bull; Lớp: 12A1 &bull; Thời gian: <span id="print-date"></span></p>
+    <h2 style="margin:0 0 0.25rem 0;">Pedagogical Report &amp; Intervention Priority Matrix</h2>
+    <p style="color:#666; font-size:9pt; margin:0 0 1rem 0;">EduAgent Automated Executive Briefing &bull; Class: c1 &bull; Generated: <span id="print-date"></span></p>
   </div>
 
   <section id="gate" class="panel">
@@ -136,8 +145,8 @@ DEMO_PAGE_HTML = """<!doctype html>
       <label for="login_user_id">ID (e.g. <span id="id-example">c1_stu01</span>)</label>
       <input id="login_user_id" placeholder="c1_stu01">
       <label for="login_password">Password</label>
-      <input id="login_password" type="password" placeholder="demo password">
-      <div class="hint">Demo build: mock login only, shared demo password -- not a real auth system.</div>
+      <input id="login_password" type="password" placeholder="demo123">
+      <div class="hint">Demo build: mock login only, shared demo password (demo123) -- not a real auth system.</div>
       <button class="action" id="login-btn" onclick="doLogin()">Sign in</button>
       <button class="small" style="margin-top:0.75rem;" onclick="backToRolePick()">Back</button>
       <div id="login-error" class="error hidden"></div>
@@ -169,9 +178,22 @@ DEMO_PAGE_HTML = """<!doctype html>
         <input id="gdoc_url" placeholder="https://docs.google.com/document/d/1A2B3C.../edit">
         <label for="essay_image">Or upload a photo of a handwritten essay</label>
         <input id="essay_image" type="file" accept="image/*">
+        
+        <div style="margin: 0.75rem 0;">
+          <label for="persona_select" style="font-weight:600;">Socratic Coach Persona:</label>
+          <select id="persona_select" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:0.9rem;">
+            <option value="auto">🎯 Auto-Detect Weakness (AI diagnoses reasoning flaws)</option>
+            <option value="skeptic">🧐 The Skeptic (Probes evidence, data, citations)</option>
+            <option value="devils_advocate">😈 The Devil's Advocate (Presents opposing counter-arguments)</option>
+            <option value="nitpicker">🔬 The Nitpicker (Challenges assumptions & logical fallacies)</option>
+            <option value="expander">🔭 The Expander (Tests edge cases, generalizations & scope)</option>
+          </select>
+        </div>
+
         <button class="action" id="start-btn" onclick="startDebate()">Start Debate</button>
         <div id="start-error" class="error hidden"></div>
       </div>
+
       <div id="debate-area" class="hidden">
         <div id="turns"></div>
         <div id="reply-area">
@@ -190,13 +212,13 @@ DEMO_PAGE_HTML = """<!doctype html>
           
           <!-- Metacognitive Self-Correction Loop (ĐỢT 7) -->
           <div id="reflection-card" class="reflection-card">
-            <h4 style="margin:0 0 0.5rem 0; color:var(--accent);">🧠 Tự Hiệu Chỉnh Luận Điểm (Metacognitive Self-Correction)</h4>
+            <h4 style="margin:0 0 0.5rem 0; color:var(--accent);">🧠 Metacognitive Self-Correction (Revised Thesis)</h4>
             <p style="font-size:0.82rem; color:var(--muted); margin:0 0 0.75rem 0;">
-              Sau khi được Persona chỉ ra lỗ hổng lập luận, em hãy viết lại <strong>1 câu luận điểm hoàn chỉnh hơn</strong> để khắc phục:
+              After reflecting on the reasoning gaps and counter-arguments identified by the Socratic persona, please rewrite <strong>1 refined thesis sentence</strong> to address these weaknesses:
             </p>
-            <textarea id="revised_claim_input" style="min-height:70px;" placeholder="Ví dụ: Dù xe điện giảm phát thải trực tiếp, hiệu quả bảo vệ môi trường tổng thể vẫn phụ thuộc vào nguồn phát điện và quy trình tái chế pin..."></textarea>
-            <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.5rem;">
-              <button class="action" style="margin:0;" id="reflection-btn" onclick="submitReflection()">Gửi Luận Điểm Mới</button>
+            <textarea id="revised_claim_input" style="min-height:70px;" placeholder="e.g. While electric vehicles eliminate direct tailpipe emissions, their overall environmental impact depends on grid electricity generation and lifecycle battery recycling..."></textarea>
+            <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <button class="action" style="margin:0;" id="reflection-btn" onclick="submitReflection()">Submit Revised Claim</button>
               <span id="reflection-status" class="hint"></span>
             </div>
             <div id="reflection-feedback" class="hidden" style="margin-top:0.75rem; padding:0.6rem 0.8rem; background:rgba(34, 197, 94, 0.1); border-left:3px solid var(--ok); border-radius:4px; font-size:0.85rem;"></div>
@@ -210,7 +232,7 @@ DEMO_PAGE_HTML = """<!doctype html>
         <p class="hint" style="margin:0;">Live Intervention Priority Index -- deterministic ranking (see priority_engine.py), zero LLM.</p>
         <div style="display:flex; gap:0.5rem;">
           <button class="small" onclick="loadPriority()">Refresh</button>
-          <button class="small" onclick="printReport()">📄 Xuất Báo Cáo (In / PDF)</button>
+          <button class="small" onclick="printReport()">📄 Export Briefing (Print / PDF)</button>
         </div>
       </div>
       <div id="priority-error" class="error hidden"></div>
@@ -231,20 +253,32 @@ DEMO_PAGE_HTML = """<!doctype html>
     </section>
 
     <section id="panel-settings" class="panel hidden">
-      <p class="hint">Pedagogical settings for this class.</p>
+      <p class="hint">Pedagogical and logging settings for this class.</p>
       <div class="settings-row">
         <input type="checkbox" id="setting_show_radar">
-        <label for="setting_show_radar" style="margin:0;">Show score radar to students</label>
+        <label for="setting_show_radar" style="margin:0;">Show cognitive score radar to students</label>
       </div>
       <label for="setting_stuck_threshold">Stuck-streak threshold (essays without improvement)</label>
       <input id="setting_stuck_threshold" type="number" min="1">
-      <label for="setting_digest_email">Digest notification email</label>
+      
+      <label for="setting_digest_email">Digest notification email (Gmail draft recipient)</label>
       <input id="setting_digest_email" placeholder="teacher@school.edu">
-      <button class="action" onclick="saveSettings()">Save Settings</button>
-      <button class="small" style="margin-left:0.5rem;" onclick="loadSettings()">Reload</button>
+
+      <label for="setting_sheet_id">Audit Log Google Sheet (Link or Spreadsheet ID)</label>
+      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <input id="setting_sheet_id" style="flex:1; min-width:280px; margin:0;" placeholder="https://docs.google.com/spreadsheets/d/1pUGTCIz.../edit or ID">
+        <button class="small" type="button" id="btn-test-sheets" onclick="testSheetsConnection()">🧪 Test Sheet Connection</button>
+      </div>
+      <div id="sheets-test-status" class="hint hidden" style="margin-top:0.4rem;"></div>
+
+      <div style="margin-top:1.25rem;">
+        <button class="action" onclick="saveSettings()">Save Settings</button>
+        <button class="small" style="margin-left:0.5rem;" onclick="loadSettings()">Reload</button>
+      </div>
       <div id="settings-error" class="error hidden"></div>
-      <div id="settings-ok" class="hidden ok-text" style="margin-top:0.75rem;">Saved.</div>
+      <div id="settings-ok" class="hidden ok-text" style="margin-top:0.75rem;">Settings saved successfully.</div>
     </section>
+
   </section>
 </main>
 
@@ -266,19 +300,43 @@ function backToRolePick() {
   document.getElementById('role-pick-step').classList.remove('hidden');
 }
 
+async function autoLogin(userId, role, displayName) {
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        role: role,
+        user_id: userId,
+        password: 'demo123',
+      }),
+    });
+    if (resp.ok) {
+      auth = await resp.json();
+      return true;
+    }
+  } catch (e) {
+    console.error('Auto-login error:', e);
+  }
+  auth = {role: role, user_id: userId, class_id: userId.split('_')[0] || 'c1', display_name: displayName || userId, token: ''};
+  return false;
+}
+
 async function doLogin() {
   const btn = document.getElementById('login-btn');
   const errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
   btn.disabled = true;
   try {
+    const enteredId = (document.getElementById('login_user_id').value || '').trim() || (auth && auth.role === 'teacher' ? 'c1_teacher' : 'c1_stu01');
+    const enteredPass = (document.getElementById('login_password').value || '').trim() || 'demo123';
     const resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         role: auth.role,
-        user_id: document.getElementById('login_user_id').value,
-        password: document.getElementById('login_password').value,
+        user_id: enteredId,
+        password: enteredPass,
       }),
     });
     if (!resp.ok) throw new Error((await resp.json()).detail || `HTTP ${resp.status}`);
@@ -412,10 +470,39 @@ function renderStudentReply(replyText) {
   document.getElementById('turns').appendChild(row);
 }
 
+function showTypingIndicator(personaName = 'Socratic Coach') {
+  removeTypingIndicator();
+  const row = document.createElement('div');
+  row.className = 'bubble-row';
+  row.id = 'active-typing-indicator';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.style.background = 'var(--accent)';
+  avatar.textContent = '🤔';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'typing-bubble';
+  bubble.innerHTML = `<span>${esc(personaName)} is evaluating your argument</span><span class="typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span>`;
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  document.getElementById('turns').appendChild(row);
+  row.scrollIntoView({behavior: 'smooth', block: 'end'});
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('active-typing-indicator');
+  if (el) el.remove();
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onload = () => {
+      const b64 = reader.result.split(',')[1];
+      resolve(b64);
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -448,16 +535,20 @@ async function startDebate() {
   const errEl = document.getElementById('start-error');
   errEl.classList.add('hidden');
   btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Analyzing essay & matching persona...';
   try {
     const imageFile = document.getElementById('essay_image').files[0];
     const gdocUrl = (document.getElementById('gdoc_url').value || '').trim();
     const studentId = auth.user_id;
+    const personaVal = document.getElementById('persona_select').value;
+    const personaId = personaVal === 'auto' ? undefined : personaVal;
     let resp;
     if (gdocUrl) {
       resp = await fetch('/api/debate/start-with-gdoc', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({gdoc_url: gdocUrl, student_id: studentId, name: auth.display_name, class_id: auth.class_id}),
+        body: JSON.stringify({gdoc_url: gdocUrl, student_id: studentId, name: auth.display_name, class_id: auth.class_id, persona_id: personaId}),
       });
     } else if (imageFile) {
       const imageBase64 = await fileToBase64(imageFile);
@@ -468,15 +559,23 @@ async function startDebate() {
           image_base64: imageBase64,
           image_mime_type: imageFile.type || 'image/jpeg',
           student_id: studentId, name: auth.display_name, class_id: auth.class_id,
+          persona_id: personaId,
         }),
       });
     } else {
       resp = await fetch('/api/debate/start', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({essay_text: document.getElementById('essay_text').value, student_id: studentId, name: auth.display_name, class_id: auth.class_id}),
+        body: JSON.stringify({
+          essay_text: document.getElementById('essay_text').value,
+          student_id: studentId,
+          name: auth.display_name,
+          class_id: auth.class_id,
+          persona_id: personaId,
+        }),
       });
     }
+
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     sessionId = data.session_id;
@@ -486,18 +585,29 @@ async function startDebate() {
     }
     document.getElementById('student-form').classList.add('hidden');
     document.getElementById('debate-area').classList.remove('hidden');
+    const turnsEl = document.getElementById('turns');
+    turnsEl.innerHTML = '';
+
+    const fallacyText = (data.summary && data.summary.fallacies_draft && data.summary.fallacies_draft[0]) || 'Argument structure analysis';
+    const routingBadge = document.createElement('div');
+    routingBadge.style.cssText = 'margin-bottom:1rem; padding:0.6rem 0.85rem; background:rgba(37,99,235,0.08); border-left:3px solid var(--accent); border-radius:6px; font-size:0.83rem; color:var(--text);';
+    routingBadge.innerHTML = `<strong>🤖 Autonomous Agent Routing:</strong> Diagnosed flaw: <em>"${esc(fallacyText)}"</em> ➔ Socratic Coach: <strong>${esc(data.persona_name || data.persona_id)}</strong>`;
+    turnsEl.appendChild(routingBadge);
+
     if (data.ocr && (data.ocr.confidence === 'low' || data.ocr.confidence === 'unavailable')) {
       const warn = document.createElement('div');
       warn.className = 'error';
       warn.textContent = `Heads up: the photo was hard to read (confidence: ${data.ocr.confidence}) -- the debate below is based on a best-effort transcription.`;
-      document.getElementById('turns').appendChild(warn);
+      turnsEl.appendChild(warn);
     }
     renderTurn(1, data.persona_id, data.turn.question);
+
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled = false;
+    btn.textContent = originalText;
   }
 }
 
@@ -505,9 +615,22 @@ async function sendReply() {
   const btn = document.getElementById('reply-btn');
   const errEl = document.getElementById('turn-error');
   errEl.classList.add('hidden');
+  const replyInput = document.getElementById('student_reply');
+  const replyText = (replyInput.value || '').trim();
+  if (!replyText) return;
+
   btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Submitting argument...';
+
+  // 1. Optimistic UI: Render student reply immediately
+  renderStudentReply(replyText);
+  replyInput.value = '';
+
+  // 2. Show Animated Socratic Persona Typing Indicator
+  showTypingIndicator();
+
   try {
-    const replyText = document.getElementById('student_reply').value;
     const resp = await fetch('/api/debate/turn', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -515,18 +638,25 @@ async function sendReply() {
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
-    renderStudentReply(replyText);
-    renderTurn(data.turn_number, data.turn.persona, data.turn.question);
-    document.getElementById('student_reply').value = '';
+
+    // 3. Remove typing indicator and render next Socratic question
+    removeTypingIndicator();
+
+    if (data.turn && data.turn.question) {
+      renderTurn(data.turn_number, data.turn.persona, data.turn.question);
+    }
     if (data.completed) {
       document.getElementById('reply-area').classList.add('hidden');
       renderCompleteResult(data.result);
     }
   } catch (e) {
+    removeTypingIndicator();
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
+    replyInput.value = replyText;
   } finally {
     btn.disabled = false;
+    btn.textContent = originalText;
   }
 }
 
@@ -540,6 +670,69 @@ const AXIS_LABELS = {
 let lastExtractedSummary = null;
 let lastEssayInput = '';
 
+function createRadarChartSvg(scores) {
+  if (!scores) return '';
+  const size = 260, center = size / 2, radius = 80;
+  const axes = [
+    {key: 'logical_coherence', label: 'Logical Coherence'},
+    {key: 'evidence_quality', label: 'Evidence Quality'},
+    {key: 'scope_awareness', label: 'Scope Awareness'},
+    {key: 'counterargument_handling', label: 'Counterargument Handling'},
+  ];
+  const angles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+
+  // Concentric polygon grids
+  let gridPolys = [2, 4, 6, 8, 10].map(level => {
+    const r = radius * (level / 10);
+    const pts = angles.map(a => `${(center + r * Math.cos(a)).toFixed(1)},${(center + r * Math.sin(a)).toFixed(1)}`).join(' ');
+    return `<polygon points="${pts}" fill="none" stroke="var(--border)" stroke-width="1" stroke-dasharray="${level < 10 ? '2,2' : 'none'}" />`;
+  }).join('');
+
+  // Axis lines
+  let axisLines = angles.map(a => {
+    const x = (center + radius * Math.cos(a)).toFixed(1);
+    const y = (center + radius * Math.sin(a)).toFixed(1);
+    return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="var(--border)" stroke-width="1" />`;
+  }).join('');
+
+  // Data coords
+  const dataCoords = axes.map((axis, i) => {
+    const val = typeof scores[axis.key] === 'number' ? scores[axis.key] : 5;
+    const r = radius * (Math.max(0, Math.min(10, val)) / 10);
+    const a = angles[i];
+    return [center + r * Math.cos(a), center + r * Math.sin(a)];
+  });
+  const dataPoints = dataCoords.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ');
+
+  const dots = dataCoords.map(([x, y]) =>
+    `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="var(--accent)" stroke="#fff" stroke-width="1.5" />`
+  ).join('');
+
+  const labelOffsets = [
+    {x: center, y: center - radius - 10, align: 'middle'},
+    {x: center + radius + 8, y: center + 4, align: 'start'},
+    {x: center, y: center + radius + 16, align: 'middle'},
+    {x: center - radius - 8, y: center + 4, align: 'end'},
+  ];
+  const labels = axes.map((axis, i) => {
+    const val = typeof scores[axis.key] === 'number' ? scores[axis.key] : '';
+    const off = labelOffsets[i];
+    return `<text x="${off.x}" y="${off.y}" text-anchor="${off.align}" fill="var(--text)" font-size="10" font-weight="600">${esc(axis.label)}: <tspan fill="var(--accent)">${val}/10</tspan></text>`;
+  }).join('');
+
+  return `
+    <div style="display:flex; justify-content:center; align-items:center; margin:0.75rem 0;">
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        ${gridPolys}
+        ${axisLines}
+        <polygon points="${dataPoints}" fill="var(--accent)" fill-opacity="0.25" stroke="var(--accent)" stroke-width="2.5" />
+        ${dots}
+        ${labels}
+      </svg>
+    </div>
+  `;
+}
+
 function renderCompleteResult(result) {
   // ĐỢT 5 #1: respects the teacher's show_score_radar_to_students setting
   // (Settings tab) -- api.py already stripped `scores`/`rationale` out of
@@ -549,16 +742,19 @@ function renderCompleteResult(result) {
   const feedbackEl = document.getElementById('complete-feedback');
   radarEl.innerHTML = '';
   if (result && result.scores) {
-    radarEl.innerHTML = Object.entries(result.scores).map(([axis, value]) => `
+    let html = createRadarChartSvg(result.scores);
+    html += Object.entries(result.scores).map(([axis, value]) => `
       <div class="radar-row">
         <div class="radar-label">${esc(AXIS_LABELS[axis] || axis)}</div>
         <div class="radar-track"><div class="radar-fill" style="width:${Math.max(0, Math.min(10, value)) * 10}%;"></div></div>
         <div class="radar-value">${esc(value)}/10</div>
       </div>`).join('');
+    radarEl.innerHTML = html;
   }
   feedbackEl.textContent = (result && result.student_feedback) || 'Debate complete -- great effort working through all 3 turns!';
   document.getElementById('complete-result').classList.remove('hidden');
 }
+
 
 async function submitReflection() {
   const inputEl = document.getElementById('revised_claim_input');
@@ -567,14 +763,14 @@ async function submitReflection() {
   const btn = document.getElementById('reflection-btn');
   const text = (inputEl.value || '').trim();
   if (!text) {
-    statusEl.textContent = 'Vui lòng nhập luận điểm đã chỉnh sửa.';
+    statusEl.textContent = 'Please enter your revised thesis claim.';
     return;
   }
   btn.disabled = true;
-  statusEl.textContent = 'Đang đánh giá nhận thức...';
+  statusEl.textContent = 'Evaluating cognitive revision...';
   feedbackEl.classList.add('hidden');
   try {
-    const fallacy = (lastExtractedSummary && lastExtractedSummary.fallacies_draft && lastExtractedSummary.fallacies_draft[0]) || 'Lập luận khái quát hoá chưa chặt chẽ';
+    const fallacy = (lastExtractedSummary && lastExtractedSummary.fallacies_draft && lastExtractedSummary.fallacies_draft[0]) || 'Hasty generalization in initial premise';
     const resp = await fetch('/api/debate/reflect', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -590,19 +786,49 @@ async function submitReflection() {
     const data = await resp.json();
     feedbackEl.innerHTML = `
       <div style="font-weight:600; color:var(--ok); margin-bottom:0.25rem;">
-        🌟 ${data.resolved ? 'Đột Phá Nhận Thức Thành Công!' : 'Ghi Nhận Nỗ Lực!'} 
-        <span class="badge" style="margin-left:0.4rem; background:var(--ok); color:#fff;">+${esc(data.growth_bonus)}đ Tiến Bộ</span>
+        🌟 ${data.resolved ? 'Cognitive Breakthrough Achieved!' : 'Growth Effort Acknowledged!'} 
+        <span class="badge" style="margin-left:0.4rem; background:var(--ok); color:#fff;">+${esc(data.growth_bonus)} Growth Bonus</span>
       </div>
-      <div>${esc(data.feedback)}</div>
+      <div style="margin-bottom:0.75rem;">${esc(data.feedback)}</div>
+      <button class="action" style="margin:0; font-size:0.82rem;" onclick="resetForNewEssay()">🔄 Return to Submit Another Essay</button>
     `;
     feedbackEl.classList.remove('hidden');
-    statusEl.textContent = 'Đã lưu vào bộ nhớ học tập.';
+    statusEl.textContent = 'Saved to student learning profile.';
+    btn.disabled = true;
+    btn.textContent = 'Submitted';
   } catch (e) {
-    statusEl.textContent = 'Lỗi: ' + e.message;
-  } finally {
+    statusEl.textContent = 'Error: ' + e.message;
     btn.disabled = false;
   }
 }
+
+function resetForNewEssay() {
+  sessionId = null;
+  lastExtractedSummary = null;
+  lastEssayInput = '';
+  document.getElementById('turns').innerHTML = '';
+  document.getElementById('complete-radar').innerHTML = '';
+  document.getElementById('complete-feedback').textContent = '';
+  document.getElementById('reflection-feedback').innerHTML = '';
+  document.getElementById('reflection-feedback').classList.add('hidden');
+  document.getElementById('revised_claim_input').value = '';
+  document.getElementById('reflection-status').textContent = '';
+  document.getElementById('student_reply').value = '';
+  document.getElementById('complete-result').classList.add('hidden');
+  document.getElementById('reply-area').classList.remove('hidden');
+  document.getElementById('debate-area').classList.add('hidden');
+  document.getElementById('student-form').classList.remove('hidden');
+  
+  const refBtn = document.getElementById('reflection-btn');
+  if (refBtn) {
+    refBtn.disabled = false;
+    refBtn.textContent = 'Submit Revised Claim';
+  }
+  
+  clearEssayForm();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
 
 function printReport() {
   const dateEl = document.getElementById('print-date');
@@ -610,29 +836,30 @@ function printReport() {
   window.print();
 }
 
+
 async function presetScenario(scenario) {
   if (scenario === 'stuck') {
-    auth = {role: 'student', user_id: 'c1_stu02', class_id: 'c1', display_name: 'Bình (Kẹt Streak)'};
+    await autoLogin('c1_stu02', 'student', 'Binh (Stuck Streak)');
     enterApp();
     showTab('student');
     clearEssayForm();
-    document.getElementById('essay_text').value = 'Xe điện hoàn toàn không gây ô nhiễm môi trường vì chúng không có ống xả khí thải. Do đó, nếu tất cả mọi người chuyển sang xe điện thì biến đổi khí hậu sẽ ngay lập tức được giải quyết triệt để.';
+    document.getElementById('essay_text').value = 'Electric vehicles completely eliminate environmental pollution because they have zero tailpipe emissions. Therefore, if everyone switches to electric cars immediately, global climate change will be entirely solved.';
     lastEssayInput = document.getElementById('essay_text').value;
   } else if (scenario === 'ocr') {
-    auth = {role: 'student', user_id: 'c1_stu01', class_id: 'c1', display_name: 'An'};
+    await autoLogin('c1_stu01', 'student', 'An');
     enterApp();
     showTab('student');
     clearEssayForm();
-    document.getElementById('essay_text').value = '[Mô phỏng ảnh chụp bài viết tay]: Việc ứng dụng AI trong trường học đem lại nhiều lợi ích cho học sinh, tuy nhiên nếu lạm dụng sẽ làm giảm khả năng tư duy phản biện độc lập.';
+    document.getElementById('essay_text').value = '[Simulated handwriting transcript]: Using artificial intelligence in schools offers major learning advantages, but excessive reliance risks diminishing students\\' independent critical reasoning.';
     lastEssayInput = document.getElementById('essay_text').value;
   } else if (scenario === 'gdoc') {
-    auth = {role: 'student', user_id: 'c1_stu01', class_id: 'c1', display_name: 'An'};
+    await autoLogin('c1_stu01', 'student', 'An');
     enterApp();
     showTab('student');
     clearEssayForm();
     document.getElementById('gdoc_url').value = 'https://docs.google.com/document/d/1yD3xFakeDemoDocForEvaluation/edit';
   } else if (scenario === 'teacher') {
-    auth = {role: 'teacher', user_id: 'c1_teacher', class_id: 'c1', display_name: 'Thầy Minh'};
+    await autoLogin('c1_teacher', 'teacher', 'Mr. Minh');
     enterApp();
     showTab('priority');
     loadPriority();
@@ -709,6 +936,22 @@ async function copyParentNote(studentId, btn) {
   }
 }
 
+function formatShortTimestamp(tsString) {
+  if (!tsString) return '';
+  try {
+    const d = new Date(tsString);
+    if (isNaN(d.getTime())) return tsString;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const HH = String(d.getHours()).padStart(2, '0');
+    const MM = String(d.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${HH}:${MM}`;
+  } catch (e) {
+    return tsString;
+  }
+}
+
 async function loadAnalytics() {
   const errEl = document.getElementById('teacher-error');
   const resultsEl = document.getElementById('teacher-results');
@@ -726,7 +969,7 @@ async function loadAnalytics() {
     }
     let rows = data.digests.map(d => `
       <tr>
-        <td>${esc(d.timestamp || '')}</td>
+        <td>${esc(formatShortTimestamp(d.timestamp))}</td>
         <td>${esc((d.ranked_students || []).map(s => s.name || s.student_id).join(', '))}</td>
         <td>${esc((d.common_fallacies || []).join(', '))}</td>
       </tr>`).join('');
@@ -782,7 +1025,7 @@ async function loadRoster() {
         <td>${sparklineSvg(s.essay_history, s.score_trend)}</td>
         <td>${esc(s.score_trend || '')}</td>
         <td>${s.flags && s.flags.needs_attention ? 'Yes' : 'No'}</td>
-        <td>${esc((s.flags && s.flags.last_updated) || '')}</td>
+        <td>${esc(formatShortTimestamp(s.flags && s.flags.last_updated))}</td>
       </tr>`).join('');
     resultsEl.innerHTML = `<h3 style="margin-top:1.5rem;">Class Roster</h3><table><thead><tr><th>Student</th><th>Score trend chart</th><th>Trend</th><th>Needs attention</th><th>Last updated</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) {
@@ -795,6 +1038,7 @@ async function loadSettings() {
   const errEl = document.getElementById('settings-error');
   errEl.classList.add('hidden');
   document.getElementById('settings-ok').classList.add('hidden');
+  document.getElementById('sheets-test-status').classList.add('hidden');
   try {
     const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/settings`, {
       headers: authHeaders(),
@@ -804,6 +1048,7 @@ async function loadSettings() {
     document.getElementById('setting_show_radar').checked = !!data.settings.show_score_radar_to_students;
     document.getElementById('setting_stuck_threshold').value = data.settings.stuck_streak_threshold;
     document.getElementById('setting_digest_email').value = data.settings.digest_notify_email || '';
+    document.getElementById('setting_sheet_id').value = data.settings.audit_spreadsheet_id || '';
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
@@ -821,7 +1066,8 @@ async function saveSettings() {
       body: JSON.stringify({
         show_score_radar_to_students: document.getElementById('setting_show_radar').checked,
         stuck_streak_threshold: parseInt(document.getElementById('setting_stuck_threshold').value, 10),
-        digest_notify_email: document.getElementById('setting_digest_email').value,
+        digest_notify_email: document.getElementById('setting_digest_email').value.trim(),
+        audit_spreadsheet_id: document.getElementById('setting_sheet_id').value.trim(),
       }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
@@ -831,6 +1077,32 @@ async function saveSettings() {
     errEl.classList.remove('hidden');
   }
 }
+
+async function testSheetsConnection() {
+  const btn = document.getElementById('btn-test-sheets');
+  const statusEl = document.getElementById('sheets-test-status');
+  const sheetInput = document.getElementById('setting_sheet_id').value.trim();
+  btn.disabled = true;
+  statusEl.textContent = '⏳ Testing connection to Google Sheets...';
+  statusEl.classList.remove('hidden', 'error', 'ok-text');
+  try {
+    const resp = await fetch(`/api/classes/${encodeURIComponent(auth.class_id)}/test-sheets`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({spreadsheet_id: sheetInput || undefined}),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    statusEl.textContent = `✅ Successfully wrote test row to sheet (${data.spreadsheet_id}) at ${formatShortTimestamp(data.timestamp)}!`;
+    statusEl.classList.add('ok-text');
+  } catch (e) {
+    statusEl.textContent = `❌ Connection failed: ${e.message}`;
+    statusEl.classList.add('error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 </script>
 </body>
 </html>

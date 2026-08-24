@@ -29,6 +29,7 @@ from eduagent.aggregator.class_aggregator import process_event
 from eduagent.aggregator.digest_store import list_recent_digests
 from eduagent.api import (
     ClassSettingsRequest,
+    TestSheetsRequest,
     DebateSessionComplete,
     DebateStartFromGDocRequest,
     DebateStartFromImageRequest,
@@ -49,7 +50,9 @@ from eduagent.api import (
     submit_debate_turn,
     submit_reflection,
     update_settings,
+    test_sheets_connection,
 )
+
 from eduagent.auth import verify_access_token
 from eduagent.config import PUBSUB
 from eduagent.demo_page import DEMO_PAGE_HTML
@@ -169,6 +172,19 @@ async def api_update_settings(class_id: str, payload: ClassSettingsRequest, auth
     except Exception:
         _logger.exception("update_settings failed for class_id=%s", class_id)
         raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
+
+
+@app.post("/api/classes/{class_id}/test-sheets")
+async def api_test_sheets(class_id: str, payload: TestSheetsRequest | None = None, authorization: str | None = Header(None)) -> dict:
+    _verify_class_auth(class_id, authorization)
+    try:
+        return test_sheets_connection(class_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        _logger.exception("test_sheets_connection failed for class_id=%s", class_id)
+        raise HTTPException(status_code=502, detail=f"Google Sheets test failed: {exc}")
+
 
 
 @app.post("/api/parent-note")

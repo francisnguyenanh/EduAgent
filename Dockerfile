@@ -22,6 +22,8 @@ COPY --from=builder --chown=eduagent:eduagent /root/.local /home/eduagent/.local
 COPY --chown=eduagent:eduagent src/ ./src/
 COPY --chown=eduagent:eduagent pyproject.toml ./
 
+
+
 ENV PATH=/home/eduagent/.local/bin:$PATH \
     PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \

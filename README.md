@@ -5,8 +5,13 @@
 
 `eduagent` is a two-tier agentic system built on **Google ADK2 + Gemini (Vertex AI) + Firestore + Pub/Sub + Cloud Run**:
 
-- **Tier 1 (per-student):** a student submits an essay (typed text, or a photo of a handwritten one) and gets challenged by an adversarial Socratic debate persona instead of being handed answers or corrections. The system remembers the student's persistent weaknesses across essays and adapts.
+- **Tier 1 (per-student):** a student submits an essay (typed text, a photo of a handwritten one, or a Google Doc share link) and gets challenged by an adversarial Socratic debate persona instead of being handed answers or corrections.
+  - **Autonomous Persona Routing:** Diagnoses reasoning weaknesses across 4 dimensions (Evidence, Counterarguments, Logical Consistency, Scope/Generalization) and routes to the matching persona (`The Skeptic`, `The Devil's Advocate`, `The Nitpicker`, `The Expander`) with an explainable routing badge + practice selector.
+  - **Full 3-Turn Socratic Debate:** Deep interactive questioning without premature termination.
+  - **Cognitive Radar Chart:** Interactive 2D SVG spider/radar polygon chart visualizing scores across 4 reasoning axes (Logical Coherence, Evidence Quality, Scope Awareness, Counterargument Handling).
+  - **Metacognitive Self-Correction Loop:** Allows students to submit a revised thesis addressing the diagnosed weaknesses with instant feedback.
 - **Tier 2 (class-wide):** every graded essay triggers an event-driven Class Aggregator that clusters shared logical fallacies across a class, ranks which students need attention first (deterministically, not by LLM vibes), and drafts a digest for the teacher — who is the only one who can actually send it.
+  - **Dynamic Integrations:** Live Google Sheet audit logging (with URL auto-parsing, smart multi-tab fallback, and a `🧪 Test Sheet Connection` button) and automated Gmail draft synthesis.
 
 ---
 
@@ -17,6 +22,7 @@ You can experience the fully deployed system immediately without any local setup
 * **Demo Login Credentials:**
   * **Student Portal:** Student ID: `c1_stu01` | Password: `demo123`
   * **Teacher Portal:** Teacher ID: `c1_teacher` | Password: `demo123`
+
 
 ---
 

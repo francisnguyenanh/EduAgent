@@ -24,10 +24,7 @@ _SYSTEM_INSTRUCTION = (
     "You do not evaluate whether the student is right or wrong, and you do not "
     "write any part of the essay for them. You only extract what is already there. "
     "`main_claim`, `claims`, and `evidence` may be written in the essay's own "
-    "language. `fallacies_draft` is the one exception: always write it using "
-    "standard ENGLISH fallacy/rhetoric terminology (e.g. 'hasty generalization', "
-    "'unsourced claim') regardless of the essay's language -- this field feeds a "
-    "downstream keyword classifier and is never shown to the student directly."
+    "language. `fallacies_draft` must be standard rhetoric/reasoning weakness categories."
 )
 
 _SCHEMA = {
@@ -48,14 +45,17 @@ _SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": (
-                "Draft list of possible reasoning gaps or fallacies observed "
-                "(e.g. 'hasty generalization', 'unsourced claim', 'ad hominem'). "
-                "This is a draft for the Debate Loop to probe, not a final verdict."
+                "Identify 1-3 specific reasoning weaknesses or gaps in the argument, classified among: "
+                "- 'unsourced claim' or 'lacks empirical evidence' (missing data/sources), "
+                "- 'one-sided argument' or 'lacks counterargument' (ignores opposing viewpoints), "
+                "- 'unexamined assumption' or 'flawed logical deduction' (inconsistent logic or non sequitur), "
+                "- 'hasty generalization' or 'overextended scope' (claims are overly broad or absolute)."
             ),
         },
     },
     "required": ["main_claim", "claims", "evidence", "fallacies_draft"],
 }
+
 
 
 _EMPTY_SUMMARY = {"main_claim": "", "claims": [], "evidence": [], "fallacies_draft": []}

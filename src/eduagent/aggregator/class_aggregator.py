@@ -208,13 +208,20 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
     # Firestore + hien tren Web UI, khong mat du lieu"). The digest itself
     # (the actual analysis) already exists in `digest` regardless of what
     # happens below; only the delivery channels can fail here.
+    class_settings = {}
+    try:
+        class_settings = get_class_settings(class_id=class_id)
+    except Exception:
+        pass
+
+    teacher_email = class_settings.get("digest_notify_email") or TEACHER.email
     draft_id = None
-    if TEACHER.email:
+    if teacher_email:
         try:
             from eduagent.integrations.gmail_mcp import create_digest_draft
 
             draft_id = create_digest_draft(
-                to_address=TEACHER.email,
+                to_address=teacher_email,
                 subject=f"[eduagent] Class digest for {class_id}: {digest['headline'][:60]}",
                 body_text=format_digest_email(digest, name_by_id),
                 body_html=format_digest_email_html(digest, ranked, name_by_id),
@@ -230,13 +237,15 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
     # doesn't affect the other (same PHASE 4 principle as Gmail vs Sheets
     # above, just parallel instead of sequential).
     def _append_sheets_row() -> None:
-        if not SHEETS.audit_spreadsheet_id:
+        from eduagent.integrations.sheets_mcp import append_audit_row, extract_spreadsheet_id
+
+        sheet_target = class_settings.get("audit_spreadsheet_id") or SHEETS.audit_spreadsheet_id
+        spreadsheet_id = extract_spreadsheet_id(sheet_target)
+        if not spreadsheet_id:
             return
         try:
-            from eduagent.integrations.sheets_mcp import append_audit_row
-
             append_audit_row(
-                spreadsheet_id=SHEETS.audit_spreadsheet_id,
+                spreadsheet_id=spreadsheet_id,
                 row=[
                     now.isoformat(),
                     class_id,
@@ -251,6 +260,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
                 "Failed to append Sheets audit row -- draft_id not lost, just not logged",
                 extra={"class_id": class_id, "event_id": event_id, "draft_id": draft_id},
             )
+
 
     def _persist_digest_to_firestore() -> None:
         try:

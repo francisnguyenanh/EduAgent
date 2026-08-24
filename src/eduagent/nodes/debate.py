@@ -40,6 +40,14 @@ _PERSONA_FALLBACK_QUESTIONS: dict[str, str] = {
 }
 _DEFAULT_FALLBACK_QUESTION = "That's an interesting point -- what evidence led you to that conclusion?"
 
+_PERSONA_FALLBACK_QUESTIONS_VI: dict[str, str] = {
+    "skeptic": "Bằng chứng hay số liệu cụ thể nào dẫn bạn đến kết luận đó, và nguồn thông tin này đến từ đâu?",
+    "devils_advocate": "Những người phản đối quan điểm của bạn sẽ đưa ra lý lẽ gì, và bạn sẽ phản hồi lại như thế nào?",
+    "nitpicker": "Hãy giải thích từng bước lập luận của bạn -- điểm mấu chốt nào dẫn trực tiếp đến kết luận này?",
+    "expander": "Quan điểm này có còn đúng trong các bối cảnh khác không, hay chỉ áp dụng trong trường hợp bạn vừa nêu?",
+}
+_DEFAULT_FALLBACK_QUESTION_VI = "Đó là một lập luận đáng chú ý -- bằng chứng nào dẫn bạn đến kết luận này?"
+
 # ĐỢT 3 #1 (token optimization): only the fields the Debate Loop actually
 # reasons over -- dropping `evidence` here (still used by cognitive_scorer)
 # keeps the compacted summary small without losing anything this node reads.
@@ -115,7 +123,15 @@ def generate_debate_turn(
     """
     persona = get_persona(persona_id)
     escalation = get_escalation_instruction(turn_number)
-    system_instruction = f"{persona.anchor}\n\n{escalation}\n\n{language_instruction(language)}"
+    system_instruction = (
+        f"{persona.anchor}\n\n"
+        f"{escalation}\n\n"
+        f"{language_instruction(language)}\n\n"
+        "STRICT FORMAT RULE:\n"
+        "- Formulate and output EXACTLY ONE single Socratic question.\n"
+        "- Your entire response MUST end with exactly ONE question mark '?'.\n"
+        "- Do NOT ask multiple questions or use multiple question marks."
+    )
     prompt = _build_prompt(
         essay_text=essay_text,
         summary=summary,
@@ -138,7 +154,10 @@ def generate_debate_turn(
             question = candidate
             break
     if question is None:
-        question = _PERSONA_FALLBACK_QUESTIONS.get(persona_id, _DEFAULT_FALLBACK_QUESTION)
+        fallbacks = _PERSONA_FALLBACK_QUESTIONS_VI if language == "vi" else _PERSONA_FALLBACK_QUESTIONS
+        default_fb = _DEFAULT_FALLBACK_QUESTION_VI if language == "vi" else _DEFAULT_FALLBACK_QUESTION
+        question = fallbacks.get(persona_id, default_fb)
+
 
     return {
         "turn": turn_number,

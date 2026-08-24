@@ -33,10 +33,15 @@ _SYSTEM_INSTRUCTION = (
     "teacher observed this personally.\n"
 )
 
-_FALLBACK_TEMPLATE = (
+_FALLBACK_TEMPLATE_EN = (
     "{name} has been working through some challenging debate topics in class lately. "
     "A relaxed chat at home about something {name} feels strongly about -- and gently "
     "asking 'what makes you say that?' -- could help reinforce what we're practicing together."
+)
+
+_FALLBACK_TEMPLATE_VI = (
+    "{name} gần đây đã rất tích cực tham gia các buổi rèn luyện tư duy phản biện trên lớp. "
+    "Ở nhà, gia đình có thể trò chuyện cởi mở cùng {name} về các chủ đề em quan tâm và nhẹ nhàng hỏi 'điều gì khiến con nghĩ như vậy?' để giúp con tự tin hơn trong lập luận."
 )
 
 
@@ -73,8 +78,9 @@ def draft_parent_note(*, student_name: str, reason: dict, language: str = "en") 
         note = generate_text(model=GEMINI.flash_model, system_instruction=system_instruction, prompt=prompt)
         return note.strip(), False
     except LLMGenerationError:
-        _logger.exception("draft_parent_note: generate_text failed, using fallback template")
-        return _FALLBACK_TEMPLATE.format(name=student_name), True
+        _logger.warning("draft_parent_note degraded to fallback for %s", student_name)
+        tmpl = _FALLBACK_TEMPLATE_VI if language == "vi" else _FALLBACK_TEMPLATE_EN
+        return tmpl.format(name=student_name), True
 
 
 __all__ = ["draft_parent_note"]

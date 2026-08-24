@@ -79,7 +79,9 @@ DEFAULT_CLASS_SETTINGS = {
     "show_score_radar_to_students": True,
     "stuck_streak_threshold": 3,
     "digest_notify_email": "",
+    "audit_spreadsheet_id": "",
 }
+
 
 
 @with_gcp_retry

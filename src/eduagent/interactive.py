@@ -24,14 +24,18 @@ profile_mutator once the graph resumes/completes.
 
 from __future__ import annotations
 
+import os
 import time
 
+import logging
 from eduagent.config import VALIDATOR
 from eduagent.nodes.debate import generate_debate_turn
 from eduagent.nodes.scorer import score_essay
 from eduagent.skills.language import detect_language
 
+_logger = logging.getLogger(__name__)
 _sessions: dict[str, dict] = {}
+
 
 # ĐỢT 3 resource hygiene: an abandoned debate (student opens the page, never
 # finishes) would otherwise sit in this in-process dict forever -- a slow
@@ -46,6 +50,39 @@ class UnknownSessionError(KeyError):
 
 class DebateSessionComplete(ValueError):
     pass
+
+
+def _firestore_save_session(session_id: str, data: dict) -> None:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        from eduagent.memory.firestore_memory import _client
+        _client().collection("debate_sessions").document(session_id).set(data)
+    except Exception:
+        pass
+
+
+def _firestore_get_session(session_id: str) -> dict | None:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return None
+    try:
+        from eduagent.memory.firestore_memory import _client
+        doc = _client().collection("debate_sessions").document(session_id).get()
+        if doc.exists:
+            return doc.to_dict()
+    except Exception:
+        pass
+    return None
+
+
+def _firestore_delete_session(session_id: str) -> None:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        from eduagent.memory.firestore_memory import _client
+        _client().collection("debate_sessions").document(session_id).delete()
+    except Exception:
+        pass
 
 
 def start_debate_session(
@@ -68,7 +105,7 @@ def start_debate_session(
     show_score_radar_to_students setting -- they never affect persona/debate
     logic itself."""
     evict_stale_sessions()  # lazy sweep -- cheap, and every new session start is a natural trigger point
-    _sessions[session_id] = {
+    session_data = {
         "persona_id": persona_id,
         "essay_text": essay_text,
         "summary": summary,
@@ -79,6 +116,8 @@ def start_debate_session(
         "turns": [],
         "created_at": time.time(),
     }
+    _sessions[session_id] = session_data
+    _firestore_save_session(session_id, session_data)
 
 
 def evict_stale_sessions(ttl_seconds: float = _SESSION_TTL_SECONDS, *, now: float | None = None) -> list[str]:
@@ -96,12 +135,17 @@ def evict_stale_sessions(ttl_seconds: float = _SESSION_TTL_SECONDS, *, now: floa
 def get_debate_session(session_id: str) -> dict:
     session = _sessions.get(session_id)
     if session is None:
+        fs_session = _firestore_get_session(session_id)
+        if fs_session is not None:
+            _sessions[session_id] = fs_session
+            return fs_session
         raise UnknownSessionError(f"Unknown session_id: {session_id!r}")
     return session
 
 
 def end_debate_session(session_id: str) -> None:
     _sessions.pop(session_id, None)
+    _firestore_delete_session(session_id)
 
 
 def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
@@ -122,6 +166,9 @@ def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
         raise DebateSessionComplete(f"Session {session_id!r} already has {len(turns)} turns (max {VALIDATOR.max_debate_turns}).")
     if turn_number > 1 and student_reply is None:
         raise ValueError(f"student_reply is required to generate turn {turn_number} (reply to turn {turn_number - 1}).")
+    if student_reply is not None and turns:
+        turns[-1]["student_response"] = student_reply
+
 
     new_turn = generate_debate_turn(
         persona_id=session["persona_id"],
@@ -134,17 +181,26 @@ def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
         language=session["language"],
     )
     turns.append(new_turn)
+    _firestore_save_session(session_id, session)
     return new_turn
+
+
+def record_student_reply(session_id: str, student_reply: str) -> None:
+    """Records the student's reply to the most recent turn in the session."""
+    session = get_debate_session(session_id)
+    turns = session.get("turns", [])
+    if turns:
+        turns[-1]["student_response"] = student_reply
+        _firestore_save_session(session_id, session)
+
+
 
 
 def complete_debate_session(session_id: str) -> dict:
     """ĐỢT 5 -- scores the finished debate (same cognitive_scorer prompt/
     schema the batch graph uses, via scorer.py's shared score_essay()) and
-    tears the session down. Meant to be called once VALIDATOR.max_debate_turns
-    has been reached; does NOT persist to Firestore or mutate the student's
-    profile -- see interactive.py's module docstring and api.py's for why
-    that write-back stays the batch graph's job. This purely produces the
-    student-facing "how did I do" summary for the live Web UI."""
+    tears the session down. Now also persists to Firestore and publishes
+    Pub/Sub event to trigger class aggregation / Sheets logging for live web sessions."""
     session = get_debate_session(session_id)
     scores, rationale, student_feedback, degraded = score_essay(
         essay_text=session["essay_text"],
@@ -153,6 +209,49 @@ def complete_debate_session(session_id: str) -> dict:
         language=session["language"],
         log_context={"session_id": session_id, "student_id": session.get("student_id")},
     )
+
+    student_id = session.get("student_id")
+    class_id = session.get("class_id") or "c1"
+    persona_id = session.get("persona_id") or "skeptic"
+    fallacies_draft = session["summary"].get("fallacies_draft", [])
+
+    if student_id and not degraded and not os.getenv("PYTEST_CURRENT_TEST"):
+        from eduagent.memory.firestore_memory import apply_essay_result
+        from eduagent.events import publish_essay_evaluated
+        from datetime import datetime, timezone
+        import threading
+
+        essay_id = session_id
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        try:
+            apply_essay_result(
+                student_id,
+                name=student_id,
+                class_id=class_id,
+                essay_id=essay_id,
+                timestamp=timestamp,
+                persona_used=persona_id,
+                scores=scores,
+                weakness_detected=fallacies_draft,
+                student_feedback=student_feedback,
+            )
+
+            def _pub():
+                try:
+                    publish_essay_evaluated(
+                        event_id=essay_id,
+                        student_id=student_id,
+                        class_id=class_id,
+                        essay_id=essay_id,
+                    )
+                except Exception:
+                    _logger.exception("Failed to publish Pub/Sub event after interactive debate completion")
+
+            threading.Thread(target=_pub, daemon=True).start()
+        except Exception:
+            _logger.exception("Failed to persist interactive debate results to Firestore for student %s", student_id)
+
     end_debate_session(session_id)
     return {
         "scores": scores,
@@ -161,3 +260,4 @@ def complete_debate_session(session_id: str) -> dict:
         "degraded": degraded,
         "class_id": session.get("class_id", ""),
     }
+

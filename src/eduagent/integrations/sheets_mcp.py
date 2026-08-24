@@ -25,11 +25,22 @@ _TOKEN_PATH = _SECRETS_DIR / "sheets_token.json"
 _HEADER_ROW = ["timestamp", "class_id", "event", "headline", "priority_students", "digest_draft_id"]
 
 
-def _find_client_secret() -> Path:
+def extract_spreadsheet_id(url_or_id: str) -> str:
+    """Extracts a Google Spreadsheet ID from either a raw ID or a full Google Sheet URL."""
+    if not url_or_id:
+        return ""
+    cleaned = url_or_id.strip()
+    if "/d/" in cleaned:
+        try:
+            return cleaned.split("/d/")[1].split("/")[0].split("?")[0].split("#")[0]
+        except Exception:
+            return cleaned
+    return cleaned
+
+
+def _find_client_secret() -> Path | None:
     matches = glob.glob(str(_SECRETS_DIR / "client_secret_*.json"))
-    if not matches:
-        raise FileNotFoundError(f"No client_secret_*.json found in {_SECRETS_DIR}.")
-    return Path(matches[0])
+    return Path(matches[0]) if matches else None
 
 
 @functools.lru_cache(maxsize=1)
@@ -37,20 +48,32 @@ def _credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
+    import google.auth
 
     creds = None
     if _TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(_TOKEN_PATH), SHEETS_SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_file(str(_TOKEN_PATH), SHEETS_SCOPES)
+        except Exception:
+            pass
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(_find_client_secret()), SHEETS_SCOPES)
-            creds = flow.run_local_server(port=0)
-        _TOKEN_PATH.write_text(creds.to_json())
+            client_secret = _find_client_secret()
+            if client_secret is not None:
+                flow = InstalledAppFlow.from_client_secrets_file(str(client_secret), SHEETS_SCOPES)
+                creds = flow.run_local_server(port=0)
+                try:
+                    _TOKEN_PATH.write_text(creds.to_json())
+                except Exception:
+                    pass
+            else:
+                creds, _ = google.auth.default(scopes=SHEETS_SCOPES)
 
     return creds
+
 
 
 @functools.lru_cache(maxsize=1)
@@ -76,12 +99,27 @@ def create_audit_spreadsheet(*, title: str = "eduagent Audit Log") -> str:
 
 @with_google_api_retry
 def append_audit_row(*, spreadsheet_id: str, row: list) -> None:
-    """Append-only: adds one row to the end of the sheet. No update/delete
-    exposed from this module -- keep the audit trail immutable."""
-    _service().spreadsheets().values().append(
-        spreadsheetId=spreadsheet_id,
-        range="audit_log!A:F",
-        valueInputOption="RAW",
-        insertDataOption="INSERT_ROWS",
-        body={"values": [row]},
-    ).execute()
+    """Append-only: adds one row to the end of the sheet. Tries 'audit_log!A:F'
+    first, and if that tab doesn't exist, appends to the first/active sheet 'A:F'."""
+    srv = _service()
+    try:
+        srv.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range="audit_log!A:F",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row]},
+        ).execute()
+    except Exception as exc:
+        # If audit_log tab doesn't exist, append to whatever tab exists in the user's sheet
+        if "Unable to parse range" in str(exc) or "audit_log" in str(exc):
+            srv.spreadsheets().values().append(
+                spreadsheetId=spreadsheet_id,
+                range="A:F",
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": [row]},
+            ).execute()
+        else:
+            raise
+

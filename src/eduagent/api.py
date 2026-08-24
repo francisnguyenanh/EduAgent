@@ -37,9 +37,11 @@ from eduagent.interactive import (
     UnknownSessionError,
     complete_debate_session,
     get_debate_session,
+    record_student_reply,
     start_debate_session,
     step_debate_turn,
 )
+
 from eduagent.memory.firestore_memory import get_profile
 from eduagent.memory.student_profile import persona_history_from_profile, weakness_taxonomy_from_profile
 from eduagent.nodes.intake import strip_injection_attempts
@@ -63,6 +65,7 @@ class DebateStartRequest(BaseModel):
     student_id: str
     name: str = ""
     class_id: str = ""
+    persona_id: str | None = None
 
 
 class DebateStartFromImageRequest(BaseModel):
@@ -76,6 +79,7 @@ class DebateStartFromImageRequest(BaseModel):
     student_id: str
     name: str = ""
     class_id: str = ""
+    persona_id: str | None = None
 
 
 class DebateStartFromGDocRequest(BaseModel):
@@ -85,6 +89,8 @@ class DebateStartFromGDocRequest(BaseModel):
     student_id: str
     name: str = ""
     class_id: str = ""
+    persona_id: str | None = None
+
 
 
 class DebateTurnRequest(BaseModel):
@@ -96,6 +102,11 @@ class ClassSettingsRequest(BaseModel):
     show_score_radar_to_students: bool | None = None
     stuck_streak_threshold: int | None = None
     digest_notify_email: str | None = None
+    audit_spreadsheet_id: str | None = None
+
+
+class TestSheetsRequest(BaseModel):
+    spreadsheet_id: str | None = None
 
 
 class ParentNoteRequest(BaseModel):
@@ -103,7 +114,15 @@ class ParentNoteRequest(BaseModel):
     student_id: str
 
 
-def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id: str = "", ocr_meta: dict | None = None) -> dict:
+
+def _start_debate_from_essay_text(
+    essay_text: str,
+    *,
+    student_id: str,
+    class_id: str = "",
+    ocr_meta: dict | None = None,
+    persona_id: str | None = None,
+) -> dict:
     """Shared core of start_debate()/start_debate_from_image(): runs the
     exact production summarizer -> memory-informed persona selection ->
     first debate turn, same as the batch graph's intake->...->debate_loop
@@ -135,13 +154,15 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id:
     persona_history = persona_history_from_profile(profile) if profile else []
     prior_weaknesses = weakness_taxonomy_from_profile(profile) if profile else []
 
-    persona_id = choose_persona(summary.get("fallacies_draft", []), persona_history)
-    persona = get_persona(persona_id)
+    selected_persona_id = persona_id if (persona_id and persona_id in ("skeptic", "devils_advocate", "nitpicker", "expander")) else None
+    if not selected_persona_id:
+        selected_persona_id = choose_persona(summary.get("fallacies_draft", []), persona_history, essay_seed=clean_essay_text)
+    persona = get_persona(selected_persona_id)
 
     session_id = str(uuid.uuid4())
     start_debate_session(
         session_id,
-        persona_id=persona_id,
+        persona_id=selected_persona_id,
         essay_text=clean_essay_text,
         summary=summary,
         prior_weaknesses=prior_weaknesses,
@@ -153,7 +174,7 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id:
 
     result = {
         "session_id": session_id,
-        "persona_id": persona_id,
+        "persona_id": selected_persona_id,
         "persona_name": persona.display_name,
         "language": language,
         "summary": summary,
@@ -167,7 +188,12 @@ def _start_debate_from_essay_text(essay_text: str, *, student_id: str, class_id:
 
 
 def start_debate(payload: DebateStartRequest) -> dict:
-    return _start_debate_from_essay_text(payload.essay_text, student_id=payload.student_id, class_id=payload.class_id)
+    return _start_debate_from_essay_text(
+        payload.essay_text,
+        student_id=payload.student_id,
+        class_id=payload.class_id,
+        persona_id=payload.persona_id,
+    )
 
 
 def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
@@ -195,6 +221,7 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
             "uncertain_segments": ocr_result["uncertain_segments"],
             "degraded": ocr_result["degraded"],
         },
+        persona_id=payload.persona_id,
     )
     return result
 
@@ -211,12 +238,15 @@ def start_debate_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
         student_id=payload.student_id,
         class_id=payload.class_id,
         ocr_meta=None,
+        persona_id=payload.persona_id,
     )
+
     result["gdoc"] = {
         "doc_id": doc_id,
         "char_count": len(essay_text),
     }
     return result
+
 
 
 def submit_debate_turn(payload: DebateTurnRequest) -> dict:
@@ -227,13 +257,20 @@ def submit_debate_turn(payload: DebateTurnRequest) -> dict:
     if matches:
         _logger.warning("Sanitized prompt injection attempt from student reply", extra={"matches": matches, "session_id": payload.session_id})
 
+    session = get_debate_session(payload.session_id)
+    turns = session["turns"]
+
+    # If all max questions (e.g. 3) were already asked, this reply is the answer to Turn 3.
+    if len(turns) >= _max_turns():
+        record_student_reply(payload.session_id, clean_reply)
+        result = _score_and_close_session(payload.session_id)
+        return {"turn": None, "turn_number": len(turns), "completed": True, "result": result}
+
+
     turn = step_debate_turn(payload.session_id, clean_reply)
     turns_so_far = len(get_debate_session(payload.session_id)["turns"])
-    completed = turns_so_far >= _max_turns()
-    response = {"turn": turn, "turn_number": turns_so_far, "completed": completed}
-    if completed:
-        response["result"] = _score_and_close_session(payload.session_id)
-    return response
+    return {"turn": turn, "turn_number": turns_so_far, "completed": False}
+
 
 
 def _score_and_close_session(session_id: str) -> dict:
@@ -302,6 +339,32 @@ def update_settings(class_id: str, payload: ClassSettingsRequest) -> dict:
     return {"class_id": class_id, "settings": set_class_settings(class_id=class_id, settings=updates)}
 
 
+def test_sheets_connection(class_id: str, payload: TestSheetsRequest | None = None) -> dict:
+    from eduagent.config import SHEETS
+    from eduagent.integrations.sheets_mcp import append_audit_row, extract_spreadsheet_id
+
+    settings = get_class_settings(class_id=class_id)
+    target = (payload and payload.spreadsheet_id) or settings.get("audit_spreadsheet_id") or SHEETS.audit_spreadsheet_id
+    sheet_id = extract_spreadsheet_id(target)
+    if not sheet_id:
+        raise ValueError("No Google Spreadsheet ID or URL provided or configured.")
+
+    now_str = datetime.now(timezone.utc).isoformat()
+    append_audit_row(
+        spreadsheet_id=sheet_id,
+        row=[
+            now_str,
+            class_id,
+            "test_connection",
+            "Manual connection test from Teacher Settings Web UI",
+            "N/A",
+            "manual-test",
+        ],
+    )
+    return {"status": "ok", "spreadsheet_id": sheet_id, "timestamp": now_str}
+
+
+
 def parent_note(payload: ParentNoteRequest) -> dict:
     """ĐỢT 4 #3 -- "Copy Parent Update Note" button's backend: re-derives
     this one student's priority `reason` (same pure function the ranking
@@ -365,17 +428,21 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
     if len(payload.revised_claim) > MAX_STUDENT_REPLY_CHARS:
         raise ValueError(f"Revised claim too long (max {MAX_STUDENT_REPLY_CHARS} chars)")
 
-    sanitized_revised = strip_injection_attempts(payload.revised_claim)
+    sanitized_revised, _ = strip_injection_attempts(payload.revised_claim)
     from eduagent.config import GEMINI
     from eduagent.llm import LLMGenerationError, generate_json
-    from eduagent.skills.language import language_instruction
+    from eduagent.skills.language import detect_language, language_instruction
+
+    detected_lang = detect_language(sanitized_revised + " " + payload.original_claim)
+    lang = payload.language if payload.language in ("vi", "en") and payload.language != "en" else detected_lang
+
 
     system_instruction = (
         "You are an expert Socratic reasoning coach evaluating a student's post-debate self-correction. "
         "The student was challenged on a logical fallacy/weakness during debate and has submitted a revised claim. "
         "Determine if the revised claim makes a meaningful effort to fix the fallacy or qualify their thesis. "
         "Be encouraging yet intellectually honest.\n\n"
-        f"{language_instruction(payload.language)}"
+        f"{language_instruction(lang)}"
     )
     prompt = (
         f"Original Weakness/Fallacy Identified: {payload.original_fallacy}\n"
@@ -392,12 +459,18 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
         )
         resolved = bool(result.get("resolved", True))
         growth_bonus = float(result.get("growth_bonus", 0.5)) if resolved else 0.0
-        feedback = str(result.get("feedback", "Good effort in revising your claim."))
+        fallback_msg = "Luận điểm chỉnh sửa thể hiện sự tiến bộ tư duy." if lang == "vi" else "Good effort in revising your claim."
+        feedback = str(result.get("feedback", fallback_msg))
     except LLMGenerationError:
         _logger.warning("LLM evaluation of reflection failed, degrading gracefully")
         resolved = True
         growth_bonus = 0.5
-        feedback = "Your revised claim has been recorded and reflects thoughtful growth."
+        feedback = (
+            "Câu luận điểm chỉnh sửa của em đã được ghi nhận và thể hiện sự tiến bộ tư duy rõ rệt."
+            if lang == "vi"
+            else "Your revised claim has been recorded and reflects thoughtful growth."
+        )
+
 
     # Record into student profile transactional memory
     try:
@@ -430,6 +503,7 @@ __all__ = [
     "DebateTurnRequest",
     "DebateReflectionRequest",
     "ClassSettingsRequest",
+    "TestSheetsRequest",
     "ParentNoteRequest",
     "start_debate",
     "start_debate_from_image",
@@ -440,7 +514,9 @@ __all__ = [
     "class_priority",
     "get_settings",
     "update_settings",
+    "test_sheets_connection",
     "parent_note",
+
     "UnknownSessionError",
     "DebateSessionComplete",
     "LoginError",

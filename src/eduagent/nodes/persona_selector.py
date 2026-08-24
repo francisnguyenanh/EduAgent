@@ -20,11 +20,24 @@ from eduagent.skills.personas import PERSONA_IDS, get_persona
 from eduagent.tracing import traced_node
 
 _FALLACY_KEYWORDS: dict[str, str] = {
-    "skeptic": "evidence|source|unsourced|citation|proof|statistic|data",
-    "devils_advocate": "counterargument|one-sided|rebuttal|opposing|bias",
-    "nitpicker": "logic|assumption|non sequitur|inconsistent|fallacy|contradiction",
-    "expander": "generaliz|scope|edge case|context|exception|always|never",
+    "skeptic": (
+        "evidence|source|unsourced|citation|proof|statistic|data|"
+        "dẫn chứng|bằng chứng|số liệu|nguồn|tài liệu|chứng minh|nghiên cứu|thực tế|căn cứ"
+    ),
+    "devils_advocate": (
+        "counterargument|one-sided|rebuttal|opposing|bias|"
+        "phản biện|một chiều|trái chiều|phản bác|bác bỏ|đối lập|góc nhìn khác|thiên vị|định kiến|ngược lại"
+    ),
+    "nitpicker": (
+        "logic|assumption|non sequitur|inconsistent|fallacy|contradiction|"
+        "lập luận|suy luận|giả định|ngụy biện|mâu thuẫn|phi logic|bất nhất|nhảy vọt|suy diễn"
+    ),
+    "expander": (
+        "generaliz|scope|edge case|context|exception|always|never|"
+        "khái quát|vội vàng|phạm vi|bối cảnh|ngoại lệ|luôn luôn|không bao giờ|tuyệt đối|vơ đũa|áp dụng"
+    ),
 }
+
 
 
 def _score_persona(persona_id: str, fallacies_draft: list[str]) -> int:
@@ -37,6 +50,7 @@ def _score_persona(persona_id: str, fallacies_draft: list[str]) -> int:
 def choose_persona(
     fallacies_draft: list[str],
     persona_history: list[str] | None = None,
+    essay_seed: str | None = None,
 ) -> str:
     """Pure function (unit-testable without Context/Firestore)."""
     persona_history = persona_history or []
@@ -51,10 +65,17 @@ def choose_persona(
     if scores[best] == 0:
         # No keyword signal at all -- rotate deterministically instead of
         # defaulting to the same persona every time.
-        start = (PERSONA_IDS.index(last_used) + 1) % len(PERSONA_IDS) if last_used in PERSONA_IDS else 0
-        best = PERSONA_IDS[start]
+        if last_used in PERSONA_IDS:
+            start = (PERSONA_IDS.index(last_used) + 1) % len(PERSONA_IDS)
+            best = PERSONA_IDS[start]
+        elif essay_seed:
+            idx = sum(ord(c) for c in essay_seed) % len(PERSONA_IDS)
+            best = PERSONA_IDS[idx]
+        else:
+            best = PERSONA_IDS[0]
 
     return best
+
 
 
 @traced_node("persona_selector")

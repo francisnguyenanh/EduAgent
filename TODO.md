@@ -533,9 +533,28 @@
 - [ ] 🟡 Sau khi redeploy xong: chạy `scripts/doctor.py` trên GCP thật để xác nhận service vẫn healthy sau khi đổi auth (đặc biệt là Pub/Sub push subscription vẫn gửi được request thành công, không bị chính lớp verify mới này chặn nhầm).
 - [ ] 🟡 Cập nhật mục 2 "Ma trận tự kiểm tra điểm tối đa" (Architectural Discipline) nếu cần, để phản ánh ADR-014 mới.
 
-**Không thêm feature mới nào trong ĐỢT 8** — mục tiêu duy nhất là đóng khoảng cách tài liệu–thực tế và đảm bảo commit history phản ánh đúng công sức đã bỏ ra, trước khi chuyển sang Phase 8 (quay video).
+---
+
+## ĐỢT 9 — Web UI Comprehensive Feature Audit & Gaps (2026-08-24) ✅
+
+> Đã rà soát 100% endpoint, module backend và luồng dữ liệu đối chiếu với Web UI (`demo_page.py` / `server.py`).
+
+- [x] **Trực tiếp kết nối Interactive Debate với Firestore & Pub/Sub (ĐÃ SỬA XONG):**
+  - Trước đây: `complete_debate_session` chỉ tính điểm hiển thị trên UI, không persist database và không phát Pub/Sub.
+  - Hiện tại: Đã tích hợp `apply_essay_result` + `publish_essay_evaluated` ngầm. Sau lượt 3, tự động lưu Firestore và bắn Pub/Sub event để kích hoạt Class Aggregator $\rightarrow$ tự động ghi dòng vào Google Sheets Audit Log.
+- [x] **Các tính năng cốt lõi đã có mặt 100% trên Web UI:**
+  - 📝 Ingest: Text thô, Ảnh chụp OCR (`/api/debate/start-with-image`), Google Doc link (`/api/debate/start-with-gdoc`).
+  - 🎭 Tranh biện Socratic: 3 lượt, 4 Persona (Skeptic, Steelman, Empiricist, Devil's Advocate), Typing Indicator động, Optimistic UI.
+  - 🧠 Vòng lặp Tự hiệu chỉnh (Metacognitive Self-Correction): Ô nhập câu luận điểm sửa đổi, LLM chấm điểm đột phá, +0.5 Growth Bonus badge, nút quay lại làm bài mới.
+  - 📊 Teacher Dashboard: Bảng xếp hạng Intervention Priority Index thời gian thực, Nút sao chép Parent Note cá nhân hóa, Xuất báo cáo Print/PDF, Biểu đồ Sparkline SVG theo dõi tiến độ từng học sinh, Xem lịch sử Digest (`/analytics`), Cài đặt lớp (`/settings`).
+  - 🎯 Judge 1-Click Showcase Bar: 4 preset kịch bản chuẩn hóa bằng tiếng Anh.
+- [x] **Lỗi phát sinh sau review (ĐÃ SỬA XONG):** Test trực tiếp trên browser phát hiện `demo_page.py` bị vỡ toàn bộ JS: chuỗi mẫu preset `ocr` (dòng ~736) chứa `students\' independent...` — do nằm trong Python triple-quoted string, `\'` bị Python nuốt escape thành `'` trần, làm chuỗi JS single-quote bị đóng sớm → `Uncaught SyntaxError: Unexpected identifier 'independent'`, kéo theo toàn bộ `<script>` không load được nên `pickRole is not defined` khi bấm nút. Đã sửa thành `\\'` để JS nhận đúng `\'`. Rút kinh nghiệm: review code không thay thế được việc mở thật app lên bấm thử.
+- [ ] 🟢 **Đề xuất cải tiến nhỏ (Nice-to-have, không chặn chấm thi):**
+  - [ ] 1. Thêm nút `📊 Open Google Sheets Audit Log` mở trực tiếp link Spreadsheet `https://docs.google.com/spreadsheets/d/...` trên tab Teacher để giám khảo click mở tab mới xem log ngay mà không cần tìm file.
+  - [ ] 2. Thêm nút `⚡ Force Synthesize Digest` trên Teacher Dashboard để ép hệ thống chạy ngay một lượt tổng hợp lớp mới mà không cần chờ debounce 5 phút.
 
 ---
+
 
 ## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 

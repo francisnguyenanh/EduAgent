@@ -37,7 +37,8 @@ def language_instruction(language: str) -> str:
     an English question the student then has to translate themselves."""
     name = LANGUAGE_NAMES.get(language, "English")
     return (
-        f"The student's essay is written in {name}. Write all of your "
-        f"student-facing output (questions, feedback, explanations) in "
-        f"natural, fluent {name} -- never switch language on the student."
+        f"CRITICAL LANGUAGE INSTRUCTION: The student's essay is written in {name}. "
+        f"You MUST write ALL of your student-facing output (questions, feedback, explanations, and rationale) "
+        f"strictly in natural, fluent {name} -- never switch language on the student."
     )
+

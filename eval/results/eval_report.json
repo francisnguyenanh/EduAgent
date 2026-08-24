@@ -164,7 +164,7 @@
           {
             "turn": 1,
             "persona": "skeptic",
-            "question": "You claim that video games cause bad grades based on your little brother's experience and the people you know, but how do you know this isn't just an isolated case, and what objective, broad-scale evidence do you have to prove that video games are the actual cause of academic struggles for teenagers in general?",
+            "question": "What systematic, objective evidence do you have to prove that video games actually *cause* bad grades and violence, rather than your observations of your friends and your brother being mere coincidences or isolated cases?",
             "student_response": null
           },
           {
@@ -176,7 +176,7 @@
           {
             "turn": 3,
             "persona": "skeptic",
-            "question": "Now that you have acknowledged your observations might only apply to \"really violent or addictive\" games played for \"a lot of hours\" rather than all games, your original claim—that *all* video games should be banned for teenagers—is left without support. \n\nFor your final response, you need to make a choice: either defend your original, absolute ban on all video games using what we've discussed, or explicitly state how you would now rewrite your thesis and arguments to match what you can actually prove. Which path do you take, and what is your final, revised argument?",
+            "question": "You have gone from proposing a blanket ban on *all* video games for *all* teenagers to suggesting that only \"really violent or addictive ones\" played for \"a lot of hours\" are the real issue. Given that you started with a highly restrictive policy proposal based on personal observations rather than objective data, how exactly would you now revise your original thesis to reflect this shift, or—if you still stand by your original claim of a total ban—what is the single strongest, most verifiable piece of evidence you can offer to justify such a sweeping restriction?",
             "student_response": "Maybe it's not ALL video games, just really violent or addictive ones for a lot of hours a day."
           }
         ],
@@ -191,13 +191,13 @@
       "id": "persona-devils_advocate",
       "group": "persona_fidelity",
       "passed": true,
-      "detail": "signature hit 2/3 turns (need >=2), validator passed 3/3 turns (need 3/3)",
+      "detail": "signature hit 3/3 turns (need >=2), validator passed 3/3 turns (need 3/3)",
       "raw_output": {
         "turns": [
           {
             "turn": 1,
             "persona": "devils_advocate",
-            "question": "If a teenager struggles in school while playing video games, how can we be sure that the games themselves are the actual cause of their poor performance, rather than other factors like stress, teaching quality, or poor time-management skills that would remain even if video games were banned?",
+            "question": "Since you argue that video games directly cause bad grades based on the gamers you know and your brother's experience, how do you explain the millions of teenagers who play video games regularly but still maintain excellent grades and gain admission to top universities?",
             "student_response": null
           },
           {
@@ -214,7 +214,7 @@
           }
         ],
         "signature_hits_per_turn": [
-          false,
+          true,
           true,
           true
         ]
@@ -230,13 +230,13 @@
           {
             "turn": 1,
             "persona": "nitpicker",
-            "question": "How does the fact that your brother's grades improved after he played fewer video games prove that the video games themselves were the actual cause of his previous academic struggles, rather than other potential factors like a change in his study habits, sleep, or class difficulty?",
+            "question": "How did you rule out the possibility that struggling in school leads teenagers to play more video games, rather than the video games causing them to struggle?",
             "student_response": null
           },
           {
             "turn": 2,
             "persona": "nitpicker",
-            "question": "Walk me through the reasoning step by step -- where exactly does one point lead to the next?",
+            "question": "So you are basing a sweeping, legally binding policy proposal—banning video games for *all* teenagers—entirely on the behavior of your brother and a few friends. \n\nEven if we accept your observation as accurate for those specific individuals, how does a sample size of a few people logically justify restricting the freedom of millions of other teenagers whose self-discipline, academic performance, and household rules you have never observed?",
             "student_response": "I guess I don't have a scientific study, just what I've noticed with my friends and my brother."
           },
           {
@@ -263,7 +263,7 @@
           {
             "turn": 1,
             "persona": "expander",
-            "question": "Does your argument for a complete ban on video games still hold if we look at teenagers who play educational or cooperative puzzle games, or those who maintain straight A's while using gaming in moderation as a scheduled reward after finishing their homework?",
+            "question": "Does your proposal to ban video games still hold if we consider educational games designed to improve academic performance, or cooperative multiplayer games that help socially anxious teenagers build community and communication skills?",
             "student_response": null
           },
           {

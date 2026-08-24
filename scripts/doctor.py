@@ -159,13 +159,21 @@ def check_cloud_run_deployment() -> tuple[str, str]:
     import requests
 
     health_url = CLOUD_RUN.service_url.rstrip("/") + "/health-check"
-    auth_request = google.auth.transport.requests.Request()
-    id_token = google.oauth2.id_token.fetch_id_token(auth_request, CLOUD_RUN.service_url)
+    headers = {}
+    auth_detail = "public probe"
+    try:
+        auth_request = google.auth.transport.requests.Request()
+        id_token = google.oauth2.id_token.fetch_id_token(auth_request, CLOUD_RUN.service_url)
+        headers["Authorization"] = f"Bearer {id_token}"
+        auth_detail = "with IAM identity token"
+    except Exception:
+        # Fallback to direct health probe (health-check is public per ADR-011/014)
+        pass
 
-    response = requests.get(health_url, headers={"Authorization": f"Bearer {id_token}"}, timeout=10)
+    response = requests.get(health_url, headers=headers, timeout=10)
     if response.status_code != 200:
         return FAIL, f"GET {health_url} -> HTTP {response.status_code}: {response.text[:200]}"
-    return PASS, f"GET {health_url} -> 200 {response.json()} (live revision reachable with IAM identity token)."
+    return PASS, f"GET {health_url} -> 200 {response.json()} (live revision reachable, {auth_detail})."
 
 
 CHECKS = [
