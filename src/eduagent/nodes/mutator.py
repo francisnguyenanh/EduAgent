@@ -64,6 +64,8 @@ def _park_pending_essay(ctx: Context, *, student_id: str, essay_id: str, reason:
             "raw_input": ctx.state.get("raw_input"),
             "sanitized_text": ctx.state.get("sanitized_text"),
             "summary": ctx.state.get("summary"),
+            "ocr_confidence": ctx.state.get("ocr_confidence"),
+            "ocr_uncertain_segments": ctx.state.get("ocr_uncertain_segments"),
             "reason": reason,
             "parked_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -80,6 +82,13 @@ async def profile_mutator(ctx: Context) -> dict:
     student_feedback = ctx.state.get("student_feedback", "")
     validation_result = ctx.state.get("validation_result", {})
     scores_degraded = ctx.state.get("scores_degraded", False)
+    # PHASE 6: an OCR pass Gemini itself flags as unreliable (see nodes/ocr.py's
+    # self-consistency cross-check) means everything downstream -- summary,
+    # persona choice, debate, scores -- was computed on possibly-fabricated
+    # text. Same discipline as scores_degraded: never let low-confidence
+    # content silently become part of the student's permanent record.
+    ocr_confidence = ctx.state.get("ocr_confidence")
+    ocr_unreliable = ocr_confidence in ("low", "unavailable")
 
     delta = build_profile_delta(
         persona_id=persona_id,
@@ -94,12 +103,13 @@ async def profile_mutator(ctx: Context) -> dict:
     updated_profile = None
     pending = False
 
-    if student_id and scores_degraded:
+    if student_id and (scores_degraded or ocr_unreliable):
+        reason = "scoring_unavailable" if scores_degraded else f"ocr_confidence_{ocr_confidence}"
         _logger.warning(
-            "Parking essay for pending_essays (scoring unavailable)",
-            extra={"essay_id": essay_id, "student_id": student_id, "reason": "scoring_unavailable"},
+            "Parking essay for pending_essays (untrustworthy input/scoring)",
+            extra={"essay_id": essay_id, "student_id": student_id, "reason": reason},
         )
-        _park_pending_essay(ctx, student_id=student_id, essay_id=essay_id, reason="scoring_unavailable")
+        _park_pending_essay(ctx, student_id=student_id, essay_id=essay_id, reason=reason)
         pending = True
     elif student_id:
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -142,5 +152,10 @@ async def profile_mutator(ctx: Context) -> dict:
         "profile_delta": delta,
         "profile_after_mutation": updated_profile,
         "pending_retry": pending,
+        # PHASE 6: surfaced so a caller (Web UI, this demo script, a teacher
+        # review queue) can tell a low-confidence OCR pass from a normal one
+        # WITHOUT having to inspect internal ctx.state directly.
+        "ocr_confidence": ctx.state.get("ocr_confidence"),
+        "ocr_uncertain_segments": ctx.state.get("ocr_uncertain_segments"),
         "stage": ctx.state.get("stage"),
     }

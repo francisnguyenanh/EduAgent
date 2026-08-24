@@ -14,6 +14,7 @@ from google.adk.workflow import START, FunctionNode, Workflow
 from eduagent.nodes.debate import debate_loop
 from eduagent.nodes.intake import intake, sanitizer
 from eduagent.nodes.mutator import profile_mutator
+from eduagent.nodes.ocr import multimodal_ocr
 from eduagent.nodes.persona_selector import persona_selector
 from eduagent.nodes.scorer import cognitive_scorer
 from eduagent.nodes.summarizer import summarizer
@@ -22,6 +23,7 @@ from eduagent.logging_config import configure_json_logging
 from eduagent.tracing import configure_tracing
 
 _intake_node = FunctionNode(func=intake, name="intake")
+_ocr_node = FunctionNode(func=multimodal_ocr, name="multimodal_ocr")
 _sanitizer_node = FunctionNode(func=sanitizer, name="sanitizer")
 _summarizer_node = FunctionNode(func=summarizer, name="summarizer")
 _persona_node = FunctionNode(func=persona_selector, name="persona_selector")
@@ -38,12 +40,18 @@ def build_tier1_workflow() -> Workflow:
     return Workflow(
         name="tier1_per_student_pipeline",
         description=(
-            "Per-student Socratic debate pipeline: intake -> sanitize -> "
+            "Per-student Socratic debate pipeline: intake -> [OCR if image] -> sanitize -> "
             "summarize -> select persona -> debate/validate -> score -> mutate profile."
         ),
         edges=[
             (START, _intake_node),
-            (_intake_node, _sanitizer_node),
+            # PHASE 6: intake.py sets ctx.route to "image" or "text" depending
+            # on whether node_input carried an inline image part -- a
+            # text-only essay skips the OCR node (and its Vision API cost)
+            # entirely; a photo essay detours through it, then rejoins the
+            # SAME sanitizer/summarizer/... chain either way.
+            (_intake_node, {"image": _ocr_node, "text": _sanitizer_node}),
+            (_ocr_node, _sanitizer_node),
             (_sanitizer_node, _summarizer_node),
             (_summarizer_node, _persona_node),
             (_persona_node, _debate_node),

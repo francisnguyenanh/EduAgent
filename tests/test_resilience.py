@@ -146,6 +146,42 @@ def test_mutator_parks_pending_essay_instead_of_writing_fake_score():
     assert result["profile_after_mutation"] is None
 
 
+def test_mutator_parks_pending_essay_when_ocr_confidence_is_low():
+    from eduagent.nodes.mutator import profile_mutator
+
+    ctx = MagicMock()
+    ctx.state = {
+        "student_id": "stu_1",
+        "class_id": "c1",
+        "persona": "skeptic",
+        "summary": {"fallacies_draft": []},
+        # Scores exist (scorer ran fine on whatever text OCR handed it) but
+        # nodes/ocr.py's self-consistency check flagged the SOURCE TEXT
+        # itself as unreliable -- scores computed on possibly-fabricated
+        # text must not reach the permanent profile either.
+        "scores": {"logical_coherence": 3, "evidence_quality": 2, "counterargument_handling": 1, "scope_awareness": 2},
+        "scores_degraded": False,
+        "ocr_confidence": "low",
+        "ocr_uncertain_segments": ["[[ocr inconsistent across repeated attempts on this image -- treat transcription as unverified]]"],
+        "validation_result": {"passed": True},
+        "essay_id": "e1",
+        "raw_input": "some hallucinated ocr text",
+        "sanitized_text": "some hallucinated ocr text",
+    }
+
+    with (
+        patch("eduagent.nodes.mutator._park_pending_essay") as mock_park,
+        patch("eduagent.nodes.mutator.apply_essay_result") as mock_apply,
+    ):
+        result = asyncio.run(profile_mutator(ctx))
+
+    mock_park.assert_called_once()
+    assert mock_park.call_args.kwargs["reason"] == "ocr_confidence_low"
+    mock_apply.assert_not_called()
+    assert result["pending_retry"] is True
+    assert result["profile_after_mutation"] is None
+
+
 def test_mutator_forwards_student_feedback_to_apply_essay_result():
     from eduagent.nodes.mutator import profile_mutator
 

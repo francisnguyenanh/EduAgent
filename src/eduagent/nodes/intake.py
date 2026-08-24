@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from typing import Any
 
 from google.adk.agents.context import Context
 
@@ -49,19 +50,60 @@ def strip_injection_attempts(text: str) -> tuple[str, list[str]]:
     return cleaned, matches
 
 
+def _extract_essay_input(node_input: Any) -> tuple[str, bytes | None, str | None]:
+    """Returns (text, image_bytes, image_mime_type).
+
+    PHASE 6 (Multimodal Ingestion): node_input is annotated as ``Any``, not
+    ``str`` -- FunctionNode only auto-coerces types.Content -> str when the
+    annotation expects str (see google.adk.workflow.FunctionNode docstring),
+    which would silently DROP an image part before intake ever saw it. A
+    plain string caller (existing tests, run_debug()) still works unchanged;
+    a types.Content with an inline image Part is detected here instead.
+    """
+    if isinstance(node_input, str):
+        return node_input, None, None
+
+    parts = getattr(node_input, "parts", None) or []
+    text_parts: list[str] = []
+    image_bytes: bytes | None = None
+    image_mime_type: str | None = None
+    for part in parts:
+        text = getattr(part, "text", None)
+        if text:
+            text_parts.append(text)
+        inline_data = getattr(part, "inline_data", None)
+        mime_type = getattr(inline_data, "mime_type", None) if inline_data else None
+        if image_bytes is None and mime_type and mime_type.startswith("image/"):
+            image_bytes = inline_data.data
+            image_mime_type = mime_type
+    return "\n".join(text_parts), image_bytes, image_mime_type
+
+
 @traced_node("intake")
-async def intake(ctx: Context, node_input: str) -> dict:
-    """Accepts raw essay text, stamps pipeline start. No mutation here --
-    the raw input is preserved for the audit trail even after sanitizing.
+async def intake(ctx: Context, node_input: Any) -> dict:
+    """Accepts raw essay text OR a photo of a handwritten essay, stamps
+    pipeline start, and routes to the Multimodal OCR node (PHASE 6) when an
+    image is present -- a text-only essay never touches OCR or costs a
+    Vision call. No mutation of the text itself here -- it's preserved for
+    the audit trail even after sanitizing.
 
     essay_id is minted here (not later in mutator) so it stays stable across
     the whole run -- if a node downstream retries, it doesn't mint a second
     id for what is logically the same essay attempt.
     """
-    ctx.state["raw_input"] = node_input
+    text, image_bytes, image_mime_type = _extract_essay_input(node_input)
     ctx.state["stage"] = "intake"
     ctx.state.setdefault("essay_id", str(uuid.uuid4()))
-    return {"essay_text": node_input}
+    ctx.state["raw_input"] = text
+
+    if image_bytes:
+        ctx.state["ocr_image_bytes"] = image_bytes
+        ctx.state["ocr_image_mime_type"] = image_mime_type
+        ctx.route = "image"
+        return {"essay_text": text, "has_image": True}
+
+    ctx.route = "text"
+    return {"essay_text": text, "has_image": False}
 
 
 @traced_node("sanitizer")
