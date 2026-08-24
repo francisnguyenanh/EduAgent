@@ -519,9 +519,19 @@
 - [x] 🔴 **BLOCKER — Commit + push toàn bộ ĐỢT 7 (Metacognitive Loop), hiện chưa nằm trong git.** ✅ ĐÃ XONG (đã có commit `224c458` + đã push lên `origin/master` trước khi review lần 2 này bắt đầu — xác nhận bằng `git log origin/master..HEAD` rỗng và `git status` báo "up to date").
   - Commit này gộp `growth_bonus`/`breakthrough_count`/`/api/debate/reflect` + `tests/test_metacognitive_reflection.py` — nay đã tồn tại trên GitHub, giám khảo chấm được.
 
-- [ ] 🔴 **BLOCKER MỚI (thao tác thật) — Redeploy service live với fix OIDC ở trên, rồi commit + push chính các file vừa sửa (`server.py`, `config.py`, `README.md`, `requirements.txt`, `TODO.md`, `tests/test_server.py`, `tests/test_server_interactive_api.py`).**
-  - Việc code + test đã xong và xanh 100% (184/184) nhưng **chưa commit** — cần lặp lại đúng kỷ luật ở blocker trên: `git add` chọn lọc, review diff không dính `secrets/`/`.env`, commit, push.
-  - Sau khi push code, redeploy Cloud Run (lệnh cụ thể ở README §3.10) rồi verify lại bằng `curl -X POST <url>/` không kèm Authorization → kỳ vọng `401` (không còn `500`).
+- [x] **Commit + push fix OIDC ở trên.** ✅ ĐÃ XONG — commit `c096405` (`server.py`, `config.py`, `README.md`, `requirements.txt`, `TODO.md`, `tests/test_server.py`, `tests/test_server_interactive_api.py`), đã push lên `origin/master`. `pytest tests/ -q -m "not e2e"` → 184/184 pass trước khi commit.
+
+- [ ] 🔴 **BLOCKER MỚI, NGHIÊM TRỌNG HƠN CẢ LỖI OIDC — `class-aggregator-sub` đang ở PULL mode thật trên GCP, không phải PUSH. Toàn bộ luồng Tier 2 tự động (Pub/Sub → Cloud Run) đang KHÔNG chạy trên hạ tầng live.**
+  - **Bằng chứng thật (2026-08-24):** `gcloud pubsub subscriptions describe class-aggregator-sub --format=json` → `"pushConfig": {}` (rỗng — nghĩa là pull mode). `gcloud pubsub subscriptions list --format="table(name,pushConfig.pushEndpoint)"` → cột `PUSH_ENDPOINT` trống cho subscription duy nhất đang có. `gcloud run services get-iam-policy eduagent-class-aggregator` → `allUsers` có `roles/run.invoker`, khớp `--allow-unauthenticated` đã biết.
+  - **Ý nghĩa:** README §3.10 tự ghi chú "Then point the class-aggregator-sub subscription at the deployed URL as a push subscription with OIDC auth ... instead of pulling" — đây là một TODO còn treo trong chính README, chưa từng được thực hiện thật trên GCP. Cloud Run service `POST /` đang tồn tại và chạy (đã verify healthy), nhưng **không có gì gọi vào nó** trừ khi ai đó tự tay chạy `scripts/run_class_aggregator_subscriber.py` (pull script, dev-mode từ Phase 3) trong lúc quay demo.
+  - **Rủi ro cho video/giám khảo:** nếu quay demo và chỉ dựa vào "nộp essay → tự động có digest" mà không chủ động chạy pull subscriber song song, luồng Tier 2 sẽ **không tự trigger**, phá vỡ đúng câu chuyện kiến trúc "event-driven" mà README/architecture diagram quảng cáo (`MUT -->|"essay.evaluated"| PUBSUB --> SUB["Cloud Run: POST /"]`).
+  - **Việc cần làm (thao tác GCP thật, cần xác nhận trước khi chạy vì đổi hành vi subscription đang có):**
+    1. Redeploy Cloud Run với code OIDC verify mới (lệnh ở README §3.10) — lấy URL service thật.
+    2. `gcloud pubsub subscriptions update class-aggregator-sub --push-endpoint=<service-url>/ --push-auth-service-account=<invoker-sa>@<project>.iam.gserviceaccount.com --push-auth-token-audience=<service-url>` để chuyển pull → push có OIDC.
+    3. Set env var `PUBSUB_PUSH_AUDIENCE=<service-url>` và `PUBSUB_PUSH_SERVICE_ACCOUNT=<invoker-sa>@<project>.iam.gserviceaccount.com` (đúng account dùng ở bước 2) trên Cloud Run service.
+    4. Verify thật: publish 1 event thử vào topic `essay-evaluated` (hoặc nộp 1 essay thật qua Web UI), xác nhận digest xuất hiện **mà không cần chạy tay pull subscriber** — đây là bằng chứng "event-driven thật" cho video.
+    5. Sau khi xác nhận push hoạt động, có thể để `scripts/run_class_aggregator_subscriber.py` như một fallback dev-mode (đã ghi rõ trong code là dev-mode), không cần xoá.
+  - **Việc cần làm (tài liệu):** sau khi verify xong, xoá dòng comment TODO ở README §3.10 dòng "Then point the class-aggregator-sub subscription..." và thay bằng mô tả đã hoàn thành + evidence thật (giống cách các ADR khác ghi "verified against the real service").
 - [ ] 🟡 Sau khi redeploy xong: chạy `scripts/doctor.py` trên GCP thật để xác nhận service vẫn healthy sau khi đổi auth (đặc biệt là Pub/Sub push subscription vẫn gửi được request thành công, không bị chính lớp verify mới này chặn nhầm).
 - [ ] 🟡 Cập nhật mục 2 "Ma trận tự kiểm tra điểm tối đa" (Architectural Discipline) nếu cần, để phản ánh ADR-014 mới.
 
