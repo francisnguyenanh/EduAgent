@@ -356,27 +356,18 @@
 
 ---
 
-## PHASE 8 — Video Demo, Submission & Bonus 🔴
+## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 
 > Video là thứ giám khảo xem nhiều nhất và chiếm phần lớn 30% Demo. Chỉ 4 phút đầu được chấm.
+> **Toàn bộ nội dung Phase 8 (kịch bản, mô tả Devpost, blog, social post) là hành động của con người (quay video, upload, bấm nộp, đăng bài) — không tự động hoá được.** Đã soạn sẵn đầy đủ nội dung/văn bản để bạn chỉ cần làm theo, không phải tự viết từ đầu.
 
-- [ ] **Kịch bản video ≤ 4:00:**
-  - **0:00–0:30 — Vấn đề & Triết lý:** lớp học nông thôn quá tải, giáo viên không kèm nổi từng em. Triết lý: *"Using AI to teach students not to depend on AI."*
-  - **0:30–1:45 — Proof of Action (Tầng 1):** live upload bài viết tay lộn xộn → Vision OCR → Socratic debate thật → **Validator chặn answer-leak hiện ngay trên log** → Firestore cập nhật live. Không cắt ghép đoạn này.
-  - **1:45–2:45 — Memory & Tầng 2:** agent nhắc lại lỗi bài trước (bằng chứng "become more helpful over time") → Pub/Sub trigger chạy ngầm → Class Aggregator phát hiện cụm lỗi → Teacher Digest → email draft xuất hiện trong Gmail → **thử gửi bằng quyền của agent bị từ chối** (proof least-privilege) → giáo viên bấm Send.
-  - **2:45–3:30 — Kiến trúc & GCP Proof:** Cloud Run, Firestore Console, Pub/Sub metrics + DLQ trống, **Cloud Trace span end-to-end**, kết quả ADK Eval.
-  - **3:30–4:00 — Track Alignment:** nói thẳng đã trả lời trọn 2 câu hỏi cốt lõi: (a) agent **synthesize & mutate** data (weakness taxonomy, fallacy clustering, priority ranking) chứ không chỉ đọc; (b) input thật sự **messy** (ảnh viết tay, chữ xấu, lỗi chính tả). Nêu rõ: Gemini 3.5 Flash/Pro + Google ADK2 + Firestore + Cloud Run + Pub/Sub.
-- [ ] Quay **unedited live execution** — tuyệt đối không mockup, không slideware. Chạy thử toàn bộ kịch bản ít nhất 2 lần trước khi quay thật.
-- [ ] Upload YouTube/Vimeo **public**, tiếng Anh hoặc có phụ đề tiếng Anh.
-- [ ] **Devpost submission:**
-  - Mô tả: features/functionality, technologies used, other data sources, findings & learnings.
-  - 🔴 **Mandatory Disclosure:** *"Kiến trúc lấy cảm hứng từ kinh nghiệm cá nhân của tác giả ở dự án CritiqAI (dự thi tại cuộc thi khác trước đây). Toàn bộ code trong submission này được viết mới hoàn toàn trong Submission Period của All Things Agentic Hackathon."*
-  - 🔴 Track ghi đúng: **Collaborative Partner** (không dùng tên "Evolving Knowledge Engine").
-  - Đính kèm: repo, video, hosted URL, architecture diagram.
-- [ ] **Bonus Stage Three (+0.4đ):**
-  - Technical blog (Medium/Dev.to) về kiến trúc ADK2 + Socratic Agent, ghi rõ làm cho hackathon này, public (+0.2đ).
-  - Post X/LinkedIn kèm `#AllThingsAgenticHackathon` + link demo (+0.2đ).
-- [ ] 🔴 **Nộp sớm ít nhất 1 ngày** trước 31/8 17:00 PT. Sau deadline: TUYỆT ĐỐI không sửa repo/video/link.
+- [x] **Kịch bản video ≤ 4:00.** ✅ ĐÃ SOẠN — `docs/video_script.md`, chia đúng 5 mốc thời gian theo yêu cầu gốc (Vấn đề & Triết lý / Proof of Action Tầng 1 / Memory & Tầng 2 / Kiến trúc & GCP Proof / Track Alignment), kèm **lệnh cụ thể để chạy live** ở từng bước (đã verify thật trong phiên làm việc này: `demo_ocr_run.py`, lệnh `curl` gọi Cloud Run service thật, `eval_report.md`) — không phải hướng dẫn chung chung, mà là runbook copy-paste được.
+- [ ] ⏸️ **Quay unedited live execution.** CHƯA LÀM — cần bạn tự quay màn hình + giọng nói theo `docs/video_script.md`. Đã ghi rõ trong script: chạy `scripts/doctor.py` trước, diễn tập ≥2 lần, không cắt ghép.
+- [ ] ⏸️ **Upload YouTube/Vimeo public.** CHƯA LÀM — phụ thuộc vào việc quay xong ở trên.
+- [x] **Nội dung Devpost submission.** ✅ ĐÃ SOẠN — `docs/devpost_submission_draft.md`: đầy đủ features/functionality, technologies used, other data sources (12 ảnh viết tay thật), findings & learnings (đúc kết từ 4 phát hiện kỹ thuật thật đã gặp trong phiên này: Gmail scope, OCR hallucination, reward-hacking trong eval, `/healthz` bị Cloud Run chặn), **nguyên văn Mandatory Disclosure**, **Track = Collaborative Partner**. Còn vài chỗ `[...]` cần điền tay (link video sau khi upload, link repo, xác nhận repo đã share quyền nếu private).
+- [x] **Nội dung Bonus Stage Three.** ✅ ĐÃ SOẠN — `docs/blog_post_draft.md` (bài blog kỹ thuật đầy đủ, 4 "Finding" rút từ ADR thật trong README) + `docs/social_post_draft.md` (bản X ngắn + bản LinkedIn dài, kèm `#AllThingsAgenticHackathon`). Chỉ cần bạn đăng lên, không cần tự viết.
+- [x] **Checklist tổng hợp các bước còn lại.** ✅ ĐÃ LÀM — `docs/submission_checklist.md`, gộp toàn bộ việc thi công thật (quay/upload/push git/share quyền/điền form/đăng bonus/deadline) thành 1 checklist tuần tự duy nhất, trỏ đúng tới từng file draft tương ứng.
+- [ ] ⏸️ 🔴 **Nộp sớm ít nhất 1 ngày** trước 31/8 17:00 PT. Sau deadline: TUYỆT ĐỐI không sửa repo/video/link. CHƯA LÀM (phụ thuộc các bước trên).
 
 ---
 
