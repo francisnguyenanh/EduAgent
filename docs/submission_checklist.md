@@ -33,7 +33,7 @@
 - [ ] Xác minh 2 thông tin quan trọng nhất để tránh bị loại (disqualification):
   - **Mandatory Disclosure:** Giữ đúng nguyên văn khai báo bản quyền.
   - **Category/Track:** Chọn chính xác duy nhất track **Collaborative Partner**.
-- [ ] Thêm đầy đủ thông tin: Hosted URL (`https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app`), test credentials (nếu có), danh sách Google SDK, Cloud Services, và tải lên file sơ đồ kiến trúc hệ thống (`Architecture diagram`).
+- [ ] Thêm đầy đủ thông tin: Hosted URL (`https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`), test credentials (nếu có), danh sách Google SDK, Cloud Services, và tải lên file sơ đồ kiến trúc hệ thống (`Architecture diagram`).
 - [ ] **Teammates:** Đảm bảo toàn bộ thành viên trong đội (nếu có) đã bấm chấp nhận lời mời tham gia trên Devpost (Unaccepted invite là nguyên nhân phổ biến nhất khiến thành viên bị rớt khỏi trang dự án khi nộp bài).
 
 ## 5. Tối ưu điểm thưởng (Bonus Stage Three - Tối đa +0.6đ)

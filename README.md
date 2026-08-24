@@ -10,6 +10,16 @@
 
 ---
 
+### 🚀 Try It Out Live (Instant Demo)
+
+You can experience the fully deployed system immediately without any local setup:
+* **Live Web App:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
+* **Demo Login Credentials:**
+  * **Student Portal:** Student ID: `c1_stu01` | Password: `demo123`
+  * **Teacher Portal:** Teacher ID: `c1_teacher` | Password: `demo123`
+
+---
+
 ## 1. Mandatory disclosure
 
 This architecture is inspired by the author's personal prior project, **CritiqAI** (entered in a different, earlier competition). **All code in this repository was written from scratch during this hackathon's Submission Period.** No source file, prompt, or data schema was copied from that prior project — it was used only as a case study for lessons learned (see `PROJECT_WIKI.md` section 9). Track: **Collaborative Partner**.
@@ -179,11 +189,10 @@ gcloud run deploy eduagent-class-aggregator \
 
 `--max-instances=5`/`--concurrency=80`/`--min-instances=0` (ĐỢT 3 GCP cost hygiene): scale-to-zero when idle, and a hard ceiling so an unexpected traffic spike (or a bug causing retry storms) can't silently burn through hackathon credits by autoscaling unbounded — matches the "make your credits last" guidance in the hackathon rules. These are flags on the deploy command itself; changing them on the already-live service requires re-running `gcloud run deploy` (or `gcloud run services update`) with intent, which this repo does not do automatically.
 
-**Live deployment (this project):** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app` (region `asia-southeast1`, same region as Firestore). Verified against the real service:
+**Live deployment (this project):** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app` (region `asia-southeast1`, same region as Firestore). Verified against the real service:
 
 ```bash
-TOKEN=$(gcloud auth print-identity-token)
-curl -H "Authorization: Bearer $TOKEN" https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app/health-check
+curl https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/health-check
 # -> {"status":"ok"}
 ```
 

@@ -4,8 +4,8 @@
 >
 > Lưu ảnh chụp vào `assets/gcp_evidence/` (tạo mới), đặt tên theo từng mục bên dưới để dễ dùng lại khi quay video demo (Phase 8) — không cần quay live lại Console lúc đó.
 
-**URL Cloud Run service thật (đã deploy Phase 7):** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app`
-Lưu ý: mở URL này bằng trình duyệt sẽ báo `403 Forbidden` — đây là **hành vi đúng thiết kế** (service deploy `--no-allow-unauthenticated`, route `/` chỉ nhận `POST` từ Pub/Sub push, không có trang web để xem). Không cần sửa gì, chỉ cần chụp bằng chứng qua Console theo hướng dẫn dưới.
+**URL Cloud Run service thật (đã deploy Phase 7/ĐỢT 4):** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`
+Lưu ý: Mở URL này bằng trình duyệt sẽ vào thẳng giao diện Web Demo (Student/Teacher Portal) do chúng ta đã deploy với cờ `--allow-unauthenticated`.
 
 ---
 

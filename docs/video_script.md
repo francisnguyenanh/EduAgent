@@ -36,13 +36,12 @@
 
 1. **(1:45–2:00)** Nói: "This isn't the student's first essay — the system remembers." Chạy hoặc chỉ vào kết quả có sẵn từ `scripts/demo_tier1_run.py` (3 essay liên tiếp, cùng 1 học sinh) — chỉ vào `persona` đổi qua từng essay và `score_trend`. Đây là bằng chứng "become more helpful over time".
 2. **(2:00–2:15)** Nói: "Every graded essay fires a Pub/Sub event — a separate Cloud Run service picks it up." Chạy lệnh thật (đã verify trước đó, chạy lại live):
-   ```bash
-   TOKEN=$(gcloud auth print-identity-token)
-   curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-     -d "{\"message\": {\"data\": \"$(python -c "import base64,json;print(base64.b64encode(json.dumps({'event_id':'demo-video-run','student_id':'stu_stuck','class_id':'c1','essay_id':'e1'}).encode()).decode())")\"}}" \
-     https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app/
-   ```
-   → hiện kết quả JSON có `ranked_students` (ranking deterministic) + `digest` (Gemini synthesize).
+    ```bash
+    curl -s -X POST -H "Content-Type: application/json" \
+      -d "{\"message\": {\"data\": \"$(python -c "import base64,json;print(base64.b64encode(json.dumps({'event_id':'demo-video-run','student_id':'stu_stuck','class_id':'c1','essay_id':'e1'}).encode()).decode())")\"}}" \
+      https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/
+    ```
+    → hiện kết quả JSON có `ranked_students` (ranking deterministic) + `digest` (Gemini synthesize).
 3. **(2:15–2:35)** Chuyển sang Gmail của giáo viên → refresh Drafts → chỉ vào draft mới xuất hiện, đọc nhanh headline + priority students. Nói: **"The agent's code has no path to send() — it can only create a draft. The teacher is the one who clicks Send."**
 4. **(2:35–2:45)** (Tuỳ chọn nếu kịp giờ) Thử mở code `gmail_mcp.py`, chỉ dòng comment "never sends" + chạy nhanh `pytest tests/test_gmail_mcp_never_sends.py -v` → PASS, làm bằng chứng kỹ thuật cho "least-privilege ở tầng code, không phải OAuth".
 

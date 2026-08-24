@@ -100,7 +100,7 @@ class CloudRunConfig:
     health check (ĐỢT 3 #5) -- never by application code, so a missing/stale
     URL degrades that one check to WARN, not a pipeline failure."""
 
-    service_url: str = os.getenv("EDUAGENT_CLOUD_RUN_URL", "https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app")
+    service_url: str = os.getenv("EDUAGENT_CLOUD_RUN_URL", "https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app")
 
 
 @dataclass(frozen=True)

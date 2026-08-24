@@ -82,7 +82,7 @@ We built the pipeline from scratch using:
 
 ## 5. "Try it out" links
 - **GitHub Repository:** `[Link tới GitHub repo của bạn]`
-- **Live Cloud Run Service (API Check):** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app/health-check`
+- **Live Cloud Run Service (API Check):** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/health-check`
 
 ---
 
@@ -107,7 +107,7 @@ We built the pipeline from scratch using:
 * **What date did you start this project?** 08-03-2026
 * **URL to your public or private code repo:** `[Link GitHub repo]` (Nếu repo private, bảo đảm đã add collab cho: `testing@devpost.com` và `cloudhackathons@google.com`)
 * **Did you add Reproducible Testing instructions to your README?** Yes
-* **Hosted project URL if available:** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app`
+* **Hosted project URL if available:** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`
 * **Testing instructions:**
   1. To run local unit & integration tests, ensure Google Application Default Credentials (ADC) are configured, then execute:
      `pytest tests/ -q`
