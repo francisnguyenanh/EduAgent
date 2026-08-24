@@ -12,9 +12,20 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class GeminiConfig:
+    """Vertex AI-backed Gemini config (uses the eduagent-sa ADC, not a raw API key).
+
+    ADR-002: `gemini-3.5-pro` does not exist as a publisher model in this
+    project/region (verified via client.models.list() during Phase 1 setup —
+    only the Flash lineage — 3.5/3.6/3.7 — and image variants are available).
+    `heavy_model` substitutes a newer Flash release for tasks that need
+    deeper reasoning (e.g. Teacher Digest Synthesizer); it still satisfies the
+    hackathon's "Gemini 3.5 or newer" requirement since 3.7 > 3.5.
+    """
+
     flash_model: str = os.getenv("EDUAGENT_FLASH_MODEL", "gemini-3.5-flash")
-    pro_model: str = os.getenv("EDUAGENT_PRO_MODEL", "gemini-3.5-pro")
-    api_key_env_var: str = "GOOGLE_API_KEY"
+    heavy_model: str = os.getenv("EDUAGENT_HEAVY_MODEL", "gemini-3.7-flash")
+    use_vertexai: bool = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "True").lower() != "false"
+    vertex_location: str = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
 
 
 @dataclass(frozen=True)

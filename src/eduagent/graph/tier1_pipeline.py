@@ -1,25 +1,23 @@
 """Tier 1 — Per-Student Adaptive Socratic Pipeline (ADK2 Graph Workflow).
 
-Phase 0: wires stub FunctionNodes into a linear, deterministic-edge graph so
-the shape can be verified end-to-end before any real agent/LLM logic exists.
-Escalation/branching (Debate <-> Validator retry loop) is added in Phase 1;
-this file intentionally stays linear until then.
+Phase 1: real node logic (LLM calls via Vertex AI + deterministic function
+nodes) replaces the Phase 0 stubs. Graph shape stays linear -- branching for
+Debate<->Validator retry happens INSIDE debate_loop (see nodes/debate.py),
+not as separate graph edges, so the overall pipeline shape stays simple and
+auditable.
 """
 
 from __future__ import annotations
 
 from google.adk.workflow import START, FunctionNode, Workflow
 
-from eduagent.nodes.tier1_stubs import (
-    challenge_validator,
-    cognitive_scorer,
-    debate_loop,
-    intake,
-    persona_selector,
-    profile_mutator,
-    sanitizer,
-    summarizer,
-)
+from eduagent.nodes.debate import debate_loop
+from eduagent.nodes.intake import intake, sanitizer
+from eduagent.nodes.mutator import profile_mutator
+from eduagent.nodes.persona_selector import persona_selector
+from eduagent.nodes.scorer import cognitive_scorer
+from eduagent.nodes.summarizer import summarizer
+from eduagent.nodes.validator import challenge_validator
 
 _intake_node = FunctionNode(func=intake, name="intake")
 _sanitizer_node = FunctionNode(func=sanitizer, name="sanitizer")

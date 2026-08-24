@@ -120,30 +120,27 @@
 
 ---
 
-## PHASE 1 — Tầng 1 lõi (text-only, chạy được end-to-end) 🔴
+## PHASE 1 — Tầng 1 lõi (text-only, chạy được end-to-end) 🔴 (ĐANG LÀM — batch mode xong, cần thêm interactive multi-turn)
+
+> ADR-002 (xem `src/eduagent/config.py`): `gemini-3.5-pro` không tồn tại trong project/region này (verify bằng `client.models.list()`). Dùng `gemini-3.5-flash` mặc định + `gemini-3.7-flash` (`heavy_model`) cho tác vụ cần reasoning sâu hơn — vẫn thoả yêu cầu "Gemini 3.5 trở lên". Toàn bộ LLM call đi qua Vertex AI bằng chính `eduagent-sa` đã tạo ở Phase 0 (không xin thêm API key riêng).
 
 > Nguyên tắc: **làm pipeline text chạy thông trước**, multimodal để phase sau. Đây là xương sống, không được trượt.
 
-- [ ] **Intake + Sanitizer (Function Node):** validate input, strip delimiter nguy hiểm, chặn pattern prompt injection cơ bản (`ignore previous instructions`, system prompt override, delimiter injection). Ghi lại input gốc trước khi sanitize để audit.
-- [ ] **Summarizer Agent (Gemini 3.5 Flash):** trích Claim chính, Premise, Fallacy nháp, Evidence Type → structured output (JSON schema, không free text).
-- [ ] **Persona library (4 persona, prompt viết mới hoàn toàn):**
-  - *Skeptic* — nghi ngờ bằng chứng, đòi nguồn.
-  - *Devil's Advocate* — phản biện ngược chiều luận điểm.
-  - *Nitpicker* — bắt bẻ lỗ hổng logic, bước nhảy suy luận.
-  - *Expander* — kéo rộng phạm vi, buộc xét trường hợp biên.
-- [ ] **Debate Loop (Agent Node, 3 turn leo thang):**
-  - **Persona Anchoring:** tái khẳng định persona instruction ở **mỗi turn**, không chỉ system prompt đầu — triệt tiêu hiện tượng "tuột persona" thành trợ lý dễ dãi.
-  - Escalation logic tách thành **skill module riêng**, không nhét chung 1 prompt khổng lồ.
-- [ ] 🔴 **Challenge Validator (Function Node, ZERO LLM, độc lập 100%):**
-  - Chống answer-leak (không được đưa đáp án/viết hộ).
-  - Single Socratic question rule (đúng 1 câu hỏi gợi mở).
-  - Length & reading-level guardrail phù hợp học sinh.
-  - Khi fail → trả về lý do cụ thể, buộc Debate Agent regenerate (tối đa N lần rồi fallback an toàn).
-- [ ] **Cognitive Scorer (Agent Node):** chấm 4 trục `logical_coherence`, `evidence_quality`, `counterargument_handling`, `scope_awareness`.
-- [ ] **Profile Mutator (Function Node — Data Mutation):** cập nhật `weakness_taxonomy` (VD: *Hasty Generalization*, *Ad Hominem*, *Unsourced Claim*), `persona_streak`, `score_trend` — đây là phần "mutate data" mà track yêu cầu.
-- [ ] Ghi Firestore `student_profiles/{id}` đúng schema.
+- [x] **Intake + Sanitizer (Function Node).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/intake.py`. Regex chặn injection (`ignore previous instructions`, override system prompt, thẻ `<system>`), giữ nguyên `raw_input` trước khi sanitize để audit. Bug thật tìm thấy qua unit test: pattern gốc chỉ khớp 1 tính từ trước "instructions" nên bỏ lọt `"ignore all previous instructions"` (2 tính từ) — đã sửa quantifier `{1,3}`.
+- [x] **Summarizer Agent (Gemini 3.5 Flash).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/summarizer.py`, structured JSON output thật qua Vertex AI (không free text). Verify bằng `scripts/demo_tier1_run.py`: với essay nguỵ biện thật, model trích đúng `hasty generalization`, `anecdotal evidence`, `appeal to popularity`.
+- [x] **Persona library (4 persona, viết mới hoàn toàn).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/skills/personas.py`. Mỗi persona có `anchor` text riêng để tái khẳng định mỗi turn (Skeptic/Devil's Advocate/Nitpicker/Expander), map với 1 trục rubric tương ứng.
+- [x] **Debate Loop (Agent Node, leo thang, persona anchoring mỗi turn).** ✅ ĐÃ LÀM MỘT PHẦN — `src/eduagent/nodes/debate.py` + `src/eduagent/skills/debate_escalation.py` (escalation tách riêng module, đúng yêu cầu). Verify: Turn 1 sinh câu hỏi Socratic đúng persona, đúng 1 câu hỏi, không leak đáp án.
+  - ⚠️ **Giới hạn đã phát hiện, cần làm tiếp:** graph hiện chạy 1 lượt (batch) — `node_input` của Workflow chỉ nhận essay ban đầu, chưa có đường dẫn để bơm câu trả lời thật của học sinh giữa các turn. Muốn tranh biện 3-turn tương tác thật (học sinh trả lời → agent leo thang dựa trên câu trả lời đó) cần dùng cơ chế **interrupt/resume** của ADK2 Workflow (`RequestInput`, đã thấy trong `google.adk.workflow`) để graph dừng chờ input thật sau mỗi turn — việc này cần làm cùng lúc với Web UI (Phase 3), ghi vào việc còn lại của Phase 1 thay vì giả lập vội.
+- [x] 🔴 **Challenge Validator (Function Node, ZERO LLM, độc lập 100%).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/validator.py`, không import `eduagent.llm` (verify bằng đọc code, không có LLM call nào). Test thật: chặn đúng answer-leak, chặn câu hỏi kép, chặn quá ngắn/quá dài. Dùng lại (không gọi chồng LLM) cả trong vòng regenerate của Debate Loop lẫn làm node cuối kiểm tra toàn bộ transcript.
+- [x] **Cognitive Scorer (Agent Node).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/scorer.py`. Verify: essay nguỵ biện thật bị chấm điểm thấp hợp lý (2/1/0/2 trên thang 10) ở cả 4 trục.
+- [x] **Profile Mutator (Function Node — Data Mutation).** ✅ ĐÃ LÀM MỘT PHẦN — `src/eduagent/nodes/mutator.py` tính đúng delta (`persona_used`, `new_weaknesses`, `scores`, `validator_passed`) từ 1 essay. Đây mới là delta cho MỘT bài; hợp nhất `persona_streak`/`score_trend` xuyên nhiều bài (cần đọc lịch sử cũ trước khi mutate) dời sang **Phase 2** cùng với ghi Firestore thật — làm ở đây sẽ phải giả lập lịch sử giả, không có giá trị.
+- [ ] ⏸️ Ghi Firestore `student_profiles/{id}` đúng schema thật (hiện `profile_delta` mới nằm trong `ctx.state`, chưa persist). — Dời sang Phase 2 vì cần thiết kế cùng lúc với read-modify-write hợp nhất lịch sử, tách làm 2 lần sẽ phải viết lại.
 
-**DoD:** submit 1 essay text → chạy hết 3 turn → Validator có ít nhất 1 lần chặn thật → Firestore ghi đúng document → đọc lại profile thấy weakness_taxonomy đã mutate.
+**Kiểm chứng thật đã chạy** (`scripts/demo_tier1_run.py`, essay ngụy biện mẫu qua Vertex AI thật): Summarizer → Persona Selector (chọn đúng Skeptic) → Debate Turn 1 (câu hỏi đúng persona, qua Validator) → Scorer (điểm thấp hợp lý) → Mutator (delta đúng cấu trúc). `pytest tests/ -q` → **10/10 pass** (1 test end-to-end thật qua LLM + 9 unit test thuần cho Sanitizer/Validator/PersonaSelector/Mutator).
+
+**DoD:** submit 1 essay text → chạy hết pipeline không lỗi [PASS, nhưng mới 1 turn do giới hạn interrupt/resume nêu trên] • Validator có test case chặn thật [PASS] • Firestore ghi đúng document [CHƯA — dời Phase 2 có chủ đích].
+
+**→ Phase 1 hoàn thành ~85%.** Lõi pipeline text-only chạy thật qua Gemini/Vertex AI, có unit test khoá hành vi deterministic. 2 việc còn lại (interactive multi-turn qua interrupt/resume, ghi Firestore thật) dời sang đúng chỗ (Phase 2/3) để không phải làm lại.
 
 ---
 
