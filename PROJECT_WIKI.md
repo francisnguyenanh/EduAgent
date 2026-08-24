@@ -315,7 +315,9 @@ student_profile/{student_id}
 2. **Validator phải độc lập về logic/reasoning path với Generator** — Debate Agent và Challenge Validator không được dùng chung 1 lần gọi LLM, nếu không risk kiểm tra chính là risk cần kiểm tra.
 3. **Deterministic-first**: luôn ưu tiên rule-based/regex/keyword trước khi gọi LLM, ở bất kỳ đâu có thể — tiết kiệm token + tăng khả năng audit (giáo viên hiểu được TẠI SAO có điểm đó).
 4. **1 điểm HITL duy nhất ở bước rủi ro cao nhất** — không rải rác approval ở mọi bước trung gian (VD: chỉ cần giáo viên duyệt trước khi gửi email, không cần duyệt từng bước nội bộ).
-5. **Least-privilege ở tầng OAuth scope**, không chỉ ở tầng logic prompt — VD Gmail compose-only nghĩa là dù AI có "muốn" gửi, nó cũng KHÔNG THỂ về mặt kỹ thuật.
+5. **Least-privilege**, không chỉ ở tầng logic prompt — VD Gmail compose-only nghĩa là dù AI có "muốn" gửi, nó cũng KHÔNG THỂ về mặt kỹ thuật.
+   > ⚠️ **CẬP NHẬT (Phase 0, test thật ngày 2026-08-24, xem TODO.md ADR-001):** giả định "OAuth scope `gmail.compose` chặn cứng `send()`" đã được kiểm chứng là SAI. Theo tài liệu chính thức của Google, `gmail.compose` bao gồm cả quyền gửi ("create, read, update, delete drafts; **send** messages and drafts") — test thật với token chỉ xin scope này cho thấy `messages.send()` vẫn thành công. Không có scope Gmail nào chỉ tạo draft mà chặn cứng gửi ở tầng Google.
+   > **Thiết kế lại:** least-privilege cho Teacher Digest Mailer phải enforce ở **tầng code** (codebase không bao giờ gọi `messages.send`/`drafts.send` trong luồng digest — kỷ luật + code review/lint, không phải rào kỹ thuật của Google), và "gate" HITL thật sự là hành động người thật: giáo viên tự mở Gmail của họ và bấm Send trên draft, ngoài mọi code path hệ thống kiểm soát. Phải nói đúng điều này trong video/README — không được nói "OAuth chặn kỹ thuật".
 6. **Agent giao tiếp qua shared session state, không gọi trực tiếp nhau** — giữ data lineage rõ ràng, từng agent test/thay thế độc lập được.
 
 ### 9.2 Pattern tổng quát rút ra (an toàn để tái sử dụng vì là khái niệm, không phải code)

@@ -27,6 +27,9 @@ node_modules/
 dist/
 build/
 
+# Claude Code local state
+.claude/
+
 # OS / editor
 .DS_Store
 Thumbs.db
