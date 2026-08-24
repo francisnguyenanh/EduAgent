@@ -20,6 +20,7 @@ is parked in `pending_essays` for reprocessing once Gemini recovers.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -32,6 +33,12 @@ from eduagent.memory.firestore_memory import apply_essay_result
 from eduagent.tracing import traced_node
 
 _logger = logging.getLogger(__name__)
+
+# ĐỢT 3 latency optimization: keeps references to the fire-and-forget publish
+# tasks below alive -- asyncio.create_task() only holds a WEAK reference, so
+# without this the task object can be garbage-collected mid-flight and
+# silently never run (a known asyncio gotcha, not paranoia).
+_background_publish_tasks: set[asyncio.Task] = set()
 
 
 def build_profile_delta(*, persona_id: str, fallacies_draft: list[str], scores: dict, validation_result: dict) -> dict:
@@ -51,6 +58,23 @@ def _resolve_essay_id(ctx: Context) -> str:
     # directly).
     essay_id = ctx.state.get("essay_id")
     return essay_id or str(uuid.uuid4())
+
+
+async def _publish_essay_evaluated_background(*, event_id: str, student_id: str, class_id: str, essay_id: str) -> None:
+    """ĐỢT 3 latency optimization: the Tier 1 pipeline's own result to the
+    student is already fully decided by this point (Firestore write done) --
+    the Tier 2 Pub/Sub handoff is a separate concern the student shouldn't
+    have to wait on. Runs the existing blocking publish_essay_evaluated()
+    (its own future.result(timeout=30) call) in a worker thread so it never
+    blocks the node's return; failures are logged, never raised -- exactly
+    the same non-fatal discipline the prior synchronous call already had."""
+    try:
+        message_id = await asyncio.to_thread(
+            publish_essay_evaluated, event_id=event_id, student_id=student_id, class_id=class_id, essay_id=essay_id
+        )
+        _logger.info("essay.evaluated published (background)", extra={"essay_id": essay_id, "message_id": message_id})
+    except Exception:
+        _logger.exception("Background publish of essay.evaluated failed", extra={"essay_id": essay_id, "student_id": student_id})
 
 
 def _park_pending_essay(ctx: Context, *, student_id: str, essay_id: str, reason: str) -> None:
@@ -126,17 +150,23 @@ async def profile_mutator(ctx: Context) -> dict:
         )
         ctx.state["profile_after_mutation"] = updated_profile
 
-        try:
-            message_id = publish_essay_evaluated(
+        # Fire-and-forget: don't make the student's response wait on the
+        # Tier 2 Pub/Sub handoff (see _publish_essay_evaluated_background's
+        # docstring). message_id is therefore no longer known synchronously
+        # -- ctx.state["essay_evaluated_message_id"] stays None on the
+        # success path now; it was only ever informational/for-audit, not
+        # something any other node reads to make a decision.
+        task = asyncio.create_task(
+            _publish_essay_evaluated_background(
                 event_id=essay_id,
                 student_id=student_id,
                 class_id=ctx.state.get("class_id", "unknown_class"),
                 essay_id=essay_id,
             )
-            ctx.state["essay_evaluated_message_id"] = message_id
-        except Exception:
-            _logger.exception("Failed to publish essay.evaluated", extra={"essay_id": essay_id, "student_id": student_id})
-            ctx.state["essay_evaluated_message_id"] = None
+        )
+        _background_publish_tasks.add(task)
+        task.add_done_callback(_background_publish_tasks.discard)
+        ctx.state["essay_evaluated_message_id"] = None
 
     ctx.state["profile_mutated"] = updated_profile is not None
     ctx.state["pending_retry"] = pending

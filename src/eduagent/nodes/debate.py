@@ -40,6 +40,21 @@ _PERSONA_FALLBACK_QUESTIONS: dict[str, str] = {
 }
 _DEFAULT_FALLBACK_QUESTION = "That's an interesting point -- what evidence led you to that conclusion?"
 
+# ĐỢT 3 #1 (token optimization): only the fields the Debate Loop actually
+# reasons over -- dropping `evidence` here (still used by cognitive_scorer)
+# keeps the compacted summary small without losing anything this node reads.
+_SUMMARY_FIELDS_FOR_PROMPT = ("main_claim", "claims", "fallacies_draft")
+# Re-sending the full transcript every turn grows quadratically over a
+# 3-turn debate; only the debate's short, capped anyway (VALIDATOR.
+# max_debate_turns), so this mainly matters if a caller passes a longer
+# prior_turns list than the batch graph ever produces (e.g. a future
+# extended-debate mode) -- cap defensively regardless.
+_RECENT_TURNS_WINDOW = 3
+
+
+def _compact_summary(summary: dict) -> dict:
+    return {field: summary[field] for field in _SUMMARY_FIELDS_FOR_PROMPT if field in summary}
+
 
 def _build_prompt(
     *,
@@ -50,7 +65,14 @@ def _build_prompt(
     student_response: str | None,
     prior_weaknesses: list[str],
 ) -> str:
-    parts = [f"Original essay:\n{essay_text}", f"Extracted summary: {summary}"]
+    parts = [f"Extracted summary: {_compact_summary(summary)}"]
+    if turn == 1:
+        # Only turn 1 needs the student's actual raw writing -- from turn 2
+        # onward the debate argues against the extracted claims + the
+        # transcript so far, not the source text verbatim again (ĐỢT 3 #1:
+        # re-sending a long raw essay on every turn was pure repeated token
+        # cost with no reasoning benefit turns 2+ actually used).
+        parts.insert(0, f"Original essay:\n{essay_text}")
     if turn == 1 and prior_weaknesses:
         # Memory injection (Phase 2 -> Phase 3 follow-up): only surfaced on
         # the opening turn, where "have you improved on this before" is a
@@ -62,7 +84,7 @@ def _build_prompt(
             + ". If this essay repeats one of these patterns, consider probing it directly; "
             "if it's actually improved, you may acknowledge that briefly before pushing further."
         )
-    for t in prior_turns:
+    for t in prior_turns[-_RECENT_TURNS_WINDOW:]:
         parts.append(f"Turn {t['turn']} question: {t['question']}")
         if t.get("student_response"):
             parts.append(f"Student's reply: {t['student_response']}")

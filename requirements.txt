@@ -14,3 +14,6 @@ opentelemetry-exporter-gcp-trace>=1.15.0
 Pillow>=10.0.0  # PHASE 6: scripts/generate_sample_essay_images.py only (dev/demo asset generation, not imported by src/)
 fastapi>=0.115.0  # PHASE 7: Cloud Run push-subscriber HTTP entrypoint (src/eduagent/server.py)
 uvicorn[standard]>=0.30.0  # PHASE 7: ASGI server the Dockerfile runs server.py with
+requests>=2.32.0  # DOT 3 #5: scripts/doctor.py's live Cloud Run identity-token health check
+google-cloud-run>=0.16.0  # DOT 3: scripts/cleanup_gcp_artifacts.py only (Cloud Run revision cleanup), not imported by src/
+google-cloud-artifact-registry>=1.22.0  # DOT 3: scripts/cleanup_gcp_artifacts.py only (Artifact Registry image cleanup), not imported by src/

@@ -221,11 +221,11 @@
 - [x] **Subscriber thật (dev-mode) + verify full end-to-end trên GCP thật.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `scripts/run_class_aggregator_subscriber.py` (pull-based, sẽ đổi thành Cloud Run push subscriber ở Phase 7, cùng dùng `process_event()`).
   - **Chạy thật toàn trình:** essay mới cho `stu_stuck` (học sinh seed có lịch sử thật) qua Tầng 1 → publish Pub/Sub thật → subscriber pull → ranking đúng (`stu_inactive`/`stu_declining`/`stu_stuck` lên đầu, đúng logic) → Gmail draft thật xuất hiện với nội dung đúng → Sheets ghi đúng 1 dòng.
   - Republish đúng `event_id` → verify `skipped_duplicate`, không tạo thêm draft/row.
-- [ ] ⏸️ **Web UI tối giản** — CHƯA LÀM, dời có chủ đích. Chức năng cốt lõi (digest chờ duyệt) đã thể hiện đầy đủ qua Gmail draft thật — giáo viên xem/duyệt ngay trong Gmail, không bắt buộc phải có UI riêng để đạt DoD. Sẽ làm nếu còn thời gian sau Phase 4/5, ưu tiên thấp hơn Resilience/Eval vì không nằm trong bất kỳ câu hỏi chấm điểm nào.
+- [x] **Web UI tối giản.** ✅ ĐÃ LÀM — dời sang lúc đó có chủ đích, hoàn thành ở ĐỀ XUẤT CẢI TIẾN ĐỢT 3 (mục 7, xem chi tiết ở đó): `server.py` + `demo_page.py` + `api.py`, tab Giáo viên xem digest/roster ngay trên URL Cloud Run thật, không chỉ qua Gmail draft nữa.
 
-**DoD:** submit essay mới → Pub/Sub trigger tự động [PASS] → digest sinh ra với ranking giải thích được [PASS] → draft xuất hiện trong Gmail [PASS — "bấm Send gửi thật" là hành động người thật ngoài phạm vi tự động hoá, đúng theo ADR-001] → Sheets có dòng log [PASS] • gửi lặp event không tạo digest trùng [PASS, verify thật].
+**DoD:** submit essay mới → Pub/Sub trigger tự động [PASS] → digest sinh ra với ranking giải thích được [PASS] → draft xuất hiện trong Gmail [PASS — "bấm Send gửi thật" là hành động người thật ngoài phạm vi tự động hoá, đúng theo ADR-001] → Sheets có dòng log [PASS] • gửi lặp event không tạo digest trùng [PASS, verify thật] • Web UI xem digest [PASS, xem ĐỢT 3 mục 7].
 
-**→ Phase 3 hoàn thành phần lõi 100%**, trừ Web UI (cố tình dời, không chặn DoD) và test path lỗi DLQ thật (dời sang Phase 4 — đúng chỗ, vì đó là phần "Chaos test"). `pytest tests/ -q` → **41/41 pass**, không có LLM/Firestore/Gmail/Sheets thật nào bị gọi ngoài ý muốn trong test suite sau khi sửa bug patch.
+**→ Phase 3 hoàn thành 100%** (Web UI ban đầu dời có chủ đích, sau đó hoàn thành ở ĐỢT 3) và test path lỗi DLQ thật (dời sang Phase 4 — đúng chỗ, vì đó là phần "Chaos test", đã hoàn thành ở đó). `pytest tests/ -q` → **41/41 pass** tại thời điểm Phase 3 (số liệu hiện tại xem ĐỢT 3), không có LLM/Firestore/Gmail/Sheets thật nào bị gọi ngoài ý muốn trong test suite sau khi sửa bug patch.
 
 ---
 
@@ -349,10 +349,59 @@
 - [ ] ⏸️ **Thu thập bằng chứng GCP Native (chụp/quay màn hình).** CHƯA LÀM — service đã chạy thật và có dữ liệu thật để chụp (Cloud Run service status/logs/metrics, Pub/Sub topic/DLQ, Firestore collections, Cloud Trace span, Vertex AI log) nhưng thao tác chụp màn hình console là thủ công, cần bạn tự làm hoặc yêu cầu tôi hướng dẫn từng bước khi tới lúc quay video.
 - [x] **README.md chuẩn quốc tế.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `README.md`, đầy đủ: disclosure bắt buộc, spin-up từng bước (kèm URL deploy thật + lệnh verify thật ở mục 3.10), 11 ADR trong 1 bảng ma trận (ADR-001..003 từ Phase 0/3, ADR-004..010 từ Đợt 2/Phase 5/6, ADR-011 mới từ chính lần deploy thật này), kết quả ADK Eval Suite thật (15/15), mô hình bảo mật, bằng chứng multimodal ingestion (12 ảnh thật).
 - [x] **Architecture Diagram (Mermaid).** ✅ ĐÃ LÀM + PASS — nhúng trực tiếp trong README.md mục 2, vẽ đúng kiến trúc thật hiện tại (routing OCR/text ở Tầng 1, Cloud Run push subscriber ở Tầng 2). Bỏ qua export PNG/SVG riêng vì Mermaid nhúng trong README đã render trực tiếp trên GitHub.
-- [ ] ⏸️ **Test spin-up lại từ máy sạch/incognito.** CHƯA LÀM — dời tới gần ngày nộp bài (sau khi đã ổn định code) để tránh phải lặp lại nếu còn thay đổi.
+- [x] **Test spin-up lại từ máy sạch (phần tự động hoá được).** ✅ ĐÃ LÀM + PASS — tạo 1 venv Python hoàn toàn trống (`python -m venv`, không kế thừa gì từ môi trường dev hiện có), `pip install -r requirements.txt` từ rỗng → cài sạch không lỗi, rồi `pytest tests/ -q -m "not e2e"` chỉ bằng venv đó → **123/124 pass** (khớp số liệu môi trường dev, không có dependency ẩn nào bị bỏ sót khỏi `requirements.txt`). Cũng `ast.parse()` toàn bộ script/module mới của ĐỢT 3 (`doctor.py`, `run_eval_suite.py`, `cleanup_gcp_artifacts.py`, `server.py`, `api.py`, `demo_page.py`) bằng chính venv sạch đó — không lỗi cú pháp/import.
+  - ⏸️ **Còn nợ (không tự động hoá được):** phần "máy sạch" đúng nghĩa đen (máy vật lý khác/trình duyệt incognito thật, gõ lại toàn bộ lệnh GCP/OAuth từ README §3.1–3.3 bằng tay) — cần bạn tự làm gần ngày nộp bài để tránh lặp lại nếu code còn đổi.
 - [x] **Quét lại toàn bộ git history.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — verify thật bằng `git log --all --diff-filter=A --name-only` (không có file nào tên `credential`/`service-account`/`secret`/`*.key`/`client_secret`/`token.json`/`.env`, không có file nào từ `CritqAI-main`) và `git log --all -p | grep` cho pattern `AIza...`/`BEGIN PRIVATE KEY`/`"type": "service_account"` — **0 kết quả** cho tất cả.
 
 **DoD:** người lạ đọc README tự deploy được • mọi bằng chứng GCP đã nằm trong thư mục assets. **[Deploy thật + verify thật ĐẠT — screenshot console vẫn còn nợ]** — service thật chạy đúng, xử lý đúng 1 event thật với ranking + digest thật; còn thiếu bước chụp màn hình console (thao tác thủ công, không tự động hoá).
+
+---
+
+## 💡 ĐỀ XUẤT CẢI TIẾN TOÀN DIỆN: 6 TRỤ CỘT PRODUCTION & CHINH PHỤC BAN GIÁM KHẢO (ĐỢT 3) 🏆 HOÀN THÀNH PHẦN LÕI
+
+> **Góc nhìn Ban Giám Khảo & Tiêu chuẩn Khảo thí Hackathon:**
+> - **Innovation (40%):** Data mutation thực thụ (weakness taxonomy tiến hóa, fallacy clustering, priority indexing), ingest ảnh viết tay lộn xộn (Multimodal OCR), loại bỏ friction chấm bài của giáo viên.
+> - **Architecture (30%):** Tối ưu Token, độ trễ thấp, chi phí tiết kiệm, decoupling qua Pub/Sub, zero-waste cloud hygiene, schema Firestore có giới hạn trần, validator độc lập zero-trust.
+> - **Demo & Production (30%):** Web UI trực quan có URL Cloud Run thật (`.run.app`), video live unedited proof of action, README spin-up tái lập được.
+
+---
+
+### 1. Tối ưu Token & Giữ vững Chất lượng Suy luận (Token Optimization) 🟡
+- [x] **Prompt Token Pruning & Context Compression (Debate Loop)**. ✅ ĐÃ LÀM + PASS — `nodes/debate.py::_build_prompt()`: raw essay chỉ còn được truyền ở turn 1 (turn 2+ chỉ thấy `_compact_summary()` — đúng 3 field `main_claim`/`claims`/`fallacies_draft`, bỏ `evidence` vì Debate Loop không đọc field đó); transcript trước đó cắt về `_RECENT_TURNS_WINDOW = 3` turn gần nhất. Không có test nào assert nội dung prompt (chỉ mock `generate_text`) nên đổi an toàn, verify bằng chạy lại `pytest tests/test_interactive.py tests/test_api.py` — pass.
+- [x] **Thinking Budget & Model Routing có kiểm soát**. ✅ ĐÃ LÀM + PASS — `llm.py` thêm param `thinking_budget` xuyên `generate_json()`/`generate_json_from_image()` (mặc định `None` = giữ hành vi cũ cho Scorer/Digest Synthesizer); `nodes/ocr.py` và `nodes/summarizer.py` truyền `thinking_budget=0`. Verify thật qua Vertex AI (`_client().models.generate_content(..., config={"thinking_config": {"thinking_budget": 0}})`) → gọi thành công, không lỗi schema. 2 unit test mới (`tests/test_llm_utils.py`) khoá đúng hành vi `_config_with_thinking_budget()` (None giữ nguyên config, không mutate input dict).
+
+### 2. Tối ưu Tốc độ & Độ trễ (Latency & Throughput Acceleration) 🟡
+- [x] **Multimodal OCR Smart Downscale & EXIF Auto-Orientation (Phase 6)**. ✅ ĐÃ LÀM + PASS — `src/eduagent/skills/image_preprocessing.py` (`preprocess_image_bytes`), gọi trong `nodes/ocr.py` trước cả 2 lần gọi Vision. 5 unit test mới (`tests/test_image_preprocessing.py`).
+- [x] **Non-blocking Event Publishing & Parallel Dispatch (Tầng 1 & Tầng 2)**. ✅ ĐÃ LÀM + PASS
+  - `nodes/mutator.py`: publish `essay.evaluated` giờ chạy qua `asyncio.create_task` + `asyncio.to_thread` (fire-and-forget, có set giữ reference chống GC sớm) — node trả kết quả cho học sinh ngay, không chờ Pub/Sub publish xong. `essay_evaluated_message_id` không còn biết đồng bộ (luôn `None` trên path thành công) vì lý do đó — field này chỉ mang tính audit, không node nào khác đọc để quyết định logic.
+  - `aggregator/class_aggregator.py`: sau khi Gmail draft xong (phải làm trước vì Sheets/Firestore cần `draft_id`), Sheets append + Firestore `persist_digest` dispatch đồng thời qua `asyncio.gather(asyncio.to_thread(...), asyncio.to_thread(...))`.
+  - Verify: 1 unit test mới (`tests/test_resilience.py::test_mutator_publish_runs_in_background_without_blocking_node_return`) dùng `threading.Event` để CHỨNG MINH node trả kết quả trước khi publish call chạy xong, không chỉ tin theo code. `pytest tests/test_class_aggregator.py` 11/11 pass sau đổi dispatch song song.
+
+### 3. Tối ưu Chi phí GCP & Bảo vệ Ngân sách (GCP Cost & Credit Optimization) 🟢
+- [x] **Cloud Run Concurrency & Max Instances Cap**. ✅ ĐÃ LÀM (tài liệu — chưa redeploy) — README.md §3.10 cập nhật lệnh `gcloud run deploy` mẫu thêm `--max-instances=5 --concurrency=80 --min-instances=0` + giải thích lý do. **Cố tình KHÔNG tự chạy lại deploy lên service thật đang live** (thay đổi cấu hình dịch vụ đang chạy là hành động cần xác nhận của bạn trước) — lệnh đã sẵn sàng, chỉ cần bạn chạy khi muốn áp dụng.
+- [x] **Cloud Budget Alert & Service Sleep Guide**. ✅ ĐÃ LÀM + PASS — README.md §3.11 mới: hướng dẫn Budget Alert qua Console + quy trình teardown (xoá Cloud Run service, Pub/Sub topics/subscriptions, SA key) sau khi chấm thi kết thúc.
+
+### 4. Tối ưu Độ chịu tải & Khả năng mở rộng (High Load & Resiliency) 🟡
+- [x] **Event-Driven Asynchronous Buffer / Digest Coalescing (Pub/Sub + DLQ)**. ✅ ĐÃ LÀM + PASS — `config.py::DigestDebounceConfig` (`EDUAGENT_DIGEST_DEBOUNCE_SECONDS`, mặc định 120s) + `aggregator/digest_store.py::get_last_digest_timestamp()` + `class_aggregator.py::should_coalesce_digest()` (pure function). Nếu digest gần nhất của `class_id` này còn trong cửa sổ debounce, event mới trả `status: "coalesced_skip_digest"` — KHÔNG mất dữ liệu (bài luận đã ghi Firestore ở Tầng 1 từ trước, không phụ thuộc Tầng 2), chỉ trì hoãn thông báo giáo viên tới event tiếp theo của lớp đó (đọc lại toàn bộ profile mới nhất nên tự động phản ánh cả học sinh vừa coalesce). 4 unit test mới (`tests/test_class_aggregator.py`) verify cả pure function và path `process_event()` skip đúng, không gọi `synthesize_digest` (tốn LLM) khi coalesce.
+
+### 5. Vệ sinh Tài nguyên & Không để lại rác (Zero Garbage & Cloud Hygiene) 🟢
+- [x] **GCP Hygiene Script (`scripts/cleanup_gcp_artifacts.py`)**. ✅ ĐÃ LÀM + PASS — dry-run mặc định (list-only), cần `--apply` mới xoá thật (đúng nguyên tắc "risky action cần xác nhận rõ ràng" của phiên làm việc này). 3 nhóm: (1) Pub/Sub subscription `chaos-test-*` còn sót lại sau chaos test crash giữa chừng, (2) Cloud Run revision cũ hơn N gần nhất (KHÔNG BAO GIỜ xoá revision đang serving traffic), (3) Artifact Registry image không tag cũ hơn K gần nhất. **Chạy dry-run thật:** 0 subscription rác tìm thấy; check Cloud Run/Artifact Registry bị chặn IAM đúng như thiết kế (SA `eduagent-sa` chỉ có 5 role least-privilege từ Phase 0, không có quyền list revision/image — script log rõ "SKIPPED" thay vì crash). 4 unit test mới (`tests/test_cleanup_gcp_artifacts.py`) mock GCP client, verify đúng logic giữ/xoá (không bao giờ xoá bản đang serving; giữ bản có tag).
+- [x] **Interactive Session Eviction / Memory TTL**. ✅ ĐÃ LÀM + PASS — `interactive.py::_SESSION_TTL_SECONDS = 24h` + `evict_stale_sessions()`, quét lazy mỗi lần `start_debate_session()` được gọi (không cần cron/scheduler riêng). 2 unit test mới verify chỉ session hết hạn bị xoá, session mới không bị đụng.
+- [x] **Artifact Registry Cleanup Policy** (chính sách tự động cấp hạ tầng, khác với script CLI ở trên) — ✅ ĐÃ LÀM (tài liệu + file JSON sẵn sàng — chưa áp lên repo thật). `cleanup-policy.json` mới ở gốc repo (giữ 3 version gần nhất + xoá untagged cũ hơn 7 ngày, đúng định dạng Artifact Registry cleanup policy thật, đã validate JSON hợp lệ) + lệnh `gcloud artifacts repositories set-cleanup-policies` trong README §3.11. **Cố tình KHÔNG tự áp policy lên repo thật đang tồn tại** — đây là thay đổi cấu hình hạ tầng, cần bạn xác nhận retention window trước khi chạy.
+
+### 6. Tối ưu Truy xuất & Cấu trúc Dữ liệu (Storage & Retrieval Optimization) 🟢
+- [x] **Firestore History Windowing & Bounded Document Size (Phase 2 & Mutator)**. ✅ ĐÃ LÀM + PASS — xem chi tiết ở mục cũ "Firestore Memory: History Capping" phía trên (`MAX_HISTORY_ENTRIES=50`, `total_essays_count`, `all_time_weaknesses`) — cùng 1 lần implement, phục vụ đúng cả 2 cách diễn đạt của yêu cầu này qua 2 lần soạn TODO khác nhau.
+- [x] **Firestore Composite Indexing**. ✅ ĐÃ LÀM + PASS — `firestore.indexes.json` mới (`student_profiles`: `class_id ASC, flags.last_updated DESC`) + lệnh `gcloud firestore indexes composite create` trong README §3.7. Query thật dùng index này: `memory/firestore_memory.py::list_students_by_class()`, lộ qua `GET /api/classes/{class_id}/students` (dùng trong tab Giáo viên của demo page — mục 7 dưới). **Chưa deploy index lên Firestore thật** (thao tác hạ tầng cần bạn xác nhận trước khi chạy) — 2 unit test mới verify hành vi qua mock Firestore client trong `tests/test_server_interactive_api.py`.
+
+### 7. Trụ cột Trực quan: Full-Stack Web UI cho Học sinh & Giáo viên (Cloud Run Embedded SPA) 🔴 HOÀN THÀNH PHẦN LÕI
+- [x] **REST API + Single-Page Demo nhúng trong Cloud Run**. ✅ ĐÃ LÀM + PASS
+  - `src/eduagent/api.py` (mới): `start_debate()`/`start_debate_from_image()`/`submit_debate_turn()` — tái dùng ĐÚNG hàm production (`summarizer.summarize_essay`, `nodes/ocr.transcribe_essay_image` — cả 2 tách ra pure function mới để dùng chung với graph batch node, không viết logic song song thứ 2 — và `persona_selector.choose_persona`, `interactive.py`).
+  - `server.py` thêm: `POST /api/debate/start`, `POST /api/debate/start-with-image` (upload ảnh viết tay — dùng lại chính OCR pipeline Phase 6, kể cả EXIF/downscale + self-consistency cross-check), `POST /api/debate/turn`, `GET /api/classes/{class_id}/analytics`, `GET /api/classes/{class_id}/students` (roster, mục 6), và `GET /`/`GET /demo` (route GET riêng, không đụng `POST /` push-subscriber).
+  - `demo_page.py` (mới): 1 trang Vanilla HTML/CSS/JS (Dark/Light theo `prefers-color-scheme`) — **Tab Học sinh:** nhập text HOẶC upload ảnh viết tay (browser đọc file → base64 → gửi API), phòng phản biện 3 turn tương tác thật, cảnh báo hiển thị nếu OCR confidence thấp. **Tab Giáo viên:** xem digest/priority ranking theo `class_id` + roster lớp học (ai cần chú ý, xu hướng điểm, lần cập nhật cuối).
+  - 22 unit test mới (`test_api.py`, `test_server_interactive_api.py`) mock toàn bộ LLM/Firestore — không có Vertex AI/Firestore thật nào bị gọi trong test suite.
+  - **Cố tình CHƯA làm (ghi nợ rõ ràng, không giả vờ đã xong):** hiển thị "Điểm radar 4 trục" (không có endpoint chấm điểm qua REST — xem lý do ở mục 2 Đợt 3 cũ, path chấm điểm vẫn thuộc về ADK2 graph qua `Context` để tránh nhân bản logic PHASE 1) và Bảng Cấu hình Sư phạm (`show_student_scores`/`show_student_feedback` toggle, `stuck_streak_threshold` slider, `teacher_email` input) — các toggle này cần 1 schema config mới xuyên `merge_essay_into_profile`/`priority_engine`/digest chưa tồn tại; dựng giả (chỉ ở UI, không có hiệu lực thật) sẽ vi phạm đúng nguyên tắc "không data mutation giả" của chính dự án này. Nợ rõ ràng cho lần cải tiến sau nếu cần điểm UI/UX cao hơn.
+
+**Kiểm chứng tổng ĐỢT 3 (bản 6 trụ cột):** `pytest tests/ -q` → **124/124 pass** (tăng từ 96 khi bắt đầu đợt 3). Không có test nào gọi Vertex AI/Firestore/Gmail/Sheets/Cloud Run thật ngoài đúng 1 test `e2e` đã có từ trước. 2 hạng mục cố tình dời lại là thao tác thay đổi TRỰC TIẾP lên hạ tầng đang chạy thật (Cloud Run redeploy với flags mới, deploy Firestore composite index thật) — lệnh đã sẵn sàng trong README, để bạn xác nhận trước khi áp dụng, đúng nguyên tắc "risky action cần confirm" của phiên làm việc này. Artifact Registry cleanup policy đã chuyển từ "chưa làm" sang "tài liệu + file JSON sẵn sàng, chưa áp dụng" (cùng lý do).
 
 ---
 
@@ -375,11 +424,11 @@
 
 | Tiêu chí | Trọng số | Bằng chứng cụ thể trong dự án | Phase | Đạt? |
 |---|---|---|---|---|
-| **Eligibility Stage One** | Pass/Fail | Gemini 3.5+, ADK2, Firestore+Cloud Run+Pub/Sub, 100% code mới, có disclosure | 0, 8 | [ ] |
-| **Innovation & Utility** | **40%** | Giảm tải thật cho giáo viên (auto-triage cả lớp), học sinh rèn tư duy không chép văn mẫu, ingest ảnh viết tay lộn xộn, data mutation (weakness taxonomy + fallacy clustering) | 1,2,3,6 | [ ] |
-| **Architectural Discipline** | **30%** | Deterministic-first, Session vs Memory tách bạch, Validator độc lập zero-trust, idempotency + DLQ + retry, least-privilege OAuth, ADK Eval suite, ADR trong README | 1,2,3,4,5,7 | [ ] |
-| **Demo & Readiness** | **30%** | Video ≤4' unedited live, GCP console proof + Cloud Trace, README spin-up test từ máy sạch, architecture diagram | 4,7,8 | [ ] |
-| **Stage Three Bonus** | **+0.4đ** | 1 technical blog (+0.2) + 1 social post có hashtag (+0.2) | 8 | [ ] |
+| **Eligibility Stage One** | Pass/Fail | Gemini 3.5+, ADK2, Firestore+Cloud Run+Pub/Sub, 100% code mới, có disclosure | 0, 8 | [x] mọi phần code/disclosure phía chúng ta đã xong; còn 1 phần ngoài tầm — chưa nhận phản hồi chính thức `cloudhackathons@google.com` (mục 4) |
+| **Innovation & Utility** | **40%** | Giảm tải thật cho giáo viên (auto-triage cả lớp), học sinh rèn tư duy không chép văn mẫu, ingest ảnh viết tay lộn xộn, data mutation (weakness taxonomy + fallacy clustering) | 1,2,3,6 | [x] đầy đủ bằng chứng thật, verify qua Vertex AI/Firestore thật ở từng phase |
+| **Architectural Discipline** | **30%** | Deterministic-first, Session vs Memory tách bạch, Validator độc lập zero-trust, idempotency + DLQ + retry, least-privilege OAuth, ADK Eval suite, ADR trong README | 1,2,3,4,5,7 | [x] đầy đủ, 11+ ADR trong README, eval suite 15/15, chaos test thật |
+| **Demo & Readiness** | **30%** | Video ≤4' unedited live, GCP console proof + Cloud Trace, README spin-up test từ máy sạch, architecture diagram | 4,7,8 | [ ] code/hạ tầng sẵn sàng 100%, nhưng video CHƯA quay/upload + screenshot GCP console CHƯA chụp (Phase 8, hành động người thật) |
+| **Stage Three Bonus** | **+0.4đ** | 1 technical blog (+0.2) + 1 social post có hashtag (+0.2) | 8 | [ ] nội dung đã soạn sẵn (`docs/blog_post_draft.md`, `docs/social_post_draft.md`), CHƯA đăng |
 
 ---
 

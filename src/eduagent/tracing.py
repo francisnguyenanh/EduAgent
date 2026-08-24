@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import warnings
 from collections.abc import Callable
 
 from opentelemetry import trace
@@ -36,6 +37,20 @@ def configure_tracing(project_id: str | None = None) -> None:
 
     project_id = project_id or FIRESTORE.project_id
     try:
+        # DOT 3 #4: opentelemetry-exporter-gcp-trace 1.15+ marks
+        # CloudTraceSpanExporter deprecated in favor of routing through an
+        # OTLP collector, but that requires standing up and operating a
+        # collector -- new infra outside this hackathon's scope, and
+        # PHASE 4 already verified this exporter produces real, complete
+        # spans in Cloud Trace. Silence exactly this one known, upstream
+        # deprecation message (not DeprecationWarning wholesale, which would
+        # also hide warnings about eduagent's OWN code) rather than taking on
+        # that infra just to clear test output.
+        warnings.filterwarnings(
+            "ignore",
+            message=r"CloudTraceSpanExporter is deprecated\..*",
+            category=DeprecationWarning,
+        )
         from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 
         provider = TracerProvider(resource=Resource.create({"service.name": "eduagent"}))

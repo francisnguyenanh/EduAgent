@@ -24,11 +24,19 @@ profile_mutator once the graph resumes/completes.
 
 from __future__ import annotations
 
+import time
+
 from eduagent.config import VALIDATOR
 from eduagent.nodes.debate import generate_debate_turn
 from eduagent.skills.language import detect_language
 
 _sessions: dict[str, dict] = {}
+
+# ĐỢT 3 resource hygiene: an abandoned debate (student opens the page, never
+# finishes) would otherwise sit in this in-process dict forever -- a slow
+# memory leak on a long-lived Cloud Run instance. 24h is generous for a
+# real debate session while still bounding worst-case growth.
+_SESSION_TTL_SECONDS = 24 * 60 * 60
 
 
 class UnknownSessionError(KeyError):
@@ -51,6 +59,7 @@ def start_debate_session(
     """Registers a new interactive session. Call once, right after
     persona_selector has run (or with equivalent data), before the first
     step_debate_turn() call. Overwrites any existing session with the same id."""
+    evict_stale_sessions()  # lazy sweep -- cheap, and every new session start is a natural trigger point
     _sessions[session_id] = {
         "persona_id": persona_id,
         "essay_text": essay_text,
@@ -58,7 +67,20 @@ def start_debate_session(
         "prior_weaknesses": prior_weaknesses or [],
         "language": language or detect_language(essay_text),
         "turns": [],
+        "created_at": time.time(),
     }
+
+
+def evict_stale_sessions(ttl_seconds: float = _SESSION_TTL_SECONDS, *, now: float | None = None) -> list[str]:
+    """Removes sessions older than `ttl_seconds` from the in-process store.
+    Returns the evicted session_ids (mainly for tests/logging). Sessions
+    created before this field existed have no `created_at` and are treated
+    as immediately stale -- they predate any TTL tracking at all."""
+    now = now if now is not None else time.time()
+    stale = [sid for sid, session in _sessions.items() if now - session.get("created_at", 0) > ttl_seconds]
+    for sid in stale:
+        _sessions.pop(sid, None)
+    return stale
 
 
 def get_debate_session(session_id: str) -> dict:

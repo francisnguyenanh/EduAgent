@@ -134,6 +134,15 @@ python scripts/seed_student_profiles.py                       # 5 sample student
 python scripts/run_class_aggregator_subscriber.py --once       # pulls essay.evaluated events, runs process_event()
 ```
 
+Deploy `firestore.indexes.json` once (needed for `GET /api/classes/{class_id}/students`, a class-roster query filtered by `class_id` and ordered by `flags.last_updated` -- Firestore rejects that exact filter+order_by combo without the matching composite index rather than silently full-scanning):
+
+```bash
+gcloud firestore indexes composite create --collection-group=student_profiles \
+  --field-config field-path=class_id,order=ascending \
+  --field-config field-path=flags.last_updated,order=descending
+# or: firebase deploy --only firestore:indexes   (if this project also uses the Firebase CLI)
+```
+
 ### 3.8 Run the ADK Eval Suite
 
 ```bash
@@ -157,6 +166,9 @@ gcloud run deploy eduagent-class-aggregator \
   --region <your-region> \
   --service-account eduagent-sa@<project>.iam.gserviceaccount.com \
   --no-allow-unauthenticated \
+  --max-instances=5 \
+  --concurrency=80 \
+  --min-instances=0 \
   --set-env-vars GCP_PROJECT_ID=<project>,GOOGLE_GENAI_USE_VERTEXAI=True
 
 # Then point the class-aggregator-sub subscription at the deployed URL as a
@@ -164,6 +176,8 @@ gcloud run deploy eduagent-class-aggregator \
 ```
 
 `--no-allow-unauthenticated` plus Pub/Sub's own service-agent OIDC token is what keeps this endpoint from being a public, unauthenticated trigger for essay-grading side effects — do not deploy with `--allow-unauthenticated` for anything beyond a throwaway smoke test.
+
+`--max-instances=5`/`--concurrency=80`/`--min-instances=0` (ĐỢT 3 GCP cost hygiene): scale-to-zero when idle, and a hard ceiling so an unexpected traffic spike (or a bug causing retry storms) can't silently burn through hackathon credits by autoscaling unbounded — matches the "make your credits last" guidance in the hackathon rules. These are flags on the deploy command itself; changing them on the already-live service requires re-running `gcloud run deploy` (or `gcloud run services update`) with intent, which this repo does not do automatically.
 
 **Live deployment (this project):** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app` (region `asia-southeast1`, same region as Firestore). Verified against the real service:
 
@@ -174,6 +188,14 @@ curl -H "Authorization: Bearer $TOKEN" https://eduagent-class-aggregator-s6pcepa
 ```
 
 See ADR-011 for a real deploy-time finding: the endpoint is `/health-check`, not the more conventional `/healthz`.
+
+### 3.11 GCP cost/credit protection (budget alert + teardown)
+
+Before leaving this project running unattended for any length of time:
+
+1. **Budget alert:** Console → Billing → Budgets & alerts → Create budget, scope it to this project, set a threshold (e.g. 50%/90%/100% of your hackathon credit grant) with email notifications. This project's actual spend is dominated by Vertex AI calls (Flash-tier, cheap) and Cloud Run (scale-to-zero per §3.10) — Firestore/Pub/Sub/Cloud Trace stay within free-tier at this project's volume.
+2. **Artifact Registry cleanup policy** (optional, complements `scripts/cleanup_gcp_artifacts.py`'s on-demand sweep with an always-on one enforced by the registry itself): `gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy --location=<your-region> --policy=cleanup-policy.json`, where `cleanup-policy.json` keeps the 3 most recent versions and deletes untagged versions older than 7 days. Not applied automatically here — it's a live change to infrastructure already in use, left for you to run deliberately once you've confirmed the retention window you want.
+3. **Teardown after judging ends** (irreversible — only run once you're certain the submission window is closed): `gcloud run services delete eduagent-class-aggregator --region <region>`, delete the Pub/Sub topics/subscriptions (`essay-evaluated`, `essay-evaluated-dlq`, `class-aggregator-sub`), and delete the `eduagent-sa` service account key/service account once no longer needed. Firestore data (student profiles, digests) has no ongoing cost at rest for this project's volume, so it's safe to leave for post-submission reference.
 
 ---
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from eduagent.aggregator.class_aggregator import format_digest_email, format_digest_email_html, process_event
+from eduagent.aggregator.class_aggregator import format_digest_email, format_digest_email_html, process_event, should_coalesce_digest
 
 _FAKE_DIGEST = {
     "headline": "Binh needs attention.",
@@ -79,6 +79,7 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
         patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value="draft123") as mock_gmail,
         patch("eduagent.integrations.sheets_mcp.append_audit_row") as mock_sheets_append,
         patch("eduagent.aggregator.class_aggregator.persist_digest") as mock_persist_digest,
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
     ):
         mock_teacher.email = "teacher@example.com"
         mock_sheets.audit_spreadsheet_id = "sheet123"
@@ -110,6 +111,7 @@ def test_process_event_skips_gmail_and_sheets_when_unconfigured():
         patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
         patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
         patch("eduagent.aggregator.class_aggregator.persist_digest"),
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
     ):
         mock_teacher.email = ""
         mock_sheets.audit_spreadsheet_id = ""
@@ -118,3 +120,44 @@ def test_process_event_skips_gmail_and_sheets_when_unconfigured():
 
     assert result["status"] == "processed"
     assert result["gmail_draft_id"] is None
+
+
+def test_should_coalesce_digest_within_window():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    last_digest_at = now - timedelta(seconds=30)
+    assert should_coalesce_digest(last_digest_at=last_digest_at, now=now, window_seconds=120) is True
+
+
+def test_should_coalesce_digest_outside_window():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    last_digest_at = now - timedelta(seconds=300)
+    assert should_coalesce_digest(last_digest_at=last_digest_at, now=now, window_seconds=120) is False
+
+
+def test_should_coalesce_digest_no_prior_digest():
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert should_coalesce_digest(last_digest_at=None, now=now, window_seconds=120) is False
+
+
+def test_process_event_coalesces_digest_within_debounce_window():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    recent_digest_at = now - timedelta(seconds=10)
+
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=recent_digest_at),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock) as mock_synthesize,
+    ):
+        result = asyncio.run(process_event({"event_id": "e5", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+
+    assert result["status"] == "coalesced_skip_digest"
+    mock_synthesize.assert_not_awaited()  # never even got to the expensive LLM digest call

@@ -81,6 +81,29 @@ class PriorityWeights:
 
 
 @dataclass(frozen=True)
+class DigestDebounceConfig:
+    """ĐỢT 3 high-load resiliency: if a whole class submits within a short
+    window of each other, one digest per essay would spam the teacher's
+    inbox. `window_seconds` bounds how often a NEW digest is generated per
+    class_id -- a coalesced event still has its underlying student_profile
+    write (Tier 1, already durable) untouched; it just skips Tier 2's
+    digest/Gmail/Sheets step, which the NEXT event for that class_id (from
+    any student) will naturally cover since ranking re-reads every profile
+    fresh each time."""
+
+    window_seconds: int = int(os.getenv("EDUAGENT_DIGEST_DEBOUNCE_SECONDS", "120"))
+
+
+@dataclass(frozen=True)
+class CloudRunConfig:
+    """PHASE 7 deployed service, referenced only by scripts/doctor.py's remote
+    health check (ĐỢT 3 #5) -- never by application code, so a missing/stale
+    URL degrades that one check to WARN, not a pipeline failure."""
+
+    service_url: str = os.getenv("EDUAGENT_CLOUD_RUN_URL", "https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app")
+
+
+@dataclass(frozen=True)
 class ValidatorConfig:
     """Deterministic guardrails for the Challenge Validator function node."""
 
@@ -97,3 +120,5 @@ SHEETS = SheetsConfig()
 TEACHER = TeacherConfig()
 PRIORITY_WEIGHTS = PriorityWeights()
 VALIDATOR = ValidatorConfig()
+CLOUD_RUN = CloudRunConfig()
+DIGEST_DEBOUNCE = DigestDebounceConfig()

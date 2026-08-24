@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "student_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "class_id", "order": "ASCENDING" },
+        { "fieldPath": "flags.last_updated", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -24,6 +24,7 @@ from google.adk.agents.context import Context
 
 from eduagent.config import GEMINI
 from eduagent.llm import LLMGenerationError, generate_json_from_image
+from eduagent.skills.image_preprocessing import preprocess_image_bytes
 from eduagent.tracing import traced_node
 
 _logger = logging.getLogger(__name__)
@@ -91,6 +92,10 @@ def _transcribe_once(*, image_bytes: bytes, image_mime_type: str) -> dict:
         image_bytes=image_bytes,
         image_mime_type=image_mime_type,
         response_schema=_SCHEMA,
+        # ĐỢT 3 token/latency optimization: verbatim transcription is a
+        # perception task, not a reasoning task -- extended thinking adds
+        # latency/cost here without improving transcription accuracy.
+        thinking_budget=0,
     )
 
 
@@ -114,6 +119,40 @@ def _cross_check_consistency(first: dict, second: dict) -> dict:
     }
 
 
+def transcribe_essay_image(image_bytes: bytes, image_mime_type: str, *, essay_id: str | None = None, student_id: str | None = None) -> dict:
+    """Pure(ish) core of the node below -- preprocess, transcribe twice,
+    cross-check -- factored out so callers outside the ADK graph (ĐỢT 3 #2/#7's
+    interactive REST API image-upload path) run the EXACT same production OCR
+    logic instead of a second, divergent implementation. Returns
+    {transcribed_text, confidence, uncertain_segments, degraded}."""
+    if not image_bytes:
+        _logger.error("transcribe_essay_image called with no image bytes", extra={"essay_id": essay_id})
+        return {"transcribed_text": "", "confidence": _DEGRADED_CONFIDENCE, "uncertain_segments": [], "degraded": True}
+
+    # ĐỢT 3 #1: normalize EXIF rotation + downscale large phone-camera photos
+    # BEFORE either Vision call -- both cross-check calls below see the same
+    # prepped bytes, so the similarity comparison stays apples-to-apples.
+    image_bytes, image_mime_type = preprocess_image_bytes(image_bytes, image_mime_type)
+
+    try:
+        first = _transcribe_once(image_bytes=image_bytes, image_mime_type=image_mime_type)
+        second = _transcribe_once(image_bytes=image_bytes, image_mime_type=image_mime_type)
+        result = _cross_check_consistency(first, second)
+        return {
+            "transcribed_text": result["transcribed_text"],
+            "confidence": result["confidence"],
+            "uncertain_segments": result["uncertain_segments"],
+            "degraded": False,
+        }
+    except LLMGenerationError:
+        # Same discipline as scorer.py/summarizer.py: never fabricate content
+        # on outage. An empty essay flows into sanitizer/summarizer exactly
+        # like a blank text submission would -- no fake transcription ever
+        # reaches the student's permanent record.
+        _logger.error("Multimodal OCR degraded -- Gemini Vision unavailable", extra={"essay_id": essay_id, "student_id": student_id})
+        return {"transcribed_text": "", "confidence": _DEGRADED_CONFIDENCE, "uncertain_segments": [], "degraded": True}
+
+
 @traced_node("multimodal_ocr")
 async def multimodal_ocr(ctx: Context) -> dict:
     ctx.state["stage"] = "multimodal_ocr"
@@ -121,39 +160,10 @@ async def multimodal_ocr(ctx: Context) -> dict:
     image_bytes = ctx.state.get("ocr_image_bytes")
     image_mime_type = ctx.state.get("ocr_image_mime_type") or "image/jpeg"
 
-    if not image_bytes:
-        # Routing only sends here when intake.py actually found an image
-        # part, but never trust that invariant blindly -- degrade to an
-        # empty transcription rather than crashing the whole essay run.
-        _logger.error("multimodal_ocr node reached with no image bytes in state", extra={"essay_id": ctx.state.get("essay_id")})
-        ctx.state["raw_input"] = ""
-        ctx.state["ocr_confidence"] = _DEGRADED_CONFIDENCE
-        ctx.state["ocr_uncertain_segments"] = []
-        ctx.state["ocr_degraded"] = True
-        return {"transcribed_text": "", "confidence": _DEGRADED_CONFIDENCE, "uncertain_segments": []}
+    result = transcribe_essay_image(image_bytes, image_mime_type, essay_id=ctx.state.get("essay_id"), student_id=ctx.state.get("student_id"))
 
-    try:
-        first = _transcribe_once(image_bytes=image_bytes, image_mime_type=image_mime_type)
-        second = _transcribe_once(image_bytes=image_bytes, image_mime_type=image_mime_type)
-        result = _cross_check_consistency(first, second)
-        transcribed_text = result["transcribed_text"]
-        confidence = result["confidence"]
-        uncertain_segments = result["uncertain_segments"]
-        ocr_degraded = False
-    except LLMGenerationError:
-        # Same discipline as scorer.py/summarizer.py: never fabricate content
-        # on outage. An empty essay flows into sanitizer/summarizer exactly
-        # like a blank text submission would -- no fake transcription ever
-        # reaches the student's permanent record.
-        _logger.error(
-            "Multimodal OCR degraded -- Gemini Vision unavailable",
-            extra={"essay_id": ctx.state.get("essay_id"), "student_id": ctx.state.get("student_id")},
-        )
-        transcribed_text, confidence, uncertain_segments = "", _DEGRADED_CONFIDENCE, []
-        ocr_degraded = True
-
-    ctx.state["raw_input"] = transcribed_text
-    ctx.state["ocr_confidence"] = confidence
-    ctx.state["ocr_uncertain_segments"] = uncertain_segments
-    ctx.state["ocr_degraded"] = ocr_degraded
-    return {"transcribed_text": transcribed_text, "confidence": confidence, "uncertain_segments": uncertain_segments}
+    ctx.state["raw_input"] = result["transcribed_text"]
+    ctx.state["ocr_confidence"] = result["confidence"]
+    ctx.state["ocr_uncertain_segments"] = result["uncertain_segments"]
+    ctx.state["ocr_degraded"] = result["degraded"]
+    return {"transcribed_text": result["transcribed_text"], "confidence": result["confidence"], "uncertain_segments": result["uncertain_segments"]}

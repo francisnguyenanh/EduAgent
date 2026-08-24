@@ -1,0 +1,15 @@
+[
+  {
+    "name": "keep-minimum-versions",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": { "keepCount": 3 }
+  },
+  {
+    "name": "delete-old-untagged",
+    "action": { "type": "Delete" },
+    "condition": {
+      "tagState": "UNTAGGED",
+      "olderThan": "7d"
+    }
+  }
+]

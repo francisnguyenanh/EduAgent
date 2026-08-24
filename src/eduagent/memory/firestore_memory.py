@@ -30,6 +30,26 @@ def get_profile(student_id: str) -> dict | None:
 
 
 @with_gcp_retry
+def list_students_by_class(class_id: str, *, limit: int = 50) -> list[dict]:
+    """ĐỢT 3 storage/retrieval optimization: a class roster view (Teacher Web
+    UI) ordered by most-recently-active student, instead of loading every
+    profile unordered (what class_aggregator.load_class_profiles does for
+    full-class ranking -- a different, batch use case). Needs the composite
+    index declared in firestore.indexes.json (class_id ASC, flags.last_updated
+    DESC) -- without it Firestore rejects this exact filter+order_by combo
+    at query time rather than silently full-scanning."""
+    docs = (
+        _client()
+        .collection(FIRESTORE.student_profiles_collection)
+        .where(filter=firestore.FieldFilter("class_id", "==", class_id))
+        .order_by("flags.last_updated", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    return [{"student_id": doc.id, **doc.to_dict()} for doc in docs]
+
+
+@with_gcp_retry
 def apply_essay_result(
     student_id: str,
     *,

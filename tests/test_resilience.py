@@ -7,6 +7,7 @@ simulate.
 from __future__ import annotations
 
 import asyncio
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -180,6 +181,54 @@ def test_mutator_parks_pending_essay_when_ocr_confidence_is_low():
     mock_apply.assert_not_called()
     assert result["pending_retry"] is True
     assert result["profile_after_mutation"] is None
+
+
+def test_mutator_publish_runs_in_background_without_blocking_node_return():
+    """ĐỢT 3 latency optimization: profile_mutator must return WITHOUT
+    waiting on publish_essay_evaluated() -- verified by making the mocked
+    publish call block on an Event that's only set AFTER profile_mutator()
+    has already returned."""
+    from eduagent.nodes.mutator import profile_mutator
+
+    ctx = MagicMock()
+    ctx.state = {
+        "student_id": "stu_1",
+        "class_id": "c1",
+        "persona": "skeptic",
+        "summary": {"fallacies_draft": []},
+        "scores": {"logical_coherence": 5, "evidence_quality": 5, "counterargument_handling": 5, "scope_awareness": 5},
+        "scores_degraded": False,
+        "validation_result": {"passed": True},
+        "essay_id": "e1",
+    }
+
+    publish_started = threading.Event()
+    node_returned = threading.Event()
+    publish_saw_node_already_returned = False
+
+    def _blocking_publish(**kwargs):
+        nonlocal publish_saw_node_already_returned
+        publish_started.set()
+        node_returned.wait(timeout=5)
+        publish_saw_node_already_returned = node_returned.is_set()
+        return "msg-1"
+
+    async def _run():
+        with (
+            patch("eduagent.nodes.mutator.apply_essay_result"),
+            patch("eduagent.nodes.mutator.publish_essay_evaluated", side_effect=_blocking_publish),
+        ):
+            result = await profile_mutator(ctx)
+            node_returned.set()
+            # Give the background task a moment to actually run and observe
+            # node_returned before the event loop closes.
+            await asyncio.sleep(0.2)
+            return result
+
+    result = asyncio.run(_run())
+    assert result["profile_after_mutation"] is None or "profile_after_mutation" in result
+    assert publish_started.is_set()
+    assert publish_saw_node_already_returned is True
 
 
 def test_mutator_forwards_student_feedback_to_apply_essay_result():

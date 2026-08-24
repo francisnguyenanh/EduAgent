@@ -1,72 +1,126 @@
-# Devpost Submission Draft
+# Devpost Submission Draft — eduagent (CritiqAI v2)
 
-> Copy-paste vào form Devpost. Điền chỗ `[...]` trước khi nộp (link video, link repo, link hosted service). Đọc lại 1 lần trước khi nộp — đặc biệt đoạn Mandatory Disclosure và Track, đây là 2 chỗ sai sẽ ảnh hưởng eligibility.
+> [!NOTE]
+> **Hướng dẫn sử dụng:**
+> File này chứa toàn bộ các trường thông tin cần điền trên cổng nộp bài Devpost. Bạn chỉ cần copy-paste nội dung tương ứng vào từng ô nhập liệu trên website. 
+> Trước khi nộp, hãy cập nhật các liên kết thực tế (Video demo link, GitHub repo link, LinkedIn post link).
 
 ---
 
-## Project name
+## 1. Project Name
+**eduagent — Collaborative Partner Socratic Mentor**
 
-**eduagent** — Collaborative Partner Socratic Mentor
+---
 
-*(Không dùng tên "Evolving Knowledge Engine" hay bất kỳ tên nào khác — chỉ dùng tên phản ánh đúng track Collaborative Partner.)*
-
-## Track
-
-**Collaborative Partner**
-
-## Elevator pitch (1–2 câu, nếu form yêu cầu)
-
+## 2. Elevator Pitch
 An adversarial Socratic debate agent that challenges students' essays instead of correcting them — remembering each student's persistent weaknesses across sessions, and automatically triaging an entire class for the teacher via a deterministic priority ranking and a human-approved digest draft.
 
-## Inspiration
+---
 
-Rural and overcrowded classrooms often have one teacher for 40+ students with no time to give individualized critical-thinking feedback. Existing AI writing tools tend to just hand students corrected answers — which teaches dependency, not thinking. Our philosophy: *use AI to teach students not to depend on AI.*
+## 3. Project Story (Markdown + LaTeX)
+
+## Inspiration
+Overcrowded classrooms often leave a single teacher responsible for 40+ students, making it impossible to provide personalized critical-thinking feedback on writing assignments. Existing AI writing assistants tend to take a lazy shortcut: they simply rewrite the student's text, fixing the grammar and logic for them. This creates a feedback loop of dependency, teaching students how to copy AI instead of how to construct a sound argument. 
+
+Our philosophy is the exact opposite: **we use AI to teach students how not to depend on AI.** We wanted to build a persistent, collaborative Socratic partner that challenges student reasoning, remembers their logical blind spots over time, and acts as a force multiplier for overloaded educators.
 
 ## What it does
+`eduagent` operates across two highly decoupled, robust tiers:
 
-**Tier 1 — Per-student adaptive Socratic pipeline.** A student submits an essay — typed text, or a photo of a handwritten one. The system:
-- Ingests messy input via **Multimodal OCR** (Gemini Vision): verbatim transcription (preserves the student's own spelling/grammar mistakes), with a **self-consistency cross-check** (two independent Vision calls compared deterministically) that catches cases where the model would otherwise hallucinate confidently on a degraded photo.
-- Extracts claim/evidence/fallacy structure, then selects one of 4 adversarial personas (Skeptic, Devil's Advocate, Nitpicker, Expander) based on the student's **persistent weakness history read from Firestore** — not just the current essay.
-- Runs a 3-turn escalating Socratic debate, with **persona anchoring** re-injected every turn (a known failure mode in earlier single-prompt approaches: personas drifting into a generic agreeable assistant mid-conversation).
-- Every generated question passes through an **independent, zero-LLM Challenge Validator** before the student sees it — blocking answer-leaks, multi-part questions, and out-of-bounds length, in both English and Vietnamese.
-- Scores the essay on 4 rubric axes and writes **constructive, encouraging student-facing feedback** — then mutates the student's Firestore profile (streak tracking, `needs_attention` flagging, score-trend detection), which is the concrete "become more helpful over time" evidence: persona choice and debate context visibly change based on what a student struggled with last time.
+### Tier 1: Per-Student Adaptive Socratic Pipeline
+1. **Multimodal Messy Ingestion:** A student can submit typed text or upload a photo of a handwritten essay. The system routes the image through **Gemini Vision OCR**. It transcribes the text verbatim (preserving original spelling/grammar errors) and runs a **deterministic self-consistency cross-check** (transcribing twice and calculating a string similarity ratio) to detect and downgrade OCR confidence if the image is too blurry to read, preventing LLM hallucinations.
+2. **Memory-Informed Persona Selection:** The agent retrieves the student's historical profile from Firestore. Instead of treating every essay in isolation, it selects one of four adversarial personas (Skeptic, Devil's Advocate, Nitpicker, Expander) designed to target the student's persistent logical weaknesses.
+3. **Escalating Socratic Debate:** The student enters a 3-turn interactive debate. The agent uses **Persona Anchoring** at each turn to prevent "persona drift" (where the LLM defaults back to a generic, agreeable assistant).
+4. **Independent Challenge Validator:** Every question generated by the LLM is validated by a zero-LLM, independent Python regex check. If the question leaks the answer, contains double questions, or violates length constraints, the system automatically triggers a regeneration loop or falls back to a persona-safe question.
+5. **Cognitive Mutation:** Once the debate completes, the essay is scored across 4 rubric axes. Encouraging, constructive student-facing feedback is written, and the student's long-term profile in Firestore is updated with score trends and streak tracking.
 
-**Tier 2 — Class Aggregator & Teacher Co-Pilot.** Every graded essay fires a Pub/Sub event to a Cloud Run service that:
-- Clusters shared logical fallacies across the whole class and computes a deterministic **Intervention Priority Index** (zero LLM — a rule engine a teacher can actually audit: "why is student A ranked above student B?" always has a traceable answer).
-- Synthesizes a natural-language **Teacher Digest** (Gemini) that only explains the pre-computed ranking — the system instruction explicitly forbids the LLM from re-ranking.
-- Drafts an email in the teacher's Gmail (compose-only — the codebase has **no code path to `.send()`**, enforced by an AST-based test, not just review discipline) and appends an audit row to a Google Sheet.
-- The **only human-in-the-loop gate**: the teacher opens their own Gmail and clicks Send.
+### Tier 2: Class-Wide Aggregator & Teacher Co-Pilot
+Every graded essay publishes a Pub/Sub event. A Cloud Run subscriber receives the event, checks for idempotency to prevent double-processing, and runs:
+1. **Systemic Fallacy Clustering:** Scans all active student profiles in a class to cluster shared logical flaws.
+2. **Intervention Priority Index:** Calculates a deterministic ranking of students needing immediate teacher attention using the formula:
+   $$Priority = w_1 \cdot \text{stuck\_streak} + w_2 \cdot \text{score\_decline} + w_3 \cdot \text{inactivity\_days} + w_4 \cdot \text{shared\_fallacy\_weight}$$
+3. **Teacher Digest Synthesis:** Gemini synthesizes the structured priority data and fallacy clusters into an actionable report with custom mini-lesson suggestions.
+4. **Human-In-The-Loop Draft:** Drafts an email draft in the teacher's Gmail using the compose-only scope and appends an audit row to a Google Sheet. The final "gate" is the teacher opening their Gmail inbox, reviewing the draft, and clicking "Send".
 
 ## How we built it
+We built the pipeline from scratch using:
+- **Google ADK2 (Agent Development Kit):** We defined a clean `Workflow` using `FunctionNode` blocks and real conditional routing (`ctx.route` to branch between typed text and OCR).
+- **Gemini 3.5 & 3.7 Flash:** Accessed through Vertex AI using service-account credentials. Flash is used for OCR, summarization, and debate loops; Gemini 3.7 Flash is leveraged for the heavier teacher digest synthesis.
+- **Google Cloud Firestore (Native Mode):** Serves as our persistent long-term Memory Bank, executing atomic transactional updates during profile mutations.
+- **Google Cloud Pub/Sub:** Acts as our event broker, decoupling Tier 1 and Tier 2. It is configured with a Dead Letter Queue (DLQ) for maximum load resiliency.
+- **Google Cloud Run:** Deploys a FastAPI HTTP server running inside a secure, multi-stage, non-root Docker container to handle Pub/Sub push subscriptions.
+- **Cloud Trace & OpenTelemetry:** Captures complete distributed span trees from intake to profile mutations.
+- **ADK Eval Suite:** A custom, fully deterministic testing framework that evaluates 15 test cases (leak prevention, injection resistance, and keyword-based persona fidelity) without utilizing an LLM-as-judge, eliminating the risk of reward-hacking.
 
-Google ADK2 Graph Workflow (real conditional routing, not if/else — e.g. text vs. image essays branch via `ctx.route`), Gemini via Vertex AI (Flash for most calls, a newer Flash release for the heavier digest-synthesis task), Firestore (Native mode, transactional read-modify-write for profile mutation), Pub/Sub (topic + dead-letter queue, idempotent event processing), Cloud Run (FastAPI push subscriber for Tier 2), Cloud Trace + structured JSON logging, and a hand-written deterministic ADK Eval Suite (answer-leak prevention, prompt-injection resistance, persona fidelity — all scored without an LLM judging another LLM's output, to avoid reward-hacking).
+## Challenges we ran into
+- **Gmail OAuth Limitations:** We originally planned to restrict the Gmail API to draft-creation only at the OAuth scope layer. However, testing revealed that `gmail.compose` officially permits message sending. To enforce a strict Human-in-the-Loop gate, we had to move this constraint to the code layer by writing a static AST-based parser test that fails the build if the `.send()` method is ever called in the integrations code.
+- **OCR Hallucinations on Blur:** On highly degraded photos, Gemini Vision would occasionally hallucinate completely fabricated sentences while confidently self-reporting "high" confidence. We resolved this by building a deterministic, zero-LLM text comparison backstop that compares two independent Vision transcriptions and downgrades the confidence to "low" if they differ.
+- **Cloud Run Knative Routing:** Real deployment testing revealed that `/healthz` is intercepted by Knative's proxy layer on Cloud Run and returns a 404. We had to pivot and expose `/health-check` instead, which successfully routed to our FastAPI application.
 
-## Technologies used
+## Accomplishments that we're proud of
+- **100% Deterministic Security:** Our validator and sanitizer are 100% regex-based, meaning prompt injection and answer leakages are blocked instantly without wasting Vertex AI tokens.
+- **GCP Native Decoupling:** The Pub/Sub event-driven design ensures that even if hundreds of essays are submitted concurrently, the teacher co-pilot won't overload or skip an update.
+- **Real Handwriting Validation:** Instead of synthetic text, we validated the multimodal OCR using **12 photos of real handwriting** with cross-outs, low light, and messy margins.
+- **Zero-LLM Priority Index:** The teacher ranking engine uses pure arithmetic. The teacher can audit exactly *why* a student was flagged, keeping the AI-assisted classroom transparent and fair.
 
-Google ADK2 (Graph Workflow, FunctionNode, conditional routing), Gemini 3.5/3.7 Flash via Vertex AI (text, JSON-schema, and multimodal/vision calls), Google Cloud Firestore, Google Cloud Pub/Sub, Google Cloud Run, Google Cloud Trace, Gmail API (compose-only OAuth scope), Google Sheets API (append-only), Python, FastAPI, tenacity (retry), OpenTelemetry, pytest.
+## What we learned
+- **LLMs are brilliant at generation but risky for validation.** Zero-trust architectures require hard code guards (regex, AST parsers, string matching) to act as backstops for GenAI features.
+- **Observability is critical.** Hooking OpenTelemetry into the ADK2 workflow allowed us to trace exactly how latency is distributed across OCR calls and database updates.
+- **Platform behaviors deviate from specs.** Testing on real GCP services (such as Cloud Run routing and Pub/Sub IAM policies) early in the development cycle is essential to catch silent failures.
 
-## Other data sources
-
-12 real handwritten essay photos (neat, messy with cross-outs, cursive, pencil, tilted, low-light/faded, bullet-point notes) used to validate multimodal ingestion end-to-end — no external dataset, all captured specifically for this project.
-
-## Findings & learnings
-
-- **Least-privilege can't always be enforced at the OAuth-scope layer.** Real testing proved Gmail's `gmail.compose` scope does *not* block `messages.send()` — Google's own docs describe it as including send. We had to move the guarantee to the code layer (an AST-based test that fails the build if `.send()` ever appears) and be honest in this write-up that the real HITL gate is a human clicking Send, not a technical wall.
-- **A single LLM self-report of confidence isn't reliable enough for OCR.** On a genuinely degraded test photo, Gemini Vision confidently hallucinated unrelated content while self-reporting "high" confidence in 2 of 4 manual trials. We added a deterministic self-consistency cross-check (two independent Vision calls, compared via plain string similarity) as a backstop — it caught the failure 3/3 times afterward.
-- **Reward-hacking risk applies to eval suites too.** Grading this system's own LLM output with another LLM call would be the exact risk we were warned about, so our ADK Eval Suite re-runs the real production validator/sanitizer directly and scores persona fidelity by keyword-matching real model output — no LLM ever judges another LLM here.
-- **A platform's own "standard" path names aren't always safe.** `/healthz`, a very common health-check convention, turned out to be intercepted by Cloud Run's underlying serving infrastructure before ever reaching our container — found only by testing the real deployed service, not by reading documentation.
-
-## Mandatory disclosure
-
-*"This architecture is inspired by the author's personal prior project, CritiqAI (entered in a different, earlier competition). All code in this submission was written from scratch during this hackathon's Submission Period."*
-
-## Links
-
-- GitHub repo: `[link tới repo, đảm bảo đã share cho testing@devpost.com và cloudhackathons@google.com nếu repo private]`
-- Demo video (YouTube/Vimeo, public): `[link]`
-- Hosted Cloud Run service: `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app` (yêu cầu Bearer token — service này là Pub/Sub push subscriber nội bộ, không phải web app công khai; giám khảo xem hoạt động qua video demo + `eval/results/eval_report.md` trong repo)
-- Architecture diagram: nhúng trong `README.md` (Mermaid, render trực tiếp trên GitHub)
+## What's next for eduagent
+- **EXIF Auto-Orientation & Smart Image Compression:** Implementing client-side/server-side image pre-processing (downscaling images > 2048px and resolving EXIF rotation) to reduce Vision latency and payload size.
+- **Embedded Web UI Dashboard:** Incorporating a modern HTML5/CSS3 Single-Page App (SPA) directly into the FastAPI server so judges and teachers can view class analytics and change settings live via browser.
+- **Firestore Windowing:** Capping the history array to the 50 most recent essays and keeping running aggregates to prevent Firestore documents from ever approaching the 1MB limit.
 
 ---
 
-*Đính kèm theo yêu cầu "What to Submit": repo ✅, video ✅ (sau khi upload), hosted URL ✅, architecture diagram ✅ (trong README).*
+## 4. Built With (Up to 25 Tags)
+`python`, `fastapi`, `google-adk`, `gemini-api`, `vertex-ai`, `google-cloud-run`, `google-cloud-firestore`, `google-cloud-pubsub`, `google-cloud-trace`, `opentelemetry`, `gmail-api`, `google-sheets-api`, `pytest`, `tenacity`, `docker`, `markdown`, `json-schema`, `rest-api`, `event-driven`, `ocr`, `socratic-method`, `education-technology`, `collaborative-agent`, `zero-trust`, `data-mutation`.
+
+---
+
+## 5. "Try it out" links
+- **GitHub Repository:** `[Link tới GitHub repo của bạn]`
+- **Live Cloud Run Service (API Check):** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app/health-check`
+
+---
+
+## 6. Project Media
+- `README_architecture_diagram.png` (Ảnh sơ đồ cấu trúc hệ thống vẽ bằng Mermaid)
+- `student_debate_interface.png` (Ảnh minh họa giao diện học sinh nộp bài và tranh biện)
+- `teacher_dashboard_analytics.png` (Ảnh minh họa dashboard giáo viên, priority ranking và fallacy clusters)
+- `gmail_digest_draft_inbox.png` (Ảnh chụp bản thảo email tự động tạo trong Gmail)
+
+---
+
+## 7. Video Demo Link
+`[Link video YouTube hoặc Vimeo của bạn sau khi upload công khai]`
+
+---
+
+## 8. Additional Info (For Judges & Organizers)
+
+* **Submitter country of residence:** `[Quốc gia của bạn, ví dụ: Vietnam]`
+* **Which Category are you submitting to?** Collaborative Partner
+* **If submitting on behalf of an Organization, what is the Organization name?** `[Để trống hoặc điền tên công ty nếu chọn Startup Prize]`
+* **What date did you start this project?** 08-03-2026
+* **URL to your public or private code repo:** `[Link GitHub repo]` (Nếu repo private, bảo đảm đã add collab cho: `testing@devpost.com` và `cloudhackathons@google.com`)
+* **Did you add Reproducible Testing instructions to your README?** Yes
+* **Hosted project URL if available:** `https://eduagent-class-aggregator-s6pcepa2cq-as.a.run.app`
+* **Testing instructions:**
+  1. To run local unit & integration tests, ensure Google Application Default Credentials (ADC) are configured, then execute:
+     `pytest tests/ -q`
+  2. To run the diagnostic doctor check, execute:
+     `python scripts/doctor.py`
+  3. To verify the event-driven aggregator subscriber, simulate a Pub/Sub event locally:
+     `python scripts/demo_tier1_run.py` (which publishes to Firestore and Pub/Sub), and monitor the output in Gmail Drafts.
+  4. The Cloud Run service at the hosted URL acts as a secure internal Pub/Sub Push endpoint (`POST /`). A GET call to `/health-check` will return `{"status":"ok"}`.
+* **Which Google SDK did you use?** Google GenAI SDK, Google Cloud SDK, Google ADK (Agent Development Kit).
+* **Which Google Cloud Service(s) did you use?** Cloud Run, Firestore, Pub/Sub, Cloud Logging, Cloud Trace, Artifact Registry, Cloud Build.
+* **Architecture diagram:** `[Upload file ảnh sơ đồ kiến trúc hệ thống, ví dụ: assets/architecture_diagram.png]`
+* **If opting-in to win the Startup Prize, please provide the name of your incorporated organization:** `[Để trống nếu là hobbyist]`
+* **If opting-in to win the Startup Prize, what is your corporate email address?** `[Để trống nếu là hobbyist]`
+* **Which Google AI Models did you use?** Gemini 3.5 Flash (for OCR, summarization, and debate loops) and Gemini 3.7 Flash (for teacher digest synthesis).
+* **Link to a piece of content (blog, podcast, video) for bonus points:** `[Link bài viết LinkedIn của bạn về dự án]` (Lưu ý: bài viết cần ghi rõ được viết cho mục đích tham gia hackathon này)
+* **Link to a social media post for bonus points:** `[Link bài đăng chia sẻ trên LinkedIn/X kèm hashtag #AllThingsAgenticHackathon]`

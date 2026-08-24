@@ -79,3 +79,27 @@ def test_end_debate_session_removes_it():
     interactive.end_debate_session("s6")
     with pytest.raises(interactive.UnknownSessionError):
         interactive.get_debate_session("s6")
+
+
+def test_evict_stale_sessions_removes_only_expired_ones():
+    interactive.start_debate_session("fresh", persona_id="skeptic", essay_text="x", summary={})
+    interactive.start_debate_session("old", persona_id="skeptic", essay_text="x", summary={})
+    interactive._sessions["old"]["created_at"] -= interactive._SESSION_TTL_SECONDS + 60
+
+    evicted = interactive.evict_stale_sessions()
+
+    assert evicted == ["old"]
+    assert interactive.get_debate_session("fresh") is not None
+    with pytest.raises(interactive.UnknownSessionError):
+        interactive.get_debate_session("old")
+
+
+def test_start_debate_session_lazily_evicts_stale_sessions():
+    interactive.start_debate_session("stale-1", persona_id="skeptic", essay_text="x", summary={})
+    interactive._sessions["stale-1"]["created_at"] -= interactive._SESSION_TTL_SECONDS + 60
+
+    interactive.start_debate_session("new-1", persona_id="skeptic", essay_text="x", summary={})
+
+    with pytest.raises(interactive.UnknownSessionError):
+        interactive.get_debate_session("stale-1")
+    assert interactive.get_debate_session("new-1") is not None

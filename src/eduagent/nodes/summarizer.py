@@ -58,36 +58,51 @@ _SCHEMA = {
 }
 
 
+_EMPTY_SUMMARY = {"main_claim": "", "claims": [], "evidence": [], "fallacies_draft": []}
+
+
+def summarize_essay(essay_text: str, *, essay_id: str | None = None, student_id: str | None = None) -> tuple[dict, bool]:
+    """Pure(ish) core of the node below, factored out so callers outside the
+    ADK graph -- ĐỢT 3 #2's interactive REST API -- can run the EXACT same
+    production summarization logic instead of a second, divergent
+    implementation. Returns (summary, degraded)."""
+    if not essay_text.strip():
+        return dict(_EMPTY_SUMMARY), False
+
+    try:
+        summary = generate_json(
+            model=GEMINI.flash_model,
+            system_instruction=_SYSTEM_INSTRUCTION,
+            prompt=f"Extract structure from this student essay:\n\n{essay_text}",
+            response_schema=_SCHEMA,
+            # ĐỢT 3 token/latency optimization: structure extraction is a
+            # lookup/extraction task, not one that benefits from extended
+            # reasoning -- Scorer/Teacher Digest Synthesizer keep the model
+            # default since they actually need deeper reasoning.
+            thinking_budget=0,
+        )
+        return summary, False
+    except LLMGenerationError:
+        # Gemini is down/degraded: don't crash the whole essay. Continue
+        # with an empty-but-valid summary so persona selection and the
+        # debate loop still run (on a plain "why do you believe that?"
+        # basis) -- flagged so the teacher digest / audit trail can tell
+        # this essay got a lower-fidelity pass, not that the student
+        # actually wrote nothing.
+        _logger.error(
+            "Summarizer degraded to empty summary",
+            extra={"essay_id": essay_id, "student_id": student_id},
+        )
+        return dict(_EMPTY_SUMMARY), True
+
+
 @traced_node("summarizer")
 async def summarizer(ctx: Context) -> dict:
     essay_text = ctx.state.get("sanitized_text", "")
     ctx.state["stage"] = "summarizer"
 
-    if not essay_text.strip():
-        summary = {"main_claim": "", "claims": [], "evidence": [], "fallacies_draft": []}
-        ctx.state["summary_degraded"] = False
-    else:
-        try:
-            summary = generate_json(
-                model=GEMINI.flash_model,
-                system_instruction=_SYSTEM_INSTRUCTION,
-                prompt=f"Extract structure from this student essay:\n\n{essay_text}",
-                response_schema=_SCHEMA,
-            )
-            ctx.state["summary_degraded"] = False
-        except LLMGenerationError:
-            # Gemini is down/degraded: don't crash the whole essay. Continue
-            # with an empty-but-valid summary so persona selection and the
-            # debate loop still run (on a plain "why do you believe that?"
-            # basis) -- flagged so the teacher digest / audit trail can tell
-            # this essay got a lower-fidelity pass, not that the student
-            # actually wrote nothing.
-            _logger.error(
-                "Summarizer degraded to empty summary",
-                extra={"essay_id": ctx.state.get("essay_id"), "student_id": ctx.state.get("student_id")},
-            )
-            summary = {"main_claim": "", "claims": [], "evidence": [], "fallacies_draft": []}
-            ctx.state["summary_degraded"] = True
+    summary, degraded = summarize_essay(essay_text, essay_id=ctx.state.get("essay_id"), student_id=ctx.state.get("student_id"))
 
+    ctx.state["summary_degraded"] = degraded
     ctx.state["summary"] = summary
     return summary

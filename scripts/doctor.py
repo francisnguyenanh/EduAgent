@@ -27,7 +27,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from eduagent.config import FIRESTORE, GEMINI, PUBSUB, SHEETS, TEACHER  # noqa: E402
+from eduagent.config import CLOUD_RUN, FIRESTORE, GEMINI, PUBSUB, SHEETS, TEACHER  # noqa: E402
 
 PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
 
@@ -145,6 +145,29 @@ def check_vertex_ai_reachability() -> tuple[str, str]:
     return PASS, f"Vertex AI reachable; flash_model='{GEMINI.flash_model}' and heavy_model='{GEMINI.heavy_model}' both available."
 
 
+def check_cloud_run_deployment() -> tuple[str, str]:
+    """ĐỢT 3 #5: the other 6 checks only verify local-SA reachability to each
+    GCP service -- none of them prove the deployed Cloud Run revision is
+    actually up and serving. Fetches a real Google-signed IAM identity token
+    (not an OAuth access token -- that's what Cloud Run's IAM invoker check
+    validates) and hits the live URL, end to end."""
+    if not CLOUD_RUN.service_url:
+        return WARN, "EDUAGENT_CLOUD_RUN_URL not set -- skipping live Cloud Run check."
+
+    import google.auth.transport.requests
+    import google.oauth2.id_token
+    import requests
+
+    health_url = CLOUD_RUN.service_url.rstrip("/") + "/health-check"
+    auth_request = google.auth.transport.requests.Request()
+    id_token = google.oauth2.id_token.fetch_id_token(auth_request, CLOUD_RUN.service_url)
+
+    response = requests.get(health_url, headers={"Authorization": f"Bearer {id_token}"}, timeout=10)
+    if response.status_code != 200:
+        return FAIL, f"GET {health_url} -> HTTP {response.status_code}: {response.text[:200]}"
+    return PASS, f"GET {health_url} -> 200 {response.json()} (live revision reachable with IAM identity token)."
+
+
 CHECKS = [
     ("GCP credentials (ADC)", check_gcp_credentials),
     ("Firestore connectivity", check_firestore_connectivity),
@@ -152,6 +175,7 @@ CHECKS = [
     ("Gmail OAuth token", check_gmail_oauth_token),
     ("Sheets spreadsheet permission", check_sheets_permission),
     ("Vertex AI / Gemini quota", check_vertex_ai_reachability),
+    ("Cloud Run live deployment", check_cloud_run_deployment),
 ]
 
 

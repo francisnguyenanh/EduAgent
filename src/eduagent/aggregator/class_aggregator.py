@@ -14,21 +14,33 @@ Sheets on every test run.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
 from opentelemetry import trace
 
 from eduagent.aggregator.digest import synthesize_digest
-from eduagent.aggregator.digest_store import persist_digest
+from eduagent.aggregator.digest_store import get_last_digest_timestamp, persist_digest
 from eduagent.aggregator.idempotency import claim_event
 from eduagent.aggregator.priority_engine import cluster_fallacies, common_fallacies, rank_students
-from eduagent.config import FIRESTORE, SHEETS, TEACHER
+from eduagent.config import DIGEST_DEBOUNCE, FIRESTORE, SHEETS, TEACHER
 from eduagent.logging_config import configure_json_logging
 from eduagent.tracing import configure_tracing
 
 _logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("eduagent")
+
+
+def should_coalesce_digest(*, last_digest_at, now, window_seconds: int) -> bool:
+    """Pure decision function (unit-testable without Firestore): True if a
+    digest was already generated for this class recently enough that this
+    event's digest should be skipped -- see DigestDebounceConfig's docstring
+    in config.py for why skipping is safe (the underlying profile write
+    already happened; only the notification step coalesces)."""
+    if last_digest_at is None:
+        return False
+    return (now - last_digest_at).total_seconds() < window_seconds
 
 
 def load_class_profiles(class_id: str) -> dict[str, dict]:
@@ -163,6 +175,28 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
         return {"status": "no_profiles", "event_id": event_id, "class_id": class_id}
 
     now = datetime.now(timezone.utc)
+
+    try:
+        last_digest_at = get_last_digest_timestamp(class_id=class_id)
+    except Exception:
+        # Debounce is a nice-to-have optimization, not correctness-critical --
+        # a Firestore hiccup on this check must not block the actual digest.
+        _logger.exception("get_last_digest_timestamp failed -- proceeding without debounce", extra={"class_id": class_id, "event_id": event_id})
+        last_digest_at = None
+
+    if should_coalesce_digest(last_digest_at=last_digest_at, now=now, window_seconds=DIGEST_DEBOUNCE.window_seconds):
+        # ĐỢT 3 high-load resiliency: e.g. a whole class of 50 submitting
+        # near-simultaneously would otherwise generate 50 near-identical
+        # digests/Gmail drafts in a few minutes. This event's profile write
+        # already happened in Tier 1 (unaffected); the NEXT event for this
+        # class_id -- from any student -- re-reads every profile fresh and
+        # will naturally cover this submission too.
+        _logger.info(
+            "Coalescing digest -- one generated for this class within the debounce window",
+            extra={"class_id": class_id, "event_id": event_id, "window_seconds": DIGEST_DEBOUNCE.window_seconds},
+        )
+        return {"status": "coalesced_skip_digest", "event_id": event_id, "class_id": class_id}
+
     ranked = rank_students(profiles, now=now)
     fallacies = common_fallacies(cluster_fallacies(profiles))
 
@@ -188,7 +222,16 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
         except Exception:
             _logger.exception("Failed to create Gmail draft -- digest still returned/logged", extra={"class_id": class_id, "event_id": event_id})
 
-    if SHEETS.audit_spreadsheet_id:
+    # ĐỢT 3 latency optimization: Sheets append and the Firestore
+    # class_analytics write are each independent network round-trips that
+    # both only depend on `draft_id` (Gmail must run first for that reason)
+    # -- not on each other -- so dispatch them concurrently instead of
+    # sequentially. Each keeps its own try/except so one failing still
+    # doesn't affect the other (same PHASE 4 principle as Gmail vs Sheets
+    # above, just parallel instead of sequential).
+    def _append_sheets_row() -> None:
+        if not SHEETS.audit_spreadsheet_id:
+            return
         try:
             from eduagent.integrations.sheets_mcp import append_audit_row
 
@@ -209,22 +252,29 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
                 extra={"class_id": class_id, "event_id": event_id, "draft_id": draft_id},
             )
 
-    try:
-        persist_digest(
-            class_id=class_id,
-            digest_id=event_id,
-            digest=digest,
-            ranked_students=ranked,
-            common_fallacies=fallacies,
-            gmail_draft_id=draft_id,
-            now=now,
-        )
-    except Exception:
-        # History/Web-UI visibility, not the digest itself -- Gmail draft and
-        # Sheets row (the teacher-facing outputs) already succeeded/failed
-        # independently above, so a Firestore write failure here must not
-        # turn an otherwise-successful digest into a reported failure.
-        _logger.exception("Failed to persist digest to class_analytics -- Gmail/Sheets outputs unaffected", extra={"class_id": class_id, "event_id": event_id})
+    def _persist_digest_to_firestore() -> None:
+        try:
+            persist_digest(
+                class_id=class_id,
+                digest_id=event_id,
+                digest=digest,
+                ranked_students=ranked,
+                common_fallacies=fallacies,
+                gmail_draft_id=draft_id,
+                now=now,
+            )
+        except Exception:
+            # History/Web-UI visibility, not the digest itself -- Gmail draft
+            # and Sheets row (the teacher-facing outputs) already
+            # succeeded/failed independently, so a Firestore write failure
+            # here must not turn an otherwise-successful digest into a
+            # reported failure.
+            _logger.exception(
+                "Failed to persist digest to class_analytics -- Gmail/Sheets outputs unaffected",
+                extra={"class_id": class_id, "event_id": event_id},
+            )
+
+    await asyncio.gather(asyncio.to_thread(_append_sheets_row), asyncio.to_thread(_persist_digest_to_firestore))
 
     return {
         "status": "processed",

@@ -21,6 +21,13 @@ STUCK_STREAK_THRESHOLD = 3  # matches PRIORITY_WEIGHTS.stuck_streak semantics (P
 TREND_WINDOW = 3  # how many recent essays feed score_trend
 TREND_FLAT_BAND = 0.3  # avg-score-per-essay change smaller than this counts as "stagnant", not noise
 
+# ĐỢT 3 #3: cap essay_history so the Firestore document (1MB hard limit) stays
+# bounded across hundreds of essays. Everything score_trend/persona_streak
+# need only ever looks at the tail (TREND_WINDOW / the single previous
+# essay), so trimming the head is safe -- the two cumulative counters below
+# preserve what would otherwise be lost from the trimmed-off entries.
+MAX_HISTORY_ENTRIES = 50
+
 
 def empty_profile(*, name: str, class_id: str) -> dict:
     return {
@@ -30,6 +37,8 @@ def empty_profile(*, name: str, class_id: str) -> dict:
         "persona_streak": {"current_persona": None, "times_repeated_without_improvement": 0},
         "flags": {"needs_attention": False, "reason": "", "last_updated": None},
         "score_trend": "insufficient_data",
+        "total_essays_count": 0,
+        "all_time_weaknesses": [],
     }
 
 
@@ -107,12 +116,30 @@ def merge_essay_into_profile(
         "last_updated": timestamp,
     }
 
+    score_trend = _score_trend(essay_history)
+    total_essays_count = profile.get("total_essays_count", len(profile.get("essay_history", []))) + 1
+
+    all_time_weaknesses = list(profile.get("all_time_weaknesses", []))
+    seen_weaknesses = set(all_time_weaknesses)
+    for w in weakness_detected:
+        if w not in seen_weaknesses:
+            seen_weaknesses.add(w)
+            all_time_weaknesses.append(w)
+
+    # Trim AFTER computing streak/trend (both only ever look at the tail) so
+    # a document that has accumulated hundreds of essays doesn't grow
+    # unbounded -- see MAX_HISTORY_ENTRIES.
+    if len(essay_history) > MAX_HISTORY_ENTRIES:
+        essay_history = essay_history[-MAX_HISTORY_ENTRIES:]
+
     return {
         **profile,
         "essay_history": essay_history,
         "persona_streak": persona_streak,
         "flags": flags,
-        "score_trend": _score_trend(essay_history),
+        "score_trend": score_trend,
+        "total_essays_count": total_essays_count,
+        "all_time_weaknesses": all_time_weaknesses,
     }
 
 
@@ -121,7 +148,13 @@ def persona_history_from_profile(profile: dict) -> list[str]:
 
 
 def weakness_taxonomy_from_profile(profile: dict) -> list[str]:
-    """Flattened, de-duplicated (order-preserving) weaknesses across all essays."""
+    """Flattened, de-duplicated (order-preserving) weaknesses across all
+    essays -- including ones trimmed off `essay_history` by MAX_HISTORY_ENTRIES,
+    since `all_time_weaknesses` is the cumulative counter for exactly that
+    case. Falls back to scanning essay_history for profiles written before
+    that field existed."""
+    if "all_time_weaknesses" in profile:
+        return list(profile["all_time_weaknesses"])
     seen: dict[str, None] = {}
     for essay in profile.get("essay_history", []):
         for w in essay.get("weakness_detected", []):
