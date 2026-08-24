@@ -721,8 +721,8 @@ function createRadarChartSvg(scores) {
   }).join('');
 
   return `
-    <div style="display:flex; justify-content:center; align-items:center; margin:0.75rem 0;">
-      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <div style="width:100%; display:flex; justify-content:center; align-items:center; margin:0.75rem 0;">
+      <svg viewBox="0 0 ${size} ${size}" style="width:100%; max-width:${size}px; height:auto; overflow:visible;">
         ${gridPolys}
         ${axisLines}
         <polygon points="${dataPoints}" fill="var(--accent)" fill-opacity="0.25" stroke="var(--accent)" stroke-width="2.5" />
