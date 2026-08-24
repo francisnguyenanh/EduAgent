@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from google.adk.agents.context import Context
 
+from eduagent.memory.firestore_memory import get_profile
+from eduagent.memory.student_profile import persona_history_from_profile
 from eduagent.skills.personas import PERSONA_IDS, get_persona
 
 _FALLACY_KEYWORDS: dict[str, str] = {
@@ -57,7 +59,11 @@ def choose_persona(
 async def persona_selector(ctx: Context) -> dict:
     summary = ctx.state.get("summary", {})
     fallacies_draft = summary.get("fallacies_draft", [])
-    persona_history = ctx.state.get("persona_history", [])
+
+    student_id = ctx.state.get("student_id")
+    profile = get_profile(student_id) if student_id else None
+    persona_history = persona_history_from_profile(profile) if profile else []
+    ctx.state["persona_history"] = persona_history  # audit trail for this run
 
     persona_id = choose_persona(fallacies_draft, persona_history)
     persona = get_persona(persona_id)

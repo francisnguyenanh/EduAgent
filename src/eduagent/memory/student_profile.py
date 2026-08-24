@@ -1,0 +1,102 @@
+"""Student profile merge logic -- kept as PURE FUNCTIONS separate from the
+Firestore client (PROJECT_WIKI.md 7.5.6: this is the ADK "Memory" layer,
+distinct from per-session state -- it must survive across many essays/weeks).
+
+Schema (PROJECT_WIKI.md 8.2), one document per student:
+    student_profiles/{student_id}
+      name, class_id
+      essay_history: [{essay_id, timestamp, persona_used, scores, avg_score,
+                        weakness_detected}]
+      persona_streak: {current_persona, times_repeated_without_improvement}
+      flags: {needs_attention, reason, last_updated}
+
+The pure `merge_essay_into_profile` function is what makes "does the agent
+mutate data, not just store it" auditable and unit-testable without a live
+Firestore connection.
+"""
+
+from __future__ import annotations
+
+STUCK_STREAK_THRESHOLD = 3  # matches PRIORITY_WEIGHTS.stuck_streak semantics (Phase 3)
+
+
+def empty_profile(*, name: str, class_id: str) -> dict:
+    return {
+        "name": name,
+        "class_id": class_id,
+        "essay_history": [],
+        "persona_streak": {"current_persona": None, "times_repeated_without_improvement": 0},
+        "flags": {"needs_attention": False, "reason": "", "last_updated": None},
+    }
+
+
+def _avg(scores: dict) -> float:
+    return sum(scores.values()) / len(scores) if scores else 0.0
+
+
+def merge_essay_into_profile(
+    profile: dict,
+    *,
+    essay_id: str,
+    timestamp: str,
+    persona_used: str,
+    scores: dict,
+    weakness_detected: list[str],
+) -> dict:
+    """Pure function: old profile + one essay's results -> new profile.
+
+    No Firestore, no network -- this is what nodes/persona_selector.py and
+    nodes/mutator.py actually reason over; the Firestore wrapper below only
+    handles the read-then-write plumbing around it.
+    """
+    avg_score = _avg(scores)
+    essay_history = list(profile.get("essay_history", []))
+    essay_history.append(
+        {
+            "essay_id": essay_id,
+            "timestamp": timestamp,
+            "persona_used": persona_used,
+            "scores": scores,
+            "avg_score": avg_score,
+            "weakness_detected": weakness_detected,
+        }
+    )
+
+    prior_streak = profile.get("persona_streak") or {"current_persona": None, "times_repeated_without_improvement": 0}
+    prior_avg = essay_history[-2]["avg_score"] if len(essay_history) >= 2 else None
+
+    same_persona_no_improvement = (
+        prior_streak.get("current_persona") == persona_used
+        and prior_avg is not None
+        and avg_score <= prior_avg
+    )
+    times_repeated = (prior_streak.get("times_repeated_without_improvement", 0) + 1) if same_persona_no_improvement else 0
+
+    persona_streak = {"current_persona": persona_used, "times_repeated_without_improvement": times_repeated}
+
+    needs_attention = times_repeated >= STUCK_STREAK_THRESHOLD
+    flags = {
+        "needs_attention": needs_attention,
+        "reason": (
+            f"stuck on persona '{persona_used}' for {times_repeated + 1} consecutive "
+            "essays without score improvement"
+            if needs_attention
+            else ""
+        ),
+        "last_updated": timestamp,
+    }
+
+    return {**profile, "essay_history": essay_history, "persona_streak": persona_streak, "flags": flags}
+
+
+def persona_history_from_profile(profile: dict) -> list[str]:
+    return [e["persona_used"] for e in profile.get("essay_history", [])]
+
+
+def weakness_taxonomy_from_profile(profile: dict) -> list[str]:
+    """Flattened, de-duplicated (order-preserving) weaknesses across all essays."""
+    seen: dict[str, None] = {}
+    for essay in profile.get("essay_history", []):
+        for w in essay.get("weakness_detected", []):
+            seen.setdefault(w, None)
+    return list(seen.keys())
