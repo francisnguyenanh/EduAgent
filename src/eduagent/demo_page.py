@@ -76,6 +76,22 @@ DEMO_PAGE_HTML = """<!doctype html>
   .radar-fill { height: 100%; background: var(--accent); }
   .radar-value { flex: none; width: 2rem; text-align: right; font-size: 0.8rem; color: var(--muted); }
   .feedback-box { margin-top: 1rem; padding: 0.9rem 1rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+  .reflection-card { margin-top: 1.25rem; padding: 1.1rem; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; }
+  .judge-bar { background: linear-gradient(90deg, #1e3a8a, #3b82f6); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; font-size: 0.8rem; }
+  .judge-bar-title { font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+  .judge-bar-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .judge-btn { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); color: #fff; border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
+  .judge-btn:hover { background: #fff; color: #1e3a8a; font-weight: 600; }
+  @media print {
+    body { background: #fff !important; color: #000 !important; }
+    header, .judge-bar, .tabs, button, .hint, .who { display: none !important; }
+    main { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    .panel { border: none !important; box-shadow: none !important; padding: 0 !important; display: block !important; }
+    table { width: 100% !important; border: 1px solid #ccc !important; font-size: 10pt !important; }
+    th, td { border: 1px solid #ccc !important; padding: 6px !important; color: #000 !important; }
+    .print-header { display: block !important; margin-bottom: 1.5rem; }
+  }
+  .print-header { display: none; }
 </style>
 </head>
 <body>
@@ -90,6 +106,22 @@ DEMO_PAGE_HTML = """<!doctype html>
   </div>
 </header>
 <main>
+
+  <!-- Judge 1-Click Showcase Bar (ĐỢT 7) -->
+  <div class="judge-bar" id="judge-bar">
+    <div class="judge-bar-title">✨ Judge 1-Click Showcase:</div>
+    <div class="judge-bar-btns">
+      <button class="judge-btn" onclick="presetScenario('stuck')">🎯 1. Kẹt Streak (Bình)</button>
+      <button class="judge-btn" onclick="presetScenario('ocr')">📷 2. Viết Tay (OCR)</button>
+      <button class="judge-btn" onclick="presetScenario('gdoc')">🔗 3. Google Doc</button>
+      <button class="judge-btn" onclick="presetScenario('teacher')">👨‍🏫 4. Giáo Viên &amp; Note</button>
+    </div>
+  </div>
+
+  <div class="print-header">
+    <h2 style="margin:0 0 0.25rem 0;">Báo Cáo Sư Phạm &amp; Ma Trận Ưu Tiên Can Thiệp</h2>
+    <p style="color:#666; font-size:9pt; margin:0 0 1rem 0;">EduAgent Automated Executive Briefing &bull; Lớp: 12A1 &bull; Thời gian: <span id="print-date"></span></p>
+  </div>
 
   <section id="gate" class="panel">
     <div id="role-pick-step">
@@ -152,19 +184,39 @@ DEMO_PAGE_HTML = """<!doctype html>
         </div>
         <div id="turn-error" class="error hidden"></div>
         <div id="complete-result" class="hidden">
-          <p class="ok-text" style="margin-top:1rem;">Debate complete -- 3 turns finished.</p>
+          <p class="ok-text" style="margin-top:1rem; font-weight:600;">Debate complete -- 3 turns finished.</p>
           <div id="complete-radar"></div>
           <div id="complete-feedback" class="feedback-box"></div>
+          
+          <!-- Metacognitive Self-Correction Loop (ĐỢT 7) -->
+          <div id="reflection-card" class="reflection-card">
+            <h4 style="margin:0 0 0.5rem 0; color:var(--accent);">🧠 Tự Hiệu Chỉnh Luận Điểm (Metacognitive Self-Correction)</h4>
+            <p style="font-size:0.82rem; color:var(--muted); margin:0 0 0.75rem 0;">
+              Sau khi được Persona chỉ ra lỗ hổng lập luận, em hãy viết lại <strong>1 câu luận điểm hoàn chỉnh hơn</strong> để khắc phục:
+            </p>
+            <textarea id="revised_claim_input" style="min-height:70px;" placeholder="Ví dụ: Dù xe điện giảm phát thải trực tiếp, hiệu quả bảo vệ môi trường tổng thể vẫn phụ thuộc vào nguồn phát điện và quy trình tái chế pin..."></textarea>
+            <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+              <button class="action" style="margin:0;" id="reflection-btn" onclick="submitReflection()">Gửi Luận Điểm Mới</button>
+              <span id="reflection-status" class="hint"></span>
+            </div>
+            <div id="reflection-feedback" class="hidden" style="margin-top:0.75rem; padding:0.6rem 0.8rem; background:rgba(34, 197, 94, 0.1); border-left:3px solid var(--ok); border-radius:4px; font-size:0.85rem;"></div>
+          </div>
         </div>
       </div>
     </section>
 
     <section id="panel-priority" class="panel hidden">
-      <p class="hint">Live Intervention Priority Index -- deterministic ranking (see priority_engine.py), zero LLM. Highest priority first.</p>
-      <button class="action" onclick="loadPriority()">Refresh Priority Ranking</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <p class="hint" style="margin:0;">Live Intervention Priority Index -- deterministic ranking (see priority_engine.py), zero LLM.</p>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="small" onclick="loadPriority()">Refresh</button>
+          <button class="small" onclick="printReport()">📄 Xuất Báo Cáo (In / PDF)</button>
+        </div>
+      </div>
       <div id="priority-error" class="error hidden"></div>
       <div id="priority-results"></div>
     </section>
+
 
     <section id="panel-teacher" class="panel hidden">
       <button class="action" onclick="loadAnalytics()">Load Digests</button>
@@ -428,6 +480,10 @@ async function startDebate() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     sessionId = data.session_id;
+    lastExtractedSummary = data.summary;
+    if (document.getElementById('essay_text').value) {
+      lastEssayInput = document.getElementById('essay_text').value;
+    }
     document.getElementById('student-form').classList.add('hidden');
     document.getElementById('debate-area').classList.remove('hidden');
     if (data.ocr && (data.ocr.confidence === 'low' || data.ocr.confidence === 'unavailable')) {
@@ -481,6 +537,9 @@ const AXIS_LABELS = {
   scope_awareness: 'Scope awareness',
 };
 
+let lastExtractedSummary = null;
+let lastEssayInput = '';
+
 function renderCompleteResult(result) {
   // ĐỢT 5 #1: respects the teacher's show_score_radar_to_students setting
   // (Settings tab) -- api.py already stripped `scores`/`rationale` out of
@@ -500,6 +559,86 @@ function renderCompleteResult(result) {
   feedbackEl.textContent = (result && result.student_feedback) || 'Debate complete -- great effort working through all 3 turns!';
   document.getElementById('complete-result').classList.remove('hidden');
 }
+
+async function submitReflection() {
+  const inputEl = document.getElementById('revised_claim_input');
+  const statusEl = document.getElementById('reflection-status');
+  const feedbackEl = document.getElementById('reflection-feedback');
+  const btn = document.getElementById('reflection-btn');
+  const text = (inputEl.value || '').trim();
+  if (!text) {
+    statusEl.textContent = 'Vui lòng nhập luận điểm đã chỉnh sửa.';
+    return;
+  }
+  btn.disabled = true;
+  statusEl.textContent = 'Đang đánh giá nhận thức...';
+  feedbackEl.classList.add('hidden');
+  try {
+    const fallacy = (lastExtractedSummary && lastExtractedSummary.fallacies_draft && lastExtractedSummary.fallacies_draft[0]) || 'Lập luận khái quát hoá chưa chặt chẽ';
+    const resp = await fetch('/api/debate/reflect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        student_id: auth ? auth.user_id : 'c1_stu01',
+        class_id: auth ? auth.class_id : 'c1',
+        original_fallacy: fallacy,
+        original_claim: lastEssayInput,
+        revised_claim: text,
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    feedbackEl.innerHTML = `
+      <div style="font-weight:600; color:var(--ok); margin-bottom:0.25rem;">
+        🌟 ${data.resolved ? 'Đột Phá Nhận Thức Thành Công!' : 'Ghi Nhận Nỗ Lực!'} 
+        <span class="badge" style="margin-left:0.4rem; background:var(--ok); color:#fff;">+${esc(data.growth_bonus)}đ Tiến Bộ</span>
+      </div>
+      <div>${esc(data.feedback)}</div>
+    `;
+    feedbackEl.classList.remove('hidden');
+    statusEl.textContent = 'Đã lưu vào bộ nhớ học tập.';
+  } catch (e) {
+    statusEl.textContent = 'Lỗi: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function printReport() {
+  const dateEl = document.getElementById('print-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleString();
+  window.print();
+}
+
+async function presetScenario(scenario) {
+  if (scenario === 'stuck') {
+    auth = {role: 'student', user_id: 'c1_stu02', class_id: 'c1', display_name: 'Bình (Kẹt Streak)'};
+    enterApp();
+    showTab('student');
+    clearEssayForm();
+    document.getElementById('essay_text').value = 'Xe điện hoàn toàn không gây ô nhiễm môi trường vì chúng không có ống xả khí thải. Do đó, nếu tất cả mọi người chuyển sang xe điện thì biến đổi khí hậu sẽ ngay lập tức được giải quyết triệt để.';
+    lastEssayInput = document.getElementById('essay_text').value;
+  } else if (scenario === 'ocr') {
+    auth = {role: 'student', user_id: 'c1_stu01', class_id: 'c1', display_name: 'An'};
+    enterApp();
+    showTab('student');
+    clearEssayForm();
+    document.getElementById('essay_text').value = '[Mô phỏng ảnh chụp bài viết tay]: Việc ứng dụng AI trong trường học đem lại nhiều lợi ích cho học sinh, tuy nhiên nếu lạm dụng sẽ làm giảm khả năng tư duy phản biện độc lập.';
+    lastEssayInput = document.getElementById('essay_text').value;
+  } else if (scenario === 'gdoc') {
+    auth = {role: 'student', user_id: 'c1_stu01', class_id: 'c1', display_name: 'An'};
+    enterApp();
+    showTab('student');
+    clearEssayForm();
+    document.getElementById('gdoc_url').value = 'https://docs.google.com/document/d/1yD3xFakeDemoDocForEvaluation/edit';
+  } else if (scenario === 'teacher') {
+    auth = {role: 'teacher', user_id: 'c1_teacher', class_id: 'c1', display_name: 'Thầy Minh'};
+    enterApp();
+    showTab('priority');
+    loadPriority();
+  }
+}
+
 
 async function loadPriority() {
   const errEl = document.getElementById('priority-error');

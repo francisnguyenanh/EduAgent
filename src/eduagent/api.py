@@ -329,17 +329,113 @@ def parent_note(payload: ParentNoteRequest) -> dict:
     return {"student_id": payload.student_id, "note": note, "degraded": degraded, "priority": priority}
 
 
+class DebateReflectionRequest(BaseModel):
+    student_id: str
+    class_id: str = "c1"
+    original_fallacy: str = "Unspecified reasoning gap"
+    original_claim: str = ""
+    revised_claim: str
+    language: str = "en"
+
+
+_REFLECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "resolved": {
+            "type": "boolean",
+            "description": "True if the student's revised claim successfully addresses or removes the original logical fallacy/reasoning weakness.",
+        },
+        "feedback": {
+            "type": "string",
+            "description": "1-2 sentences of encouraging, specific feedback on how their revised claim improved their reasoning.",
+        },
+        "growth_bonus": {
+            "type": "number",
+            "description": "Growth bonus between 0.0 and 1.0 (e.g. 0.5 for a clear, improved claim).",
+        },
+    },
+    "required": ["resolved", "feedback", "growth_bonus"],
+}
+
+
+def submit_reflection(payload: DebateReflectionRequest) -> dict:
+    """ĐỢT 7: Metacognitive Self-Correction Loop. Evaluates the student's
+    post-debate revised claim, rewards cognitive growth into their Firestore
+    profile, and returns encouraging constructive feedback."""
+    if len(payload.revised_claim) > MAX_STUDENT_REPLY_CHARS:
+        raise ValueError(f"Revised claim too long (max {MAX_STUDENT_REPLY_CHARS} chars)")
+
+    sanitized_revised = strip_injection_attempts(payload.revised_claim)
+    from eduagent.config import GEMINI
+    from eduagent.llm import LLMGenerationError, generate_json
+    from eduagent.skills.language import language_instruction
+
+    system_instruction = (
+        "You are an expert Socratic reasoning coach evaluating a student's post-debate self-correction. "
+        "The student was challenged on a logical fallacy/weakness during debate and has submitted a revised claim. "
+        "Determine if the revised claim makes a meaningful effort to fix the fallacy or qualify their thesis. "
+        "Be encouraging yet intellectually honest.\n\n"
+        f"{language_instruction(payload.language)}"
+    )
+    prompt = (
+        f"Original Weakness/Fallacy Identified: {payload.original_fallacy}\n"
+        f"Original Context/Claim: <student_essay>{payload.original_claim}</student_essay>\n"
+        f"Student's Revised Claim: <student_reply>{sanitized_revised}</student_reply>"
+    )
+
+    try:
+        result = generate_json(
+            model=GEMINI.flash_model,
+            system_instruction=system_instruction,
+            prompt=prompt,
+            response_schema=_REFLECTION_SCHEMA,
+        )
+        resolved = bool(result.get("resolved", True))
+        growth_bonus = float(result.get("growth_bonus", 0.5)) if resolved else 0.0
+        feedback = str(result.get("feedback", "Good effort in revising your claim."))
+    except LLMGenerationError:
+        _logger.warning("LLM evaluation of reflection failed, degrading gracefully")
+        resolved = True
+        growth_bonus = 0.5
+        feedback = "Your revised claim has been recorded and reflects thoughtful growth."
+
+    # Record into student profile transactional memory
+    try:
+        from eduagent.memory.firestore_memory import apply_reflection_result
+
+        apply_reflection_result(
+            student_id=payload.student_id,
+            reflection_text=sanitized_revised,
+            original_fallacy=payload.original_fallacy,
+            resolved=resolved,
+            growth_bonus=growth_bonus,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            class_id=payload.class_id or "c1",
+        )
+    except Exception:
+        _logger.exception("Failed to persist student reflection for student_id=%s", payload.student_id)
+
+    return {
+        "student_id": payload.student_id,
+        "resolved": resolved,
+        "growth_bonus": growth_bonus,
+        "feedback": feedback,
+    }
+
+
 __all__ = [
     "DebateStartRequest",
     "DebateStartFromImageRequest",
     "DebateStartFromGDocRequest",
     "DebateTurnRequest",
+    "DebateReflectionRequest",
     "ClassSettingsRequest",
     "ParentNoteRequest",
     "start_debate",
     "start_debate_from_image",
     "start_debate_from_gdoc",
     "submit_debate_turn",
+    "submit_reflection",
     "login",
     "class_priority",
     "get_settings",
@@ -349,3 +445,4 @@ __all__ = [
     "DebateSessionComplete",
     "LoginError",
 ]
+

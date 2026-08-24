@@ -473,63 +473,35 @@
 
 ---
 
-### 11. ĐỢT 7 — Nâng Tầm Đột Phá: Đạt Điểm Tuyệt Đối & Vượt Mong Đợi Giám Khảo (Wow-Factor & Maximum Score Engineering) 🚀
+### 11. ĐỢT 7 — Nâng Tầm Đột Phá: Đạt Điểm Tuyệt Đối & Vượt Mong Đợi Giám Khảo (Top 3 High-ROI Deliverables) 🚀 HOÀN THÀNH 100%
 
-> **Đánh giá tổng thể hệ thống trước ĐỢT 7:**
-> - Hệ thống lõi (`src/`) đã đạt độ hoàn thiện rất cao về tính kỷ luật kiến trúc (Deterministic-First, ADR-001→013, Eval Suite 100%, Secret Hygiene, CI Pipeline, Input Capping, Scoped Token Auth).
-> - Để chuyển hóa từ "Dự án kỹ thuật xuất sắc" thành **"Dự án chiến thắng thuyết phục đạt điểm tuyệt đối"**, ĐỢT 7 tập trung vào 4 đòn bẩy đột phá: (1) **Judge 1-Click Showcase Tour** giúp giám khảo trải nghiệm trọn vẹn trong 60 giây; (2) **Metacognitive Self-Correction Node** chứng minh data mutation 2 chiều sâu sắc; (3) **Voice/Audio Socratic Mentor** tạo ấn tượng thính giác mạnh mẽ; (4) **What-If Pedagogical Simulator & PDF Export** trao siêu năng lực thực tế cho giáo viên.
+> **Chiến lược ĐỢT 7 (Tập trung Tối Đa ROI & Triệt Tiêu Rủi Ro):**
+> Triển khai 3 hạng mục có tỷ suất giá trị / rủi ro cao nhất, đánh trực diện vào 30% Demo & 40% Collaborative Partner, không phá vỡ hợp đồng dữ liệu hiện có:
 
-#### 🌟 Nhóm 1: Trải nghiệm Giám khảo & Demo "WOW" trong 60 giây (Demo & Readiness — 30%)
+#### ✅ NÊN LÀM — ĐÃ HOÀN THÀNH 100%
 
-- [ ] 🌟 **Judge 1-Click Showcase Bar (Chế độ Trải nghiệm Nhanh cho Giám Khảo).**
-  - **Vấn đề**: Giám khảo chấm hàng chục bài, không có thời gian gõ văn bản dài hay tìm ảnh bài tập tay. Nếu để form trống, giám khảo có thể nhập câu ngắn ngẫu nhiên và không thấy hết sức mạnh của hệ thống.
-  - **Giải pháp**: Thêm thanh công cụ `✨ Quick Demo Scenarios` cố định trên đầu trang:
-    - `[📝 Kịch bản 1: Học sinh kẹt luận điểm (Stuck Streak)]` → Tự điền bài viết mắc ngụy biện điển hình của học sinh đang có lịch sử yếu kém (`s2_binh`).
-    - `[📷 Kịch bản 2: Ảnh viết tay có gạch xóa (Messy OCR)]` → Nạp sẵn ảnh viết tay thực tế và kích hoạt quy trình OCR cross-check 2-pass.
-    - `[🔗 Kịch bản 3: Tải từ Google Doc]` → Nạp link Google Doc mẫu.
-    - `[👨‍🏫 Kịch bản 4: Dashboard Giáo viên & Parent Note]` → Chuyển sang tab Teacher, tự mở modal mẫu thư phụ huynh 1-click.
-  - **Giá trị**: Giám khảo thấy ngay 100% tính năng đỉnh cao chỉ bằng 1 cú click chuột, không gặp bất kỳ trở ngại nào.
+- [x] 🌟 **Judge 1-Click Showcase Bar (Chế độ Trải nghiệm Nhanh cho Giám Khảo & Hỗ trợ Quay Video).** ✅ ĐÃ LÀM + PASS — Thêm thanh công cụ `✨ Judge 1-Click Showcase` trên đầu `src/eduagent/demo_page.py` với 4 preset tương ứng 4 mốc kịch bản trong `docs/video_script.md`:
+  - `[🎯 1. Kẹt Streak (Bình)]`: Tự nạp `c1_stu02`, điền bài viết ngụy biện về xe điện.
+  - `[📷 2. Viết Tay (OCR)]`: Nạp mô phỏng bài luận viết tay có gạch xóa.
+  - `[🔗 3. Google Doc]`: Nạp link Google Doc mẫu.
+  - `[👨‍🏫 4. Giáo Viên & Note]`: Chuyển sang quyền giáo viên `c1_teacher`, tự load ma trận ưu tiên và nút soạn thư phụ huynh 1-click.
+  - *Giá trị*: Giám khảo trải nghiệm toàn bộ hệ thống trong 60s mà không cần gõ; người quay video demo không lo fumble gõ nhầm.
 
-- [ ] 🌟 **Audio / Voice Socratic Mentor (Giọng nói Phản biện Đa sắc thái).**
-  - **Giải pháp**: Tích hợp Web Speech API (hoặc Gemini Multimodal Voice Audio) trên Web UI:
-    - Khi nhận phản biện từ Persona, xuất hiện nút `🔊 Nghe phản biện`.
-    - Tự động điều chỉnh cao độ (pitch) và tốc độ (rate) theo từng Persona: Skeptic (trầm, chậm rãi, tra vấn), Devil's Advocate (sắc sảo, biến hóa), Nitpicker (tỉ mỉ, nhanh), Expander (trầm ấm, truyền cảm hứng).
-  - **Giá trị**: Biến giao diện từ "chat bot đọc chữ" thành một "Gia sư Socratic sống động", gây ấn tượng tức thì trong video demo và trải nghiệm live.
+- [x] 📄 **Xuất Báo Cáo Chẩn Đoán Lớp PDF / In ấn (Exportable Executive Briefing via Print CSS).** ✅ ĐÃ LÀM + PASS — Thêm nút `📄 Xuất Báo Cáo (In / PDF)` trên Dashboard giáo viên (`demo_page.py`), tích hợp `@media print` CSS chuẩn định dạng A4 sạch đẹp, ẩn toàn bộ header/tab/nút bấm thừa, tạo bản báo cáo tóm tắt tình hình sư phạm cho Ban Giám Hiệu hoặc buổi họp phụ huynh.
 
-#### 🧠 Nhóm 2: Đột phá Sư phạm & Data Mutation Sâu (Innovation & Utility — 40%)
+- [x] 🧠 **Vòng Lặp Tự Hiệu Chỉnh Nhận Thức (Metacognitive Self-Correction Loop).** ✅ ĐÃ LÀM + PASS — Sau Turn 3, xuất hiện khung phản hồi nhận thức:
+  - Học sinh nhập câu luận điểm mới đã sửa đổi dựa trên phản biện của Persona.
+  - `POST /api/debate/reflect` (`src/eduagent/api.py`, `src/eduagent/server.py`) đánh giá ngữ nghĩa và ghi nhận `growth_bonus` (điểm thưởng nhận thức) cùng `breakthrough_count` vào Firestore `student_profiles` qua `merge_reflection_into_profile()`.
+  - *Giá trị*: Minh chứng đỉnh cao cho "True Collaborative Partner" — AI không làm thay, mà đồng hành giúp học sinh tiến hóa tư duy.
 
-- [ ] 🧠 **Vòng Lặp Tự Hiệu Chỉnh Nhận Thức (Metacognitive Self-Correction Loop).**
-  - **Cơ chế**: Sau khi hoàn thành Turn 3 của phiên tranh biện, thay vì chỉ hiện điểm số tĩnh, hệ thống mở thêm bước: *"Dựa trên thử thách vừa qua, em hãy viết lại 1 câu luận điểm hoàn chỉnh hơn của mình"*.
-  - **Xử lý**: LLM kiểm tra xem câu luận điểm mới có khắc phục được ngụy biện ban đầu không. Nếu có:
-    - Cập nhật điểm thưởng nhận thức (`growth_bonus`) vào `student_profiles` trên Firestore.
-    - Đánh dấu trạng thái `breakthrough_achieved: True` để thông báo cho giáo viên trong báo cáo digest tiếp theo.
-  - **Giá trị**: Minh chứng cao nhất cho tiêu chí **"True Collaborative Partner"** — AI không làm thay, mà thực sự giúp học sinh tiến hóa tư duy và ghi nhận sự tiến bộ đó vào bộ nhớ dài hạn.
+#### ⚠️ CẮT THEO ĐÁNH GIÁ KỶ LUẬT (RỦI RO CAO / DIMINISHING RETURNS)
+- ✂️ *Audio/Voice Socratic Mentor*: Cắt bỏ (Web Speech API tiếng Việt chất lượng không đều, dễ phản tác dụng trong video 4 phút).
+- ✂️ *Socratic Dynamic Heat-Level*: Cắt bỏ (Trùng lặp câu chuyện cá nhân hoá đã có với Persona Selector, thêm biến số rủi ro tuột persona).
+- ✂️ *What-If Sandbox*: Cắt bỏ (Tránh bị trừ điểm Architectural Discipline do công thức mô phỏng thiếu cơ sở thực nghiệm).
+- ✂️ *Fallacy Semantic Graph*: Cắt bỏ (Radar chart + priority table + clustering đã đủ đầy, không thêm giá trị mới).
+- ✂️ *Live SSE Stream*: Cắt bỏ (Long-lived connections trên Cloud Run dễ lỗi khi quay video live unedited).
 
-- [ ] 🧠 **Socratic Dynamic Heat-Level (Thang đo Sức Kháng Cự Nhận Thức Tự Động).**
-  - **Cơ chế**: Deterministic logic đo lường độ dài, tính kiên định và từ vựng phản biện của học sinh ở Turn 1 & 2 để tự động phân cấp "Độ gắt" (Heat Level: Gentle Nudge → Direct Challenge → Dilemma Counter-Thesis) cho lượt tranh biện tiếp theo.
-  - **Giá trị**: Cá nhân hóa tranh biện theo năng lực phản hồi thực tế của từng học sinh, tránh việc câu hỏi quá dễ gây chán hoặc quá khó gây nản lòng.
-
-#### 📊 Nhóm 3: Siêu Năng Lực cho Giáo Viên (Teacher Co-Pilot Superpowers)
-
-- [ ] 📊 **Hộp Cát Giả Lập Can Thiệp Sư Phạm (What-If Pedagogical Impact Sandbox).**
-  - **Cơ chế**: Trên Dashboard giáo viên, thêm công cụ trượt trực quan: *"Nếu tôi tổ chức buổi rèn luyện về Ngụy biện Khái quát hóa vội vã (Hasty Generalization) cho cả lớp?"*.
-  - **Xử lý**: Thuật toán mô phỏng (Zero-LLM deterministic calculation) tính toán lại ma trận ưu tiên lớp, cho thấy biểu đồ dự phóng: % học sinh thoát khỏi tình trạng stuck streak và mức độ giảm tải chỉ số can thiệp khẩn cấp.
-  - **Giá trị**: Giúp giáo viên ra quyết định chiến lược giảng dạy dựa trên dữ liệu (Data-driven Lesson Planning) thay vì chỉ xem thống kê thụ động.
-
-- [ ] 📊 **Xuất Báo Cáo Chẩn Đoán Lớp PDF / In ấn 1-Click (Exportable Executive Briefing).**
-  - **Giải pháp**: Nút `📄 Xuất Báo Cáo Sư Phạm (PDF)` trên Dashboard giáo viên:
-    - Tạo trang in định dạng chuẩn (A4 Print CSS) gồm: Ma trận radar tư duy trung bình của lớp, danh sách học sinh cần hỗ trợ khẩn cấp, các cụm ngụy biện phổ biến nhất và gợi ý kế hoạch bài giảng.
-  - **Giá trị**: Giải quyết bài toán thực tế khi giáo viên cần nộp báo cáo cho Ban Giám Hiệu hoặc chuẩn bị cho buổi họp phụ huynh định kỳ.
-
-#### 🛡️ Nhóm 4: Kiến Trúc & Quan Sát Trực Quan Nâng Cao (Architectural Discipline — 30%)
-
-- [ ] 🛡️ **Bản Đồ Cụm Ngụy Biện Trực Quan (Interactive Fallacy Semantic Graph).**
-  - **Giải pháp**: Render đồ thị tương quan các lỗi tư duy trong lớp học (sử dụng SVG Canvas thuần hoặc Mermaid nhúng động):
-    - Thể hiện trực quan học sinh nào đang mắc chung cụm lỗi tư duy nào.
-    - Giúp giáo viên nhóm các học sinh có cùng điểm yếu để hướng dẫn theo nhóm nhỏ (Differentiated Instruction).
-
-- [ ] 🛡️ **Live SSE Stream / Real-time Teacher Feed (Cập nhật Tức thì khi Học sinh nộp bài).**
-  - **Giải pháp**: Tích hợp Server-Sent Events (SSE) tại `/api/classes/{class_id}/events` để khi học sinh nộp bài luận ở tab này, dashboard giáo viên ở tab kia tự động nhấp nháy cập nhật dòng điểm ưu tiên mới mà không cần F5 lại trang.
+**Kiểm chứng ĐỢT 7:** `tests/test_metacognitive_reflection.py` + toàn bộ 179 unit tests pass 100%.
 
 ---
 

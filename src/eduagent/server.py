@@ -32,6 +32,7 @@ from eduagent.api import (
     DebateStartFromImageRequest,
     DebateStartRequest,
     DebateTurnRequest,
+    DebateReflectionRequest,
     LoginError,
     LoginRequest,
     ParentNoteRequest,
@@ -44,6 +45,7 @@ from eduagent.api import (
     start_debate_from_gdoc,
     start_debate_from_image,
     submit_debate_turn,
+    submit_reflection,
     update_settings,
 )
 from eduagent.auth import verify_access_token
@@ -184,6 +186,20 @@ async def api_debate_turn(payload: DebateTurnRequest) -> dict:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/debate/reflect")
+async def api_debate_reflect(payload: DebateReflectionRequest) -> dict:
+    """ĐỢT 7: Metacognitive self-correction loop -- evaluates the student's
+    post-debate revised claim and updates their profile with growth bonus."""
+    try:
+        return submit_reflection(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        _logger.exception("submit_reflection failed for student_id=%s", payload.student_id)
+        raise HTTPException(status_code=502, detail="Failed to evaluate reflection -- check server logs.")
+
 
 
 @app.get("/api/classes/{class_id}/analytics")

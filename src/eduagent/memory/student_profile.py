@@ -160,3 +160,48 @@ def weakness_taxonomy_from_profile(profile: dict) -> list[str]:
         for w in essay.get("weakness_detected", []):
             seen.setdefault(w, None)
     return list(seen.keys())
+
+
+def merge_reflection_into_profile(
+    profile: dict,
+    *,
+    reflection_text: str,
+    original_fallacy: str,
+    resolved: bool,
+    growth_bonus: float,
+    timestamp: str,
+) -> dict:
+    """Pure function: old profile + student's post-debate self-correction -> new profile.
+
+    Appends to reflections_history and sets metacognitive_growth metrics.
+    Preserves all existing profile fields without breaking backward compatibility.
+    """
+    reflections = list(profile.get("reflections_history", []))
+    reflections.append(
+        {
+            "timestamp": timestamp,
+            "reflection_text": reflection_text,
+            "original_fallacy": original_fallacy,
+            "resolved": resolved,
+            "growth_bonus": growth_bonus,
+        }
+    )
+    if len(reflections) > MAX_HISTORY_ENTRIES:
+        reflections = reflections[-MAX_HISTORY_ENTRIES:]
+
+    total_growth = profile.get("total_growth_bonus", 0.0) + (growth_bonus if resolved else 0.0)
+    breakthrough_count = profile.get("breakthrough_count", 0) + (1 if resolved else 0)
+
+    return {
+        **profile,
+        "reflections_history": reflections,
+        "total_growth_bonus": round(total_growth, 2),
+        "breakthrough_count": breakthrough_count,
+        "last_reflection": {
+            "timestamp": timestamp,
+            "resolved": resolved,
+            "original_fallacy": original_fallacy,
+            "growth_bonus": growth_bonus,
+        },
+    }
+

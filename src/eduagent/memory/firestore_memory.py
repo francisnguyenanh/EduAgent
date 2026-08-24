@@ -14,7 +14,7 @@ import functools
 from google.cloud import firestore
 
 from eduagent.config import FIRESTORE
-from eduagent.memory.student_profile import empty_profile, merge_essay_into_profile
+from eduagent.memory.student_profile import empty_profile, merge_essay_into_profile, merge_reflection_into_profile
 from eduagent.resilience import with_gcp_retry
 
 
@@ -77,6 +77,39 @@ def apply_essay_result(
             scores=scores,
             weakness_detected=weakness_detected,
             student_feedback=student_feedback,
+        )
+        transaction.set(doc_ref, updated)
+        return updated
+
+    return _txn(_client().transaction())
+
+
+@with_gcp_retry
+def apply_reflection_result(
+    student_id: str,
+    *,
+    reflection_text: str,
+    original_fallacy: str,
+    resolved: bool,
+    growth_bonus: float,
+    timestamp: str,
+    name: str = "",
+    class_id: str = "c1",
+) -> dict:
+    """Transactional read-modify-write for post-debate student reflection."""
+    doc_ref = _client().collection(FIRESTORE.student_profiles_collection).document(student_id)
+
+    @firestore.transactional
+    def _txn(transaction: firestore.Transaction) -> dict:
+        snapshot = doc_ref.get(transaction=transaction)
+        current = snapshot.to_dict() if snapshot.exists else empty_profile(name=name or student_id, class_id=class_id)
+        updated = merge_reflection_into_profile(
+            current,
+            reflection_text=reflection_text,
+            original_fallacy=original_fallacy,
+            resolved=resolved,
+            growth_bonus=growth_bonus,
+            timestamp=timestamp,
         )
         transaction.set(doc_ref, updated)
         return updated
