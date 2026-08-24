@@ -61,6 +61,7 @@ def merge_essay_into_profile(
     persona_used: str,
     scores: dict,
     weakness_detected: list[str],
+    student_feedback: str = "",
 ) -> dict:
     """Pure function: old profile + one essay's results -> new profile.
 
@@ -78,6 +79,7 @@ def merge_essay_into_profile(
             "scores": scores,
             "avg_score": avg_score,
             "weakness_detected": weakness_detected,
+            "student_feedback": student_feedback,
         }
     )
 

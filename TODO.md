@@ -268,9 +268,9 @@
 > **Mục đích:** Khắc phục các khoảng trống thực tế sau khi hoàn thành Phase 3 & 4, tối ưu hóa trải nghiệm giáo viên / học sinh, đảm bảo dữ liệu minh bạch và tăng tính thuyết phục cao nhất khi chấm thi và ghi hình demo.
 
 ### 1. Tier 2 Aggregator & Digest Enhancement (Trực quan & Minh bạch dữ liệu) 🔴
-- [ ] **Persist Digest vào Firestore `class_analytics`**: Hiện tại `process_event` tạo Gmail draft và Sheets log nhưng chưa lưu `digest` vào collection `class_analytics` (đã tạo ở Phase 0). Cần lưu document vào `class_analytics/{class_id}/digests/{digest_id}` chứa đầy đủ `ranked_students`, `common_fallacies`, `digest_text`, `timestamp`, `gmail_draft_id` để làm nguồn dữ liệu lịch sử cho giáo viên và Web UI.
-- [ ] **Human-Friendly Student Name Resolution**: Hiện tại digest/email hiển thị `p['student_id']` (ví dụ `stu_stuck`). Bổ sung mapping lấy `name` từ profile (ví dụ `Binh (stu_stuck)`) để email gửi giáo viên trông tự nhiên và có tính sư phạm thực tế.
-- [ ] **HTML Rich Formatting cho Gmail Draft**: Tạo phiên bản HTML có định dạng bảng xếp hạng mức độ ưu tiên (Priority Index), màu sắc cảnh báo (badge kẹt streak/điểm giảm) và khung gợi ý Mini-Lesson để hiển thị chuyên nghiệp trong Gmail của giáo viên thay vì thuần text.
+- [x] **Persist Digest vào Firestore `class_analytics`**. ✅ ĐÃ LÀM + PASS — `src/eduagent/aggregator/digest_store.py` (`persist_digest`), ghi vào `class_analytics/{class_id}/digests/{digest_id}` với `digest_id = event_id` (idempotent tự nhiên: redelivery ghi đè cùng document thay vì nhân đôi). Gọi sau khi Gmail/Sheets xử lý xong trong `class_aggregator.py`; lỗi ghi Firestore chỉ log, không làm hỏng kết quả `"processed"` đã trả về (Gmail/Sheets là output chính, Firestore chỉ là lịch sử/Web UI sau này).
+- [x] **Human-Friendly Student Name Resolution**. ✅ ĐÃ LÀM + PASS — `_display_name()` trong `class_aggregator.py` map `student_id → "Name (student_id)"` từ chính `ranked_students` (đã có `name` từ `priority_engine.rank_students`), không phụ thuộc LLM phải tự đánh vần đúng tên. Áp dụng cho cả `format_digest_email()` (plain text) và dòng Sheets audit.
+- [x] **HTML Rich Formatting cho Gmail Draft**. ✅ ĐÃ LÀM + PASS — `format_digest_email_html()` dựng bảng priority index + badge màu (stuck streak/declining/inactive/shared fallacy) + khung mini-lesson; `gmail_mcp.create_digest_draft()` nhận thêm `body_html` optional, gửi `multipart/alternative` (giữ nguyên bản plain-text làm fallback). Verify: `pytest tests/test_class_aggregator.py -q` → 9/9 pass, bao gồm test mới cho name resolution + HTML table.
 
 ### 2. Tier 1 Pipeline & Trải nghiệm Học sinh (Language & Interactive Engine) 🟡
 - [ ] **Bilingual Language Adaptation (VI / EN)**: Đảm bảo Summarizer, Debate Loop, và Scorer tự động phát hiện và phản hồi theo đúng ngôn ngữ của bài viết (tiếng Việt hoặc tiếng Anh), giúp các câu hỏi Socratic bằng tiếng Việt tự nhiên, không bị trả lời bằng tiếng Anh cho bài luận tiếng Việt.
@@ -279,7 +279,7 @@
 
 ### 3. Resilience, Diagnostic & Demo Readiness (Sẵn sàng quay video) 🟢
 - [ ] **System Doctor CLI (`scripts/doctor.py`)**: Script kiểm tra toàn diện trước khi demo: verify GCP IAM, Firestore connectivity, Pub/Sub topic/DLQ subscriptions, Gmail OAuth token expiry, Sheets spreadsheet permission, Vertex AI API quota. Tránh mọi rủi ro gián đoạn khi quay video không cắt ghép.
-- [ ] **Fast Test Mock Mode**: Tách biệt rõ test e2e có gọi LLM thật (`tests/test_tier1_skeleton.py` ~28s) và unit test thuần (`pytest -m "not e2e"`) bằng pytest markers để tăng tốc độ phát triển và kiểm thử liên tục.
+- [x] **Fast Test Mock Mode**. ✅ ĐÃ LÀM + PASS — thêm marker `e2e` trong `pyproject.toml` (`[tool.pytest.ini_options]`), gắn `@pytest.mark.e2e` cho đúng 1 test gọi Vertex AI thật (`test_tier1_skeleton_end_to_end`, 13.6s). `pytest tests/ -q -m "not e2e"` → 50/50 pass trong ~12s (thay vì 26s full suite) — verify thật bằng `--durations=10` trước/sau.
 
 ---
 

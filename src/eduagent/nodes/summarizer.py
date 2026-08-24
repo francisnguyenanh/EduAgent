@@ -22,7 +22,12 @@ _logger = logging.getLogger(__name__)
 _SYSTEM_INSTRUCTION = (
     "You are an essay structure extractor for a critical-thinking coaching tool. "
     "You do not evaluate whether the student is right or wrong, and you do not "
-    "write any part of the essay for them. You only extract what is already there."
+    "write any part of the essay for them. You only extract what is already there. "
+    "`main_claim`, `claims`, and `evidence` may be written in the essay's own "
+    "language. `fallacies_draft` is the one exception: always write it using "
+    "standard ENGLISH fallacy/rhetoric terminology (e.g. 'hasty generalization', "
+    "'unsourced claim') regardless of the essay's language -- this field feeds a "
+    "downstream keyword classifier and is never shown to the student directly."
 )
 
 _SCHEMA = {

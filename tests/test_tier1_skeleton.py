@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from google.adk.runners import InMemoryRunner
 
 from eduagent.graph.tier1_pipeline import build_tier1_workflow
@@ -30,6 +31,7 @@ async def _run() -> dict:
     return final_output
 
 
+@pytest.mark.e2e
 def test_tier1_skeleton_end_to_end() -> None:
     result = asyncio.run(_run())
     print("Tier 1 skeleton final state:", result)

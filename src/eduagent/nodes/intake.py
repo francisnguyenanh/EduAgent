@@ -13,6 +13,7 @@ import uuid
 
 from google.adk.agents.context import Context
 
+from eduagent.skills.language import detect_language
 from eduagent.tracing import traced_node
 
 # Patterns aimed at overriding the system/agent instructions, not the essay's
@@ -71,6 +72,10 @@ async def sanitizer(ctx: Context) -> dict:
     ctx.state["stage"] = "sanitizer"
     ctx.state["sanitized_text"] = cleaned
     ctx.state["injection_flags"] = matches
+    # Detected once here (not per-node) so every downstream LLM node answers
+    # in the SAME language for one essay, rather than each node guessing
+    # independently and possibly disagreeing with each other.
+    ctx.state["language"] = detect_language(cleaned)
 
     if matches:
         # Audit signal only -- Phase 3/7 wires this into system_audit_logs.

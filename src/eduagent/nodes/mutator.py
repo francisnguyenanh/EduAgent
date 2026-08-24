@@ -77,6 +77,7 @@ async def profile_mutator(ctx: Context) -> dict:
     persona_id = ctx.state.get("persona", "")
     fallacies_draft = ctx.state.get("summary", {}).get("fallacies_draft", [])
     scores = ctx.state.get("scores", {})
+    student_feedback = ctx.state.get("student_feedback", "")
     validation_result = ctx.state.get("validation_result", {})
     scores_degraded = ctx.state.get("scores_degraded", False)
 
@@ -111,6 +112,7 @@ async def profile_mutator(ctx: Context) -> dict:
             persona_used=persona_id,
             scores=scores,
             weakness_detected=fallacies_draft,
+            student_feedback=student_feedback,
         )
         ctx.state["profile_after_mutation"] = updated_profile
 
@@ -136,6 +138,7 @@ async def profile_mutator(ctx: Context) -> dict:
         "debate_turns": ctx.state.get("debate_turns"),
         "validation_result": validation_result,
         "scores": scores,
+        "student_feedback": student_feedback,
         "profile_delta": delta,
         "profile_after_mutation": updated_profile,
         "pending_retry": pending,

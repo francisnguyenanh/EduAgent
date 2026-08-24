@@ -73,6 +73,24 @@ def test_scorer_degrades_and_flags_instead_of_faking_a_score():
     assert ctx.state["scores_degraded"] is True
 
 
+def test_scorer_stores_student_feedback_on_success():
+    from eduagent.nodes.scorer import cognitive_scorer
+
+    ctx = MagicMock()
+    ctx.state = {"sanitized_text": "a real essay", "summary": {}, "debate_turns": [], "language": "en"}
+
+    fake_result = {
+        "scores": {"logical_coherence": 5, "evidence_quality": 5, "counterargument_handling": 5, "scope_awareness": 5},
+        "rationale": {k: "" for k in ("logical_coherence", "evidence_quality", "counterargument_handling", "scope_awareness")},
+        "student_feedback": "Nice use of evidence! Next time, address the counterargument directly.",
+    }
+    with patch("eduagent.nodes.scorer.generate_json", return_value=fake_result):
+        asyncio.run(cognitive_scorer(ctx))
+
+    assert ctx.state["student_feedback"] == "Nice use of evidence! Next time, address the counterargument directly."
+    assert ctx.state["scores_degraded"] is False
+
+
 def test_debate_loop_falls_back_to_persona_question_on_llm_outage():
     from eduagent.nodes.debate import debate_loop
 
@@ -126,3 +144,31 @@ def test_mutator_parks_pending_essay_instead_of_writing_fake_score():
     mock_apply.assert_not_called()
     assert result["pending_retry"] is True
     assert result["profile_after_mutation"] is None
+
+
+def test_mutator_forwards_student_feedback_to_apply_essay_result():
+    from eduagent.nodes.mutator import profile_mutator
+
+    ctx = MagicMock()
+    ctx.state = {
+        "student_id": "stu_1",
+        "class_id": "c1",
+        "persona": "skeptic",
+        "summary": {"fallacies_draft": []},
+        "scores": {"logical_coherence": 5, "evidence_quality": 5, "counterargument_handling": 5, "scope_awareness": 5},
+        "student_feedback": "Great job citing your source!",
+        "scores_degraded": False,
+        "validation_result": {"passed": True},
+        "essay_id": "e1",
+        "raw_input": "raw",
+        "sanitized_text": "clean",
+    }
+
+    with (
+        patch("eduagent.nodes.mutator.apply_essay_result") as mock_apply,
+        patch("eduagent.nodes.mutator.publish_essay_evaluated"),
+    ):
+        result = asyncio.run(profile_mutator(ctx))
+
+    assert mock_apply.call_args.kwargs["student_feedback"] == "Great job citing your source!"
+    assert result["student_feedback"] == "Great job citing your source!"

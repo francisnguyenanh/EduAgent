@@ -40,6 +40,7 @@ def apply_essay_result(
     persona_used: str,
     scores: dict,
     weakness_detected: list[str],
+    student_feedback: str = "",
 ) -> dict:
     """Transactional read-modify-write. Returns the profile AFTER merging."""
     doc_ref = _client().collection(FIRESTORE.student_profiles_collection).document(student_id)
@@ -55,6 +56,7 @@ def apply_essay_result(
             persona_used=persona_used,
             scores=scores,
             weakness_detected=weakness_detected,
+            student_feedback=student_feedback,
         )
         transaction.set(doc_ref, updated)
         return updated

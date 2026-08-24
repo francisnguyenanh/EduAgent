@@ -116,3 +116,18 @@ def test_score_trend_stagnant_within_flat_band():
     profile = merge_essay_into_profile(profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(5), weakness_detected=[])
     profile = merge_essay_into_profile(profile, essay_id="e2", timestamp="t2", persona_used="nitpicker", scores=_scores(5), weakness_detected=[])
     assert profile["score_trend"] == "stagnant"
+
+
+def test_student_feedback_is_stored_per_essay():
+    profile = empty_profile(name="An", class_id="c1")
+    profile = merge_essay_into_profile(
+        profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(5),
+        weakness_detected=[], student_feedback="Great use of evidence -- next time, address counterarguments too.",
+    )
+    assert profile["essay_history"][-1]["student_feedback"] == "Great use of evidence -- next time, address counterarguments too."
+
+
+def test_student_feedback_defaults_to_empty_string():
+    profile = empty_profile(name="An", class_id="c1")
+    profile = merge_essay_into_profile(profile, essay_id="e1", timestamp="t1", persona_used="skeptic", scores=_scores(5), weakness_detected=[])
+    assert profile["essay_history"][-1]["student_feedback"] == ""
