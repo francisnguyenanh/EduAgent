@@ -182,8 +182,14 @@ gcloud run deploy eduagent-class-aggregator \
   --set-env-vars GCP_PROJECT_ID=<project>,GOOGLE_GENAI_USE_VERTEXAI=True
 
 # Then point the class-aggregator-sub subscription at the deployed URL as a
-# push subscription with OIDC auth (see Pub/Sub push docs) instead of pulling.
+# push subscription with OIDC auth instead of pulling:
+gcloud pubsub subscriptions update class-aggregator-sub \
+  --push-endpoint=<deployed-service-url>/ \
+  --push-auth-service-account=eduagent-sa@<project>.iam.gserviceaccount.com \
+  --push-auth-token-audience=<deployed-service-url>
 ```
+
+**Verified on the real project (ĐỢT 8):** the above two commands were run against the live deployment, then a real test event was published to `essay-evaluated` and confirmed in Cloud Run logs to be picked up and processed by `process_event()` with no pull-mode script running anywhere — i.e. the Pub/Sub → Cloud Run push path in the architecture diagram above is not just deployed, it fires end-to-end.
 
 This project's live deployment (below) is deployed with `--allow-unauthenticated`, so that a judge can open the Web UI without a GCP identity or an OAuth flow. That means Cloud Run IAM does **not** protect the `POST /` Pub/Sub push endpoint — the application itself verifies the push subscription's OIDC token (see ADR-014, `server.py::_verify_pubsub_push_auth`) so `/` still cannot be triggered by an arbitrary unauthenticated caller. If you redeploy this service and do **not** need a public demo UI, prefer `--no-allow-unauthenticated` plus Pub/Sub's own service-agent OIDC token as the sole gate instead — that is the simpler, IAM-only setup and needs no application-layer check.
 
