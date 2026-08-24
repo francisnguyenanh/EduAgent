@@ -8,7 +8,9 @@ CritqAI-main/
 *service-account*.json
 *credentials*.json
 *.key.json
+*-key.json
 *.pem
+secrets/
 
 # Python
 __pycache__/

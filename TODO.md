@@ -90,19 +90,30 @@
   - Verify: `git diff --cached --name-only | grep -i critqai` → **0 kết quả** trước commit đầu tiên. PASS.
 - [x] `.gitignore` chuẩn production: `.env`, `*service-account*.json`, `*credentials*`, `__pycache__/`, `.venv/`. ✅ ĐÃ LÀM
 - [x] Môi trường: Python 3.14 sẵn có, đã verify cài đặt `google-adk==2.3.0`, `google-genai==2.9.0`, `google-cloud-firestore==2.28.0`, `pytest==8.3.3`. `requirements.txt` đã khai đủ (kèm `google-cloud-pubsub`, `google-cloud-trace` cho Phase 3–4, chưa cài — cài khi tới phase đó). ✅ ĐÃ LÀM
-- [ ] ⏸️ **GCP Project: bật Vertex AI/Gemini API, Firestore Native, Cloud Run API, Pub/Sub, Cloud Trace/Logging.** — CẦN BẠN THAO TÁC (tài khoản GCP thật). Chưa làm.
-- [ ] ⏸️ **Service Account + phân quyền least-privilege.** — CẦN BẠN THAO TÁC. Chưa làm.
-- [ ] ⏸️ Firestore collections thật trên Cloud (`student_profiles`, `class_analytics`, `system_audit_logs`, `processed_events`) — tên collection đã khai báo sẵn trong `src/eduagent/config.py::FirestoreConfig`, nhưng project Firestore thật CẦN BẠN TẠO. Chưa làm.
-- [ ] ⏸️ 🔴 **Verify Gmail MCP OAuth (compose-only, test gọi `send` bị chặn).** — CẦN BẠN THAO TÁC (Google Cloud Console + hòm thư Gmail thật). Chưa làm — **ưu tiên làm sớm, đây là rủi ro cao nhất còn lại của Phase 0.**
+- [x] **GCP Project: bật Vertex AI/Gemini API, Firestore Native, Cloud Run API, Pub/Sub, Cloud Trace/Logging, Gmail API.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - Project thật: `project-4fc36103-f4ca-49f6-883` (đã verify quyền truy cập qua `gcloud projects describe`).
+  - Verify: `gcloud services list --enabled` → cả 6 API (`aiplatform`, `firestore`, `run`, `pubsub`, `cloudtrace`, `logging`) hiện đủ, + `gmail.googleapis.com` bật riêng cho MCP sau này.
+- [x] **Service Account + phân quyền least-privilege.** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - Tạo SA riêng `eduagent-sa@project-4fc36103-f4ca-49f6-883.iam.gserviceaccount.com` — KHÔNG tái dùng SA có sẵn của project (project này đang có SA của các dự án khác: `docutranslate-vertex-sa`, `vti-nagoya-sa`...).
+  - Gán đúng 5 role, không Owner/Editor: `datastore.user`, `pubsub.editor`, `aiplatform.user`, `cloudtrace.agent`, `logging.logWriter`. Verify bằng `gcloud projects get-iam-policy --filter=...` → khớp chính xác 5 role.
+  - Key JSON tại `secrets/eduagent-sa-key.json` — **phát hiện và vá lỗ hổng**: tên file không khớp pattern cũ `*service-account*.json` trong `.gitignore`. Đã thêm `*-key.json` + `secrets/` vào `.gitignore`, verify bằng `git check-ignore -v` → bị ignore đúng, không lọt vào `git status`.
+- [x] Firestore Native database thật đã tạo tại `asia-southeast1` (Singapore, theo lựa chọn của bạn). ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
+  - Verify bằng `scripts/verify_firestore.py`: ghi + đọc + xoá document thật trong cả 4 collection (`student_profiles`, `class_analytics`, `system_audit_logs`, `processed_events`) dùng chính SA least-privilege vừa tạo → **PASSED**.
 - [x] Skeleton graph ADK2 chạy end-to-end với mock data (mọi node là stub) → commit. ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS
   - Xây bằng API thật `google.adk.workflow.{Workflow, FunctionNode, START}` (không phải mock tự chế) — khớp đúng ADK2 Graph Workflow trong wiki 7.5.3.
   - 8 stub node nối tuyến tính: `intake → sanitizer → summarizer → persona_selector → debate_loop → challenge_validator → cognitive_scorer → profile_mutator`, state thread qua `Context.state` (khớp wiki 7.5.6 — Context tách biệt `state` và `session`).
   - Chạy qua `InMemoryRunner(node=workflow).run_debug(...)` — verify bằng `python -m pytest tests/ -q` → **1 passed**, không cần `GOOGLE_API_KEY` (chưa gọi LLM ở giai đoạn stub, đúng deterministic-first).
   - Commit `69b49d3` — 14 file, không có file nào từ `CritqAI-main`.
+- [ ] ⏸️ 🔴 **Verify Gmail MCP OAuth (compose-only, test gọi `send` bị chặn).** — CẦN BẠN THAO TÁC MỘT PHẦN. Gmail API đã bật, nhưng **OAuth Consent Screen + tạo OAuth Client ID là wizard trên Console UI**, không tự động hoá qua CLI được vì cần quyết định của bạn (Internal vs External, tên app hiển thị, email hỗ trợ, test user). Việc cần bạn làm:
+  1. Vào [Google Cloud Console → APIs & Services → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent?project=project-4fc36103-f4ca-49f6-883) — chọn **External**, thêm chính email Gmail của bạn làm **Test user** (app chưa verified vẫn dùng được cho test user).
+  2. Vào **Credentials → Create Credentials → OAuth client ID**, loại **Desktop app**, đặt tên `eduagent-gmail-mcp`.
+  3. Tải file `client_secret_*.json`, đặt vào `secrets/` (đã nằm trong `.gitignore`).
+  4. Báo tôi khi xong — tôi viết script xin đúng scope `https://www.googleapis.com/auth/gmail.compose` (KHÔNG xin `gmail.send`), tạo 1 draft thật, và test gọi `send` để verify bị chặn ở tầng credential.
+  - **Đây là rủi ro cao nhất còn lại của Phase 0** — nên làm sớm, đừng để tới Phase 3/8.
 
-**DoD:** `git ls-files` sạch [PASS] • skeleton graph chạy hết luồng không lỗi [PASS] • Gmail draft tạo được thật, `send` bị chặn [CHƯA — cần bạn cung cấp/thao tác GCP + Gmail] • GCP project/service account/Firestore thật tồn tại [CHƯA — cần bạn].
+**DoD:** `git ls-files` sạch [PASS] • skeleton graph chạy hết luồng không lỗi [PASS] • GCP project/service account/Firestore thật tồn tại và verify được [PASS] • Gmail draft tạo được thật, `send` bị chặn [CHƯA — chờ bạn tạo OAuth consent screen + client ID theo hướng dẫn trên].
 
-**→ Phase 0 chưa thể đánh dấu PASS toàn phần.** Phần code-only đã xong và tự kiểm chứng được; phần còn lại đòi hỏi quyền truy cập tài khoản GCP/Gmail thật mà tôi không có. Cho tôi biết khi bạn đã tạo GCP project + OAuth client, tôi sẽ viết script verify (tạo draft thật + test send bị chặn) và tiếp tục Phase 1 song song trong lúc chờ.
+**→ Phase 0 hoàn thành 90%.** Chỉ còn bước Gmail OAuth cần thao tác Console UI của bạn. Trong lúc chờ, tôi tiếp tục sang **Phase 1** (logic thật cho Summarizer/Persona/Debate/Validator) — không phụ thuộc Gmail.
 
 ---
 
