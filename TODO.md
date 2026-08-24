@@ -448,6 +448,68 @@
 
 ---
 
+### 10. ĐỢT 6 — Review tổng thể trước khi nộp: siết Production Surface & Đóng khoảng cách Tài liệu–Thực tế 🔴 CHƯA LÀM
+
+> Bối cảnh: review toàn bộ `src/` (4.639 LOC) + chạy `pytest tests/ -q -m "not e2e"` → **164/164 pass** + probe THẬT service đang live. Phần lõi (deterministic-first, ADR-001→011, eval suite, OCR cross-check, secrets hygiene) đã ở mức ăn điểm cao — **mọi vấn đề dưới đây nằm ở tầng web/production được thêm sau ở ĐỢT 3/4/5, chưa được siết bằng cùng mức kỷ luật với lõi.**
+>
+> Nguyên tắc xuyên suốt đợt này: **vấn đề lớn nhất không phải là các lỗ hổng, mà là việc tài liệu khẳng định chúng đã được bịt.** Giám khảo có kỹ thuật đọc README §5 rồi `curl` thử là thấy chênh lệch — và sẽ mất niềm tin vào cả những phần (ADR-001, ADR-007) hoàn toàn chính xác. Vì vậy mỗi mục code dưới đây đều đi kèm việc đồng bộ lại tài liệu.
+
+#### 🔴 P0 — Phải sửa trước khi giám khảo mở link
+
+- [ ] 🔴 **Sanitizer chống prompt-injection KHÔNG chạy trên đường live (nghiêm trọng nhất).**
+  - Bằng chứng: `strip_injection_attempts()` (`nodes/intake.py:52`) chỉ được gọi từ node `sanitizer` trong ADK graph. Cả 3 entry point của web app đều KHÔNG đi qua graph: `POST /api/debate/start`, `/start-with-image`, `/start-with-gdoc` → đều gọi `api.py::_start_debate_from_essay_text()` (dòng 100) → `summarize_essay(essay_text, ...)` (dòng 110) với **text thô, chưa sanitize**. Grep toàn repo: ngoài `intake.py` + `tier1_pipeline.py`, không file nào gọi `strip_injection_attempts`.
+  - Thêm nữa: `student_reply` trong `POST /api/debate/turn` **không được sanitize ở BẤT KỲ đường nào** — kể cả batch graph, vì graph chỉ sanitize `raw_input` (essay), không sanitize câu trả lời từng lượt.
+  - Hệ quả: README §5 + eval suite (`prompt_injection 5/5 = 100%`) đang chứng nhận một control **không áp dụng cho production path**. Eval suite vẫn pass 100% vì nó gọi thẳng `strip_injection_attempts` — test HÀM, không test ĐƯỜNG ĐI.
+  - DoD: sanitize ngay đầu `_start_debate_from_essay_text()` (cả 3 nhánh text/image/gdoc đi qua đây) + trong `submit_debate_turn()`; thêm test khẳng định **đường API** có redact (gọi qua `TestClient`, không gọi hàm trực tiếp) — đây chính là loại test hiện đang thiếu; ghi ADR mới về lý do sanitize được đặt ở tầng API chứ không phải chỉ trong graph.
+
+- [ ] 🔴 **XSS lưu trữ cross-privilege trên dashboard Giáo viên.**
+  - `demo_page.py:296` (`renderTurn`) và `demo_page.py:308` (`renderStudentReply`) nhồi dữ liệu chưa escape vào `innerHTML`: `questionText` (output LLM, mà LLM đọc essay do học sinh kiểm soát) và `replyText` (**input thô của học sinh, không escape gì cả**).
+  - `loadPriority()` (`demo_page.py:476` vùng lân cận) render `r.name` (từ Firestore, học sinh kiểm soát) vào `innerHTML` **và** vào inline `onclick="copyParentNote('${r.student_id}', this)"` — hai sink trong một dòng. `loadRoster()`/`loadAnalytics()` cùng khuôn mẫu.
+  - Khai thác: học sinh gõ `<img src=x onerror=...>` làm reply → execute ngay; đặt payload vào `name` → execute **trong session của giáo viên** khi mở dashboard. Kết hợp với mục sanitizer ở trên thì càng dễ.
+  - Ghi nhận: phần còn lại của file dùng `textContent` đúng (dòng 207/236/259/387/451/496…) → đây là không nhất quán, không phải thiếu hiểu biết.
+  - DoD: helper `esc()` cho mọi nội dung do người dùng/LLM sinh; đổi `renderTurn`/`renderStudentReply` sang `textContent`; bỏ inline `onclick` → `dataset` + event delegation.
+
+- [ ] 🔴 **Service live public 100%, TRÁI NGƯỢC với README §3.10/§5.**
+  - `deploy.txt:1` dùng `--allow-unauthenticated`, trong khi README §3.10 và §5 nói rõ `--no-allow-unauthenticated` và giải thích tại sao. Probe thật (đã chạy trong phiên review): `GET /health-check` → 200; `GET /api/classes/c1/priority` → **200 + tên học sinh, `score_trend`, fallacies, `inactivity_days` của cả lớp**; `POST /` không auth → 200.
+  - Ba vấn đề chồng nhau:
+    - **Không có authz tầng app (IDOR phơi PII vị thành niên).** `auth.py::login()` trả identity nhưng **không phát token**; mọi route `/api/classes/{class_id}/*` nhận bất kỳ `class_id` nào. `class_id` chỉ do frontend tự giữ trong biến JS `auth`. Domain giáo dục trẻ vị thành niên → đây đúng thứ giám khảo sẽ hỏi.
+    - **`POST /` không verify OIDC token** (`server.py:198`). README lập luận `--no-allow-unauthenticated` + OIDC của Pub/Sub là lớp bảo vệ; nhưng deploy thật đã bỏ lớp IAM và code **không có lớp thứ hai**. Ai cũng POST được envelope hợp lệ → chạy digest → gọi Gemini heavy + tạo Gmail draft + append Sheets. Đốt credit + làm bẩn audit trail (ngược đúng tinh thần ĐỢT 3 mục 3 & 5).
+    - **Không rate limit, không giới hạn input.** `essay_text` không cap độ dài; `image_base64` decode không cap size (`api.py:169`); `fetch_gdoc_text` (`integrations/gdocs.py`) gọi `response.read()` không cap rồi đưa cả doc vào prompt. Mỗi `POST /api/debate/start` = nhiều lần gọi Vertex AI, ẩn danh, không chặn → **cost-DoS**.
+  - **KHÔNG bỏ demo public** — README §"Try It Out Live" là điểm cộng thật. DoD: giữ GET demo page + `/health-check` mở; thêm ở tầng app một signed token phát ra từ `/api/auth/login`, verify `class_id` trong token khớp `class_id` trong path; verify OIDC cho `POST /`; cap input size; **và sửa README §3.10/§5 mô tả đúng cấu hình đang chạy**.
+
+- [ ] 🔴 **Cap input (chặn cost-DoS & tránh 504).** `essay_text` (max chars), `image_base64` (max bytes trước khi `b64decode`), `fetch_gdoc_text` (đọc có giới hạn thay vì `response.read()` trắng). Ăn khớp trực tiếp với ADR-009 (ảnh 2.6MB đã từng 504 ở 30s) — hiện chưa có gì chặn một ảnh lớn hơn thế đi vào.
+
+#### 🟡 P1 — Chênh lệch giữa "demo tốt" và "production"
+
+- [ ] 🟡 **README §5 im lặng về chỗ yếu nhất.** `auth.py` là mock login, một password dùng chung — bản thân điều này ỔN và **đã được document trung thực trong docstring** (cách xử lý đúng). Nhưng README §5 tiêu đề "Security model" liệt kê SA roles / Gmail scope / Sheets append-only / secrets (đều thật) rồi không nhắc auth là mock. Thêm một dòng thừa nhận sẽ **TĂNG** độ tin cậy, không giảm.
+- [ ] 🟡 **`_sessions` in-process + `--max-instances=5` = 404 khi giám khảo mở đồng thời.** ADR-005 đã tự nhận biết và ghi "Known follow-up" (tốt), nhưng chưa xử lý hệ quả vận hành: 2 instance → turn 2 route sang instance khác → `Unknown session_id` (404). Demo 1 người không thấy; nhiều giám khảo mở cùng lúc thì thấy. DoD: hoặc `--max-instances=1` cho cửa sổ chấm (một dòng, đảo ngược được), hoặc chuyển session sang Firestore-with-TTL đúng như ADR-005 đã dự liệu.
+- [ ] 🟡 **Không có CI.** Không có `.github/`. 164 test tốt nhưng chỉ chạy khi ai đó nhớ chạy. Đặc biệt: `tests/test_gmail_mcp_never_sends.py` là **cơ chế thi hành** của ADR-001 (AST-based, chặn `.send()`) mà hiện **không có gì bắt buộc nó chạy trước khi deploy**. DoD: workflow GitHub Actions ~15 dòng chạy `pytest -m "not e2e"` — bằng chứng "production discipline" rẻ nhất có thể mua.
+- [ ] 🟡 **Deps chỉ `>=`, không lock.** `google-adk>=2.3.0` → build lại hôm nay có thể ra image khác hôm qua. Với Cloud Run `--source .` (build trong cloud) rủi ro là thật: một minor release của ADK có thể làm deploy hỏng **ngay giữa lúc chấm**. Repo cũ `CritqAI-main` có `requirements.lock` — làm lại điều đó ở đây.
+- [ ] 🟡 **`llm.py` không tách kênh system vs user.** Essay được nối vào prompt; sanitizer regex là lớp phòng thủ duy nhất (mà P0 #1 cho thấy nó còn chưa chạy trên đường live). DoD: system instruction riêng + bọc essay trong delimiter rõ ràng — phòng thủ theo lớp, ăn khớp tinh thần deterministic-first.
+
+#### 🟢 P2 — Trình bày (ảnh hưởng trực tiếp tới điểm)
+
+- [ ] 🟢 **`deploy.txt` bị gitignore nhưng chứa cấu hình deploy THỰC TẾ đang chạy** — khác với README. Việc nó không được version chính là lý do khoảng cách P0 #3 tồn tại mà không ai thấy. DoD: version hoá cấu hình deploy (hoặc script deploy) để nó luôn bị review cùng README.
+- [ ] 🟢 **README §6 "100% pass 15/15" đặt cạnh eval suite không phủ đường production** (xem P0 #1). Sau khi fix P0 #1, con số đó mới thực sự có nghĩa — và lúc đó nó đáng giá hơn nhiều. DoD: bổ sung case eval chạy qua tầng API.
+- [ ] 🟢 **`PriorityWeights` docstring vẫn ghi "Values are placeholders to be tuned against seed data in Phase 2/3"** (`config.py:70-84`) — đã qua Phase 8. DoD: hoặc tune thật, hoặc sửa thành "tuned & frozen, lý do X". Giám khảo đọc code sẽ thấy chữ "placeholder".
+
+**Thứ tự thực hiện (theo tỷ lệ điểm-thu-được / công-bỏ-ra):**
+
+| # | Việc | Công | Vì sao đáng |
+|---|---|---|---|
+| 1 | Sanitize ở `api.py` (start + turn) + test đường API | ~30 phút | Biến claim bảo mật lớn nhất từ "sai" thành "đúng" |
+| 2 | Escape `innerHTML` ở 3 chỗ trong `demo_page.py` | ~20 phút | Bịt stored XSS cross-privilege |
+| 3 | Token + kiểm `class_id` tầng app; verify OIDC cho `POST /` | ~2 giờ | Bịt IDOR PII học sinh + cost-DoS |
+| 4 | Cap input (essay chars, image bytes, gdoc bytes) | ~30 phút | Chặn cost-DoS, tránh 504 (ADR-009) |
+| 5 | Đồng bộ README §3.10/§5 với thực tế + thừa nhận auth là mock | ~20 phút | Loại bỏ câu hỏi khó nhất của giám khảo |
+| 6 | CI workflow + `requirements.lock` | ~30 phút | Bằng chứng production discipline, chống deploy hỏng |
+
+Bốn việc đầu là code, khoảng nửa ngày, **không đổi kiến trúc** và có test bảo vệ. Việc thứ 5 quan trọng không kém phần code.
+
+**Kiểm chứng ĐỢT 6 (điểm khởi đầu, trước khi sửa):** `pytest tests/ -q -m "not e2e"` → **164/164 pass**; `git ls-files | grep -Ei "secret|\.env|key|token|credential"` → chỉ `.env.example` (sạch); `git log --all --diff-filter=A` không có file secret/key nào từng bị add; `CritqAI-main/` → **0 file tracked** (eligibility an toàn).
+
+---
+
 ## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 
 > Video là thứ giám khảo xem nhiều nhất và chiếm phần lớn 30% Demo. Chỉ 4 phút đầu được chấm.

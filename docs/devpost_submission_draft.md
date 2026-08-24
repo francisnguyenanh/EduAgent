@@ -82,6 +82,9 @@ We built the pipeline from scratch using:
 
 ## 5. "Try it out" links
 - **GitHub Repository:** `[Link tới GitHub repo của bạn]`
+- **Live Web Demo:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
+  * **Student Portal:** ID `c1_stu01` | Password `demo123`
+  * **Teacher Portal:** ID `c1_teacher` | Password `demo123`
 - **Live Cloud Run Service (API Check):** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/health-check`
 
 ---
@@ -109,13 +112,16 @@ We built the pipeline from scratch using:
 * **Did you add Reproducible Testing instructions to your README?** Yes
 * **Hosted project URL if available:** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`
 * **Testing instructions:**
-  1. To run local unit & integration tests, ensure Google Application Default Credentials (ADC) are configured, then execute:
+  1. **Interact with the Live Web UI:** Open `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/`
+     * Login as Student using ID `c1_stu01` and Password `demo123` to try Socratic debate with OCR, presets, or Google Doc link.
+     * Login as Teacher using ID `c1_teacher` and Password `demo123` to view class analytics, priority index table with SVG sparklines, parent update notes, and configuration settings.
+  2. To run local unit & integration tests, ensure Google Application Default Credentials (ADC) are configured, then execute:
      `pytest tests/ -q`
-  2. To run the diagnostic doctor check, execute:
+  3. To run the diagnostic doctor check, execute:
      `python scripts/doctor.py`
-  3. To verify the event-driven aggregator subscriber, simulate a Pub/Sub event locally:
+  4. To verify the event-driven aggregator subscriber, simulate a Pub/Sub event locally:
      `python scripts/demo_tier1_run.py` (which publishes to Firestore and Pub/Sub), and monitor the output in Gmail Drafts.
-  4. The Cloud Run service at the hosted URL acts as a secure internal Pub/Sub Push endpoint (`POST /`). A GET call to `/health-check` will return `{"status":"ok"}`.
+  5. The Cloud Run service at the hosted URL acts as a secure internal Pub/Sub Push endpoint (`POST /`). A GET call to `/health-check` will return `{"status":"ok"}`.
 * **Which Google SDK did you use?** Google GenAI SDK, Google Cloud SDK, Google ADK (Agent Development Kit).
 * **Which Google Cloud Service(s) did you use?** Cloud Run, Firestore, Pub/Sub, Cloud Logging, Cloud Trace, Artifact Registry, Cloud Build.
 * **Architecture diagram:** `[Upload file ảnh sơ đồ kiến trúc hệ thống, ví dụ: assets/architecture_diagram.png]`
