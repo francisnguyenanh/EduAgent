@@ -108,8 +108,8 @@ tests/            pytest suite — fast unit tests by default, `@pytest.mark.e2e
 ### 3.2 Install
 
 ```bash
-git clone <this-repo-url>
-cd CritiqAI_ver2
+git clone https://github.com/francisnguyenanh/EduAgent.git
+cd EduAgent
 python -m venv .venv && source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 cp .env.example .env   # then fill in GCP_PROJECT_ID and the other values

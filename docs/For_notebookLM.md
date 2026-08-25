@@ -1,5 +1,5 @@
 # eduagent — Tài liệu Toàn diện cho NotebookLM
-> Tổng hợp kiến trúc, triết lý thiết kế, kết quả thực nghiệm và kỹ thuật của dự án **eduagent (CritiqAI ver2)**
+> Tổng hợp kiến trúc, triết lý thiết kế, kết quả thực nghiệm và kỹ thuật của dự án **eduagent**
 > Dùng để tạo slide trình bày trong video demo hackathon và nộp bài.
 
 ---
