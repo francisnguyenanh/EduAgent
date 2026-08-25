@@ -16,6 +16,12 @@ from eduagent.server import app
 client = TestClient(app)
 _C1_HEADERS = {"Authorization": f"Bearer {create_access_token('c1_teacher', 'teacher', 'c1')}"}
 
+# ĐỢT 12 NHÓM 2: the debate endpoints now require a student (or same-class
+# teacher) Bearer token, so every debate request below carries one.
+_STUDENT_ID = "c1_stu01"
+_STUDENT_HEADERS = {"Authorization": f"Bearer {create_access_token(_STUDENT_ID, 'student', 'c1')}"}
+_SESSION = {"student_id": _STUDENT_ID, "class_id": "c1"}
+
 
 def test_demo_page_served_at_root_and_slash_demo():
     for path in ("/", "/demo"):
@@ -48,7 +54,11 @@ def test_api_debate_start_returns_session_and_first_turn():
         "turn_number": 1,
     }
     with patch("eduagent.server.start_debate", return_value=fake_result) as mock_start:
-        response = client.post("/api/debate/start", json={"essay_text": "Cats are great.", "student_id": "s1"})
+        response = client.post(
+            "/api/debate/start",
+            json={"essay_text": "Cats are great.", "student_id": _STUDENT_ID},
+            headers=_STUDENT_HEADERS,
+        )
 
     assert response.status_code == 200
     assert response.json() == fake_result
@@ -72,7 +82,8 @@ def test_api_debate_start_with_image_returns_session_with_ocr_meta():
     with patch("eduagent.server.start_debate_from_image", return_value=fake_result) as mock_start:
         response = client.post(
             "/api/debate/start-with-image",
-            json={"image_base64": base64.b64encode(b"fake").decode(), "student_id": "s1"},
+            json={"image_base64": base64.b64encode(b"fake").decode(), "student_id": _STUDENT_ID},
+            headers=_STUDENT_HEADERS,
         )
 
     assert response.status_code == 200
@@ -86,34 +97,55 @@ def test_api_debate_start_with_image_failure_returns_502():
     with patch("eduagent.server.start_debate_from_image", side_effect=RuntimeError("boom")):
         response = client.post(
             "/api/debate/start-with-image",
-            json={"image_base64": base64.b64encode(b"fake").decode(), "student_id": "s1"},
+            json={"image_base64": base64.b64encode(b"fake").decode(), "student_id": _STUDENT_ID},
+            headers=_STUDENT_HEADERS,
         )
     assert response.status_code == 502
 
 
 def test_api_debate_start_failure_returns_502():
     with patch("eduagent.server.start_debate", side_effect=RuntimeError("boom")):
-        response = client.post("/api/debate/start", json={"essay_text": "x", "student_id": "s1"})
+        response = client.post(
+            "/api/debate/start",
+            json={"essay_text": "x", "student_id": _STUDENT_ID},
+            headers=_STUDENT_HEADERS,
+        )
     assert response.status_code == 502
 
 
 def test_api_debate_turn_returns_next_turn():
     fake_result = {"turn": {"turn": 2, "persona": "skeptic", "question": "Why?", "student_response": "reply"}, "turn_number": 2, "completed": False}
-    with patch("eduagent.server.submit_debate_turn", return_value=fake_result):
-        response = client.post("/api/debate/turn", json={"session_id": "sess-1", "student_reply": "reply"})
+    with patch("eduagent.server.get_debate_session", return_value=_SESSION), patch(
+        "eduagent.server.submit_debate_turn", return_value=fake_result
+    ):
+        response = client.post(
+            "/api/debate/turn",
+            json={"session_id": "sess-1", "student_reply": "reply"},
+            headers=_STUDENT_HEADERS,
+        )
     assert response.status_code == 200
     assert response.json() == fake_result
 
 
 def test_api_debate_turn_unknown_session_returns_404():
-    with patch("eduagent.server.submit_debate_turn", side_effect=UnknownSessionError("sess-x")):
-        response = client.post("/api/debate/turn", json={"session_id": "sess-x", "student_reply": "reply"})
+    with patch("eduagent.server.get_debate_session", side_effect=UnknownSessionError("sess-x")):
+        response = client.post(
+            "/api/debate/turn",
+            json={"session_id": "sess-x", "student_reply": "reply"},
+            headers=_STUDENT_HEADERS,
+        )
     assert response.status_code == 404
 
 
 def test_api_debate_turn_already_complete_returns_409():
-    with patch("eduagent.server.submit_debate_turn", side_effect=DebateSessionComplete("done")):
-        response = client.post("/api/debate/turn", json={"session_id": "sess-1", "student_reply": "reply"})
+    with patch("eduagent.server.get_debate_session", return_value=_SESSION), patch(
+        "eduagent.server.submit_debate_turn", side_effect=DebateSessionComplete("done")
+    ):
+        response = client.post(
+            "/api/debate/turn",
+            json={"session_id": "sess-1", "student_reply": "reply"},
+            headers=_STUDENT_HEADERS,
+        )
     assert response.status_code == 409
 
 

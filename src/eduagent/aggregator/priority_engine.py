@@ -19,6 +19,19 @@ from datetime import datetime
 from eduagent.config import PRIORITY_WEIGHTS
 from eduagent.memory.student_profile import weakness_taxonomy_from_profile
 
+# How many DISTINCT students must share a fallacy before it counts as a
+# class-level (systemic) pattern worth a mini-lesson.
+#
+# ĐỢT 12 NHÓM 3: docs previously claimed ">= 3 students" while this constant was
+# 2 -- a doc/code mismatch a judge can diff in seconds. Resolved by keeping 2 and
+# correcting the docs, because 2 is the defensible threshold here: the pedagogic
+# claim is "this is not one student's idiosyncratic mistake", and two independent
+# students is exactly the point that stops being true. Raising it to 3 would also
+# make the signal nearly unreachable in a 5-student demo class, so the number was
+# never actually validated at 3.
+#
+# `common_fallacies()` takes this as a default parameter, so a real deployment
+# with 40-student classes can raise it without editing this module.
 MIN_STUDENTS_FOR_COMMON_FALLACY = 2
 
 

@@ -101,6 +101,29 @@ def _build_prompt(
     return "\n\n".join(parts)
 
 
+def build_system_instruction(*, persona_id: str, turn_number: int, language: str = "en") -> str:
+    """The persona-anchoring system instruction, exactly as generate_debate_turn
+    sends it to Gemini.
+
+    Factored out (ĐỢT 12 NHÓM 1) so the eval suite's persona-fidelity layer can
+    assert against the REAL production builder. Previously that eval rebuilt
+    the string itself (`f"{persona.anchor}\\n\\n{get_escalation_instruction(1)}"`)
+    and then checked `persona.anchor in system_instruction` -- a tautology that
+    stayed green no matter what this module actually sent. Calling this function
+    means the eval fails if anchoring is ever dropped from the real prompt.
+    """
+    persona = get_persona(persona_id)
+    return (
+        f"{persona.anchor}\n\n"
+        f"{get_escalation_instruction(turn_number)}\n\n"
+        f"{language_instruction(language)}\n\n"
+        "STRICT FORMAT RULE:\n"
+        "- Formulate and output EXACTLY ONE single Socratic question.\n"
+        "- Your entire response MUST end with exactly ONE question mark '?'.\n"
+        "- Do NOT ask multiple questions or use multiple question marks."
+    )
+
+
 def generate_debate_turn(
     *,
     persona_id: str,
@@ -121,17 +144,7 @@ def generate_debate_turn(
     (one turn per call, for a live back-and-forth Web UI/CLI/API) -- there is
     exactly one place that knows how to generate a validated debate turn.
     """
-    persona = get_persona(persona_id)
-    escalation = get_escalation_instruction(turn_number)
-    system_instruction = (
-        f"{persona.anchor}\n\n"
-        f"{escalation}\n\n"
-        f"{language_instruction(language)}\n\n"
-        "STRICT FORMAT RULE:\n"
-        "- Formulate and output EXACTLY ONE single Socratic question.\n"
-        "- Your entire response MUST end with exactly ONE question mark '?'.\n"
-        "- Do NOT ask multiple questions or use multiple question marks."
-    )
+    system_instruction = build_system_instruction(persona_id=persona_id, turn_number=turn_number, language=language)
     prompt = _build_prompt(
         essay_text=essay_text,
         summary=summary,

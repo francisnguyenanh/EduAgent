@@ -45,13 +45,23 @@ def _find_client_secret() -> Path | None:
 
 @functools.lru_cache(maxsize=1)
 def _credentials():
+    import json
+    import os
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
     import google.auth
 
     creds = None
-    if _TOKEN_PATH.exists():
+    token_json_env = os.getenv("SHEETS_TOKEN_JSON")
+    if token_json_env:
+        try:
+            creds_data = json.loads(token_json_env)
+            creds = Credentials.from_authorized_user_info(creds_data, SHEETS_SCOPES)
+        except Exception:
+            pass
+
+    if not creds and _TOKEN_PATH.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(_TOKEN_PATH), SHEETS_SCOPES)
         except Exception:

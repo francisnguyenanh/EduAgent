@@ -120,6 +120,7 @@ def _start_debate_from_essay_text(
     essay_text: str,
     *,
     student_id: str,
+    name: str = "",
     class_id: str = "",
     ocr_meta: dict | None = None,
     persona_id: str | None = None,
@@ -182,6 +183,7 @@ def _start_debate_from_essay_text(
         prior_weaknesses=prior_weaknesses,
         language=language,
         student_id=student_id,
+        name=name,
         class_id=class_id,
     )
     first_turn = step_debate_turn(session_id)
@@ -205,6 +207,7 @@ def start_debate(payload: DebateStartRequest) -> dict:
     return _start_debate_from_essay_text(
         payload.essay_text,
         student_id=payload.student_id,
+        name=payload.name,
         class_id=payload.class_id,
         persona_id=payload.persona_id,
     )
@@ -229,6 +232,7 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
     result = _start_debate_from_essay_text(
         ocr_result["transcribed_text"],
         student_id=payload.student_id,
+        name=payload.name,
         class_id=payload.class_id,
         ocr_meta={
             "confidence": ocr_result["confidence"],
@@ -250,6 +254,7 @@ def start_debate_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
     result = _start_debate_from_essay_text(
         essay_text,
         student_id=payload.student_id,
+        name=payload.name,
         class_id=payload.class_id,
         ocr_meta=None,
         persona_id=payload.persona_id,
@@ -519,6 +524,7 @@ __all__ = [
     "ClassSettingsRequest",
     "TestSheetsRequest",
     "ParentNoteRequest",
+    "get_debate_session",
     "start_debate",
     "start_debate_from_image",
     "start_debate_from_gdoc",

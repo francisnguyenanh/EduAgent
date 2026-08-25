@@ -74,12 +74,14 @@ TẦNG 2: Class Aggregator & Teacher Co-Pilot
 | **intake** | FunctionNode (deterministic) | Nhận input, phát hiện loại (text/image/gdoc), định tuyến |
 | **multimodal_ocr** | FunctionNode (Gemini Vision) | OCR bài viết tay thật, kiểm tra self-consistency 2-pass |
 | **sanitizer** | FunctionNode (regex) | Chống prompt injection, áp giới hạn kích thước đầu vào |
-| **summarizer** | AgentNode (Gemini Flash) | Trích xuất luận điểm chính và danh mục lỗi ngụy biện |
+| **summarizer** | FunctionNode (gọi Gemini Flash bên trong) | Trích xuất luận điểm chính và danh mục lỗi ngụy biện |
 | **persona_selector** | FunctionNode (deterministic) | Chọn persona tranh biện dựa trên lịch sử điểm số và lỗi mới |
-| **debate_loop** | AgentNode (Gemini Flash) | 3 lượt chất vấn Socratic với persona anchoring cứng |
+| **debate_loop** | FunctionNode (gọi Gemini Flash bên trong) | 3 lượt chất vấn Socratic với persona anchoring cứng |
 | **challenge_validator** | FunctionNode (ZERO LLM) | Kiểm duyệt đầu ra: chặn answer leak, đa câu hỏi, quá dài |
-| **cognitive_scorer** | AgentNode (Gemini Flash) | Chấm điểm 4 trục nhận thức argumentative |
+| **cognitive_scorer** | FunctionNode (gọi Gemini Flash bên trong) | Chấm điểm 4 trục nhận thức argumentative |
 | **profile_mutator** | FunctionNode (Firestore) | Ghi nhận đột biến hồ sơ tiến độ dài hạn của học sinh |
+
+> **Lưu ý kiến trúc (ĐỢT 12):** cả **9/9 node đều là `FunctionNode`** — trong toàn bộ `src/` không tồn tại một `AgentNode` nào (`grep -rn "AgentNode" src/` → 0 kết quả; xem `src/eduagent/graph/tier1_pipeline.py:26-34`). Bảng này trước đây ghi `summarizer`/`debate_loop`/`cognitive_scorer` là `AgentNode`, và đó là mô tả sai. Ba node đó *có* gọi Gemini, nhưng chúng gọi bên trong một Python function node do chính ta điều khiển — chứ không phải nhường quyền điều phối cho một agent node của framework. Đây chính là nguyên tắc **deterministic-first**: mỗi lần gọi LLM đều nằm trong một hàm có thể kiểm thử, có timeout/retry và có đường degrade tường minh. Nói đúng còn có lợi hơn nói sai.
 
 #### 4 Persona Tranh Biện (Socratic Personas)
 
@@ -113,14 +115,16 @@ Chứng minh bằng thực nghiệm định lượng trên chuỗi 3 bài luận
 
 ### 3.2 Đánh Giá Cải Thiện Đầu Ra (Learning-Outcome Delta Evaluation)
 
-Sự chuyển biến nhận thức thông qua vòng lặp **Metacognitive Self-Correction Loop** (Turn 3 $\rightarrow$ Rewrite Thesis) được lượng hóa thực tế trên 8 kịch bản lập luận phổ biến:
+**Cách đo (quan trọng, đọc trước khi trích số):** mỗi cặp luận điểm (bản yếu ↔ bản đã chỉnh sửa sau tranh biện Socratic) được đẩy qua **đúng đường production**: `summarize_essay()` → `score_essay()` gọi Gemini thật qua Vertex AI. Scorer chỉ thấy MỘT văn bản mỗi lần, không thấy câu hỏi Socratic, không được cho biết văn bản nào là bản chỉnh sửa — nên nó không thể suy ra rằng nó "nên" cho điểm cao hơn. Mọi số dưới đây là output của model, không có số nào gõ tay.
 
-* **Tỷ lệ cải thiện mục tiêu (Target Pass Rate):** **100% (8/8 kịch bản đánh giá)** cho thấy điểm cải thiện trên trục nhận thức bị chẩn đoán (không phải 8 học sinh thật riêng biệt — xem `docs/learning_outcome_eval.md` mục Methodology).
-* **Mức tăng điểm trung bình trên trục bị lỗi ($\Delta_{\text{targeted}}$):** **+5.62 / 10 điểm** (Ngưỡng kỳ vọng $> +3.0$).
-* **Mức tăng điểm trung bình toàn diện ($\Delta_{\text{overall}}$):** **+3.38 / 10 điểm** (Ngưỡng kỳ vọng $> +2.0$).
-* **Ví dụ chuyển biến (Evidence Quality):**
-  - *Trước:* *"Xe điện hoàn toàn sạch và không gây chút ô nhiễm nào."* (2/10 điểm - Lập luận cảm tính).
-  - *Sau:* *"Mặc dù xe điện không phát thải trực tiếp, nghiên cứu cho thấy lượng giảm carbon ròng đạt 40-60% tùy thuộc vào nguồn điện lưới là tái tạo hay hóa thạch."* (8/10 điểm - Đã qualified và có số liệu).
+* **Số kịch bản có cải thiện trên trục mục tiêu:** **7/8 (88%)** — kịch bản `AI in High School Classrooms` **không** cải thiện (1.0 → 1.0), và con số này được giữ nguyên trong báo cáo thay vì nới ngưỡng cho đủ 8/8.
+* **Mức tăng trung bình trên trục bị lỗi ($\Delta_{\text{targeted}}$):** **+2.75 / 10 điểm**.
+* **Mức tăng trung bình toàn diện ($\Delta_{\text{overall}}$):** **+2.05 / 10 điểm**.
+* **Ví dụ chuyển biến (Evidence Quality — số liệu do scorer thật chấm):**
+  - *Trước:* *"Electric cars are completely clean and produce zero pollution anywhere."* → đo được **0.5/10** ở trục `evidence_quality`.
+  - *Sau:* *"While EVs produce zero tailpipe emissions, lifecycle studies show a 40-60% net reduction..."* → đo được **2.5/10** (delta **+2.0**). Điểm tuyệt đối thấp vì đây là luận điểm 1 câu chấm bằng rubric essay — điều được đo là **delta**, không phải điểm tuyệt đối.
+* **Giới hạn phải nói rõ:** n = 8 cặp luận điểm do tác giả viết, **không phải 8 học sinh thật**; không có nhóm đối chứng; điểm LLM không tất định (lần chạy này lấy trung bình 2 lượt chấm/văn bản). Đây là phép đo **trên chính scorer**, không phải bằng chứng về mức tiến bộ của học sinh thật trong lớp. Xem `docs/learning_outcome_eval.md` mục "Measurement design & limitations".
+* **ĐỢT 12 — vì sao con số đổi từ +5.62 xuống +2.75:** bản trước của `scripts/evaluate_learning_outcomes.py` khai `before_scores`/`after_scores` là **hằng số gõ tay** rồi chỉ làm phép trừ; `+5.62` là trung bình của 16 số do chính tác giả chọn, không có bài luận nào được chấm và không có call LLM nào. Báo cáo cũ còn ghi "Chấm lại độc lập — PASS" cho một hành vi không tồn tại trong code. Nối vào scorer thật làm mất một nửa con số và mất 1/8 kịch bản — và đó mới là con số dùng được.
 
 ---
 
@@ -136,12 +140,14 @@ Sự chuyển biến nhận thức thông qua vòng lặp **Metacognitive Self-C
 
 ### 4.2 STRIDE Threat Modeling
 
-- **Spoofing (Giả mạo):** Định danh bằng HMAC-signed Scoped Access Token mang `class_id` và `role`.
-- **Tampering (Sửa đổi):** Logic chấm điểm và priority hoàn toàn chạy phía Server, không tin cậy client.
+- **Spoofing (Giả mạo):** HMAC-SHA256 Scoped Access Token mang `user_id`/`class_id`/`role`/`exp`. Khoá ký lấy từ Secret Manager; `auth.py` khiến tiến trình **từ chối khởi động** nếu đang chạy trên Cloud Run mà khoá vẫn là giá trị demo trong repo (ADR-016).
+- **Tampering (Sửa đổi):** Logic chấm điểm và priority chạy hoàn toàn phía server, không tin client; **và** 5 endpoint tranh biện của học sinh buộc token `role=student` chỉ nộp được cho chính `user_id` của mình — trước ĐỢT 12 chúng không có xác thực gì cả (ADR-018).
 - **Repudiation (Chối bỏ):** Ghi nhật ký event Pub/Sub với ID và Timestamp ISO UTC không thể thay đổi.
-- **Information Disclosure (Rò rỉ):** Cấm truy cập chéo (IDOR Prevention): App layer từ chối nếu `token.class_id != target.class_id`.
-- **Denial of Service (DoS):** Giới hạn cứng 3 lượt tranh luận (Hard Cap) và rate limiting input size.
-- **Elevation of Privilege (Leo thang):** Role-based access control (RBAC) nghiêm ngặt (`role == "teacher"` để vào dashboard).
+- **Information Disclosure (Rò rỉ):** Cấm truy cập chéo (IDOR Prevention): app layer từ chối nếu `token.class_id != target.class_id`. `/api/debate/turn` xác thực token **trước** khi tra session, nên không làm oracle dò `session_id`.
+- **Denial of Service (DoS):** Giới hạn cứng 3 lượt tranh biện (Hard Cap), cap kích thước input, **và token-bucket rate limiting theo IP** (`src/eduagent/rate_limit.py`, trả 429 + `Retry-After`). Bucket là **per-process**, nên trần thực tế là `N_instances × capacity` — chặn lạm dụng thường và ràng buộc chi phí, không phải rate limiter phân tán (ADR-017).
+- **Elevation of Privilege (Leo thang):** `role` nằm trong payload đã ký nên không sửa được mà không có khoá; RBAC kiểm `role == "teacher"` tại tầng route.
+
+> **Trung thực (ĐỢT 12):** hai dòng trong bảng này từng mô tả biện pháp **không có trong code** — "token bucket rate limiting" (grep ra 0 kết quả) và một khoá HMAC chưa từng được set khi deploy (service live ký token bằng chuỗi mặc định công khai trong repo, tức ai đọc repo cũng tự ký được token giáo viên cho lớp bất kỳ). Cả hai giờ đã được **implement thật** và có test bảo vệ (`tests/test_student_endpoint_auth.py`, 24 test).
 
 ### 4.3 Privacy & Regulatory Considerations (Cân nhắc Bảo mật & Pháp lý)
 
@@ -158,7 +164,7 @@ Sự chuyển biến nhận thức thông qua vòng lặp **Metacognitive Self-C
 - **Giải pháp:** Chạy OCR 2 lần độc lập. So sánh khoảng cách văn bản (difflib ratio $< 0.75$). Nếu bất nhất, hạ confidence xuống `low`, chuyển bài luận vào hàng đợi giáo viên phê duyệt (`pending_essays`), không ghi điểm sai vào profile.
 
 ### 5.2 Giáo Án 15 Phút Tự Động (Actionable Mini-Lesson Plan)
-- Khi phát hiện lỗi lập luận hệ thống chung của cả lớp ($\ge 3$ học sinh cùng mắc), Class Aggregator tự động tạo cấu trúc:
+- Khi phát hiện lỗi lập luận hệ thống chung của cả lớp ($\ge 2$ học sinh **khác nhau** cùng mắc — xem `priority_engine.MIN_STUDENTS_FOR_COMMON_FALLACY`; đếm theo học sinh, không theo bài luận, nên 1 em lặp lỗi 5 lần không bị tính thành 5 em), Class Aggregator tự động tạo cấu trúc:
   - Tên chủ đề dạy lại.
   - Mục tiêu sư phạm rõ ràng.
   - Hoạt động 3 bước chi tiết trên lớp.
@@ -170,7 +176,7 @@ Sự chuyển biến nhận thức thông qua vòng lặp **Metacognitive Self-C
 
 ---
 
-## PHẦN 6: 4-LAYER DETERMINISTIC ADK EVAL SUITE (50/50 PASS)
+## PHẦN 6: 4-LAYER DETERMINISTIC ADK EVAL SUITE (50/50 deterministic test cases passed)
 
 Không dùng mô hình LLM-as-judge (tránh rủi ro Reward Hacking). Kiểm thử bằng các hàm logic tất định và string signature đối chiếu với code sản xuất.
 
@@ -249,7 +255,7 @@ Hệ thống tuân thủ 16 Quyết định Kiến trúc ghi nhận trực tiế
 
 ### Slide 6: Metacognitive Self-Correction Loop & Delta Scoring
 - Đo lường thực chất bước nhảy nhận thức: $\Delta = \text{Score}_{\text{after}} - \text{Score}_{\text{before}}$.
-- Kết quả thực nghiệm: Mức tăng điểm trung bình đạt $+5.62/10$ trên trục bị lỗi.
+- Kết quả đo thật (scorer production, Vertex AI): tăng trung bình $+2.75/10$ trên trục bị lỗi, 7/8 kịch bản có cải thiện. n = 8 cặp luận điểm mẫu, không phải 8 học sinh thật.
 
 ### Slide 7: Tier 2: Teacher Co-Pilot Dashboard
 - Bảng ưu tiên can thiệp Intervention Priority Index bằng thuật toán tất định.
@@ -259,7 +265,7 @@ Hệ thống tuân thủ 16 Quyết định Kiến trúc ghi nhận trực tiế
 - Gmail Draft Creator (HITL Gate): Giáo viên kiểm duyệt thủ công trước khi gửi.
 - HMAC-signed scoped tokens (IDOR Prevention) và AST-based code guard.
 
-### Slide 9: 4-Layer Deterministic Eval Suite (50/50 PASS)
+### Slide 9: 4-Layer Deterministic Eval Suite (50/50 deterministic test cases passed)
 - 50 test case bao phủ toàn diện: An ninh, Hành vi Persona, Trí nhớ dài hạn, và Đầu ra học tập. 100% tất định, loại bỏ rủi ro LLM-as-judge.
 
 ### Slide 10: GCP Evidence & Live Demo

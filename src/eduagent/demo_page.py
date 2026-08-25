@@ -343,7 +343,12 @@ async function autoLogin(userId, role, displayName) {
   } catch (e) {
     console.error('Auto-login error:', e);
   }
+  // ĐỢT 12 NHÓM 2: the debate endpoints now require a Bearer token (they used
+  // to accept any caller-supplied student_id). A tokenless fallback identity
+  // therefore cannot do anything except collect 401s -- so say so plainly
+  // instead of leaving the page looking mysteriously broken.
   auth = {role: role, user_id: userId, class_id: userId.split('_')[0] || 'c1', display_name: displayName || userId, token: ''};
+  alert('Could not sign in (the server may be unreachable or rate-limited). Debate actions need a valid session token, so please retry in a moment.');
   return false;
 }
 
@@ -618,7 +623,7 @@ async function startDebate() {
     if (gdocUrl) {
       resp = await fetch('/api/debate/start-with-gdoc', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders(),
         body: JSON.stringify({gdoc_url: gdocUrl, student_id: studentId, name: auth.display_name, class_id: auth.class_id}),
       });
     } else if (imageFile || presetImageBase64) {
@@ -626,7 +631,7 @@ async function startDebate() {
       const mimeType = imageFile ? (imageFile.type || 'image/jpeg') : 'image/jpeg';
       resp = await fetch('/api/debate/start-with-image', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders(),
         body: JSON.stringify({
           image_base64: imageBase64,
           image_mime_type: mimeType,
@@ -636,7 +641,7 @@ async function startDebate() {
     } else {
       resp = await fetch('/api/debate/start', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders(),
         body: JSON.stringify({
           essay_text: document.getElementById('essay_text').value,
           student_id: studentId,
@@ -703,7 +708,7 @@ async function sendReply() {
   try {
     const resp = await fetch('/api/debate/turn', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: authHeaders(),
       body: JSON.stringify({session_id: sessionId, student_reply: replyText}),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
@@ -843,7 +848,7 @@ async function submitReflection() {
     const fallacy = (lastExtractedSummary && lastExtractedSummary.fallacies_draft && lastExtractedSummary.fallacies_draft[0]) || 'Hasty generalization in initial premise';
     const resp = await fetch('/api/debate/reflect', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: authHeaders(),
       body: JSON.stringify({
         student_id: auth ? auth.user_id : 'c1_stu01',
         class_id: auth ? auth.class_id : 'c1',

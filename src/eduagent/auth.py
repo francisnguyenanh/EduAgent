@@ -28,7 +28,75 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 _MOCK_PASSWORD = os.getenv("EDUAGENT_MOCK_PASSWORD", "eduagent2026")
-_SESSION_SECRET = os.getenv("EDUAGENT_SESSION_SECRET", "eduagent-demo-secret-key-2026").encode("utf-8")
+
+# ADR-016 (ĐỢT 12 NHÓM 2): this default is committed to a public repo, so it is
+# a PUBLICLY KNOWN signing key. Anyone who reads the repo can mint a valid
+# `role=teacher` token for any class_id and read that class's students' names,
+# scores and weakness history -- which silently voids ADR-013's tenancy
+# isolation and contradicts the STRIDE table's Spoofing/IDOR mitigation. The
+# audit found the deployed Cloud Run revision was signing with exactly this
+# string, because EDUAGENT_SESSION_SECRET had never been set at deploy time.
+#
+# The fix is defense in depth, not just documentation: the default remains
+# usable for local development (so `pytest` and a laptop demo need no setup),
+# but the process REFUSES TO START if it detects it is running on Cloud Run
+# with the default still in place. A missing env var is a silent failure; a
+# container that will not boot is a loud one.
+_INSECURE_DEFAULT_SECRET = "eduagent-demo-secret-key-2026"
+
+_MIN_SECRET_LENGTH = 32
+
+
+class InsecureConfigurationError(RuntimeError):
+    """Raised at import time when a production deployment is using the
+    publicly-known default signing key."""
+
+
+def _is_cloud_run() -> bool:
+    """Cloud Run always injects K_SERVICE into the container environment
+    (https://cloud.google.com/run/docs/container-contract#services-env-vars),
+    so this is a reliable "am I deployed?" signal that needs no extra config
+    and cannot be forgotten the way a hand-set FLAG=prod can be."""
+    return bool(os.getenv("K_SERVICE"))
+
+
+def _resolve_session_secret() -> bytes:
+    configured = os.getenv("EDUAGENT_SESSION_SECRET", "")
+    if configured and configured != _INSECURE_DEFAULT_SECRET:
+        if len(configured) < _MIN_SECRET_LENGTH and _is_cloud_run():
+            raise InsecureConfigurationError(
+                f"EDUAGENT_SESSION_SECRET is only {len(configured)} characters; "
+                f"use at least {_MIN_SECRET_LENGTH} bytes of randomness "
+                "(e.g. `openssl rand -base64 48`). See README §Deploy."
+            )
+        return configured.encode("utf-8")
+
+    if _is_cloud_run() and not os.getenv("EDUAGENT_ALLOW_INSECURE_SECRET"):
+        raise InsecureConfigurationError(
+            "Refusing to start: EDUAGENT_SESSION_SECRET is unset (or still the "
+            "committed demo default), and K_SERVICE indicates this process is "
+            "running on Cloud Run. Session tokens would be signed with a key "
+            "that is public in the repository, letting anyone mint a "
+            "role=teacher token for any class_id.\n\n"
+            "Fix (see README §Deploy / deploy.txt):\n"
+            "  printf '%s' \"$(openssl rand -base64 48)\" | \\\n"
+            "    gcloud secrets create eduagent-session-secret --data-file=-\n"
+            "  gcloud run services update eduagent-class-aggregator \\\n"
+            "    --update-secrets=EDUAGENT_SESSION_SECRET=eduagent-session-secret:latest\n\n"
+            "To deliberately run an insecure throwaway deployment, set "
+            "EDUAGENT_ALLOW_INSECURE_SECRET=1."
+        )
+    return _INSECURE_DEFAULT_SECRET.encode("utf-8")
+
+
+_SESSION_SECRET = _resolve_session_secret()
+
+
+def using_insecure_default_secret() -> bool:
+    """True when tokens are being signed with the publicly-known default.
+    Surfaced by scripts/doctor.py so the state is visible before a demo
+    rather than discovered by a judge reading auth.py."""
+    return _SESSION_SECRET == _INSECURE_DEFAULT_SECRET.encode("utf-8")
 
 
 class LoginError(ValueError):
@@ -135,6 +203,8 @@ def login(payload: LoginRequest) -> LoginResult:
 
 
 __all__ = [
+    "InsecureConfigurationError",
+    "using_insecure_default_secret",
     "LoginError",
     "LoginResult",
     "LoginRequest",

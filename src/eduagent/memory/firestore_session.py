@@ -2,9 +2,42 @@
 
 Solves the multi-instance Cloud Run session state problem:
 - Persists live debate sessions to Firestore collection `debate_sessions/{session_id}`
-- Supports Firestore TTL policies via `expire_at` timestamp
-- Transparent local in-memory caching to minimize Firestore read latency
-- Resilient fallback to memory if Firestore is unavailable
+- Firestore is the SOURCE OF TRUTH; the in-memory tier is a short-lived read cache
+- Supports Firestore TTL deletion via the `expire_at` timestamp
+- Falls back to the local tier if Firestore is unavailable
+
+ĐỢT 12 NHÓM 4 -- the bug this file used to have, and why the fix looks like this
+--------------------------------------------------------------------------------
+`load_session()` previously returned any cached entry whose *session* TTL (24h)
+had not passed, before ever consulting Firestore, with no versioning or
+invalidation. In a multi-instance deployment that loses debate turns:
+
+    Turn 1 -> instance A     : writes {turns: [t1]}, caches {turns: [t1]}
+    Turn 2 -> instance B     : loads from Firestore, writes {turns: [t1, t2]}
+    Turn 3 -> instance A     : cache entry is still ~minutes old and thus "valid",
+                               so it HITS the stale {turns: [t1]} -- t2 vanishes,
+                               and the subsequent save_session() writes that
+                               stale state back over Firestore.
+
+So ADR-015 had narrowed the failure window without closing it: the store was
+durable, but reads did not prefer the durable copy. The fix is to make the cache
+honest about what it is -- a coalescing cache for near-simultaneous reads, not a
+session store. Entries are trusted for `_CACHE_FRESHNESS_SECONDS` (3s) only;
+past that, every read goes to Firestore.
+
+Why 3 seconds rather than a version counter: a debate turn is gated on a human
+typing a reply, so consecutive turns are seconds-to-minutes apart and always
+re-read Firestore. The only reads that land inside a 3s window are the ones in a
+single request's own call chain (`get_debate_session()` is called more than once
+per request), which is exactly what the cache should absorb. A `version` field
+would also work but adds a compare-and-set protocol to every write for a race
+that a 3s bound already removes.
+
+Remaining known limitation (stated rather than hidden): two requests for the SAME
+session arriving at two instances inside the same ~3s window can still interleave
+their read-modify-write. That needs a Firestore transaction or an optimistic
+version check on `save_session()`. It is not reachable through the UI, which
+cannot submit the next turn before the current one responds.
 """
 
 from __future__ import annotations
@@ -16,9 +49,15 @@ from datetime import datetime, timedelta, timezone
 
 _logger = logging.getLogger(__name__)
 
-_DEFAULT_SESSION_TTL_SECONDS = 24 * 60 * 60  # 24 hours
+_DEFAULT_SESSION_TTL_SECONDS = 24 * 60 * 60  # 24 hours -- matches the Firestore TTL policy
 
-# In-memory local cache: {session_id: {"data": dict, "expires_at": float}}
+# How long a locally cached copy may be served without re-reading Firestore.
+# This is deliberately far shorter than the session TTL: see the module docstring.
+_CACHE_FRESHNESS_SECONDS = 3.0
+
+# In-memory local cache:
+#   {session_id: {"data": dict, "cached_at": float, "expires_at": float}}
+# `cached_at` bounds cache freshness; `expires_at` bounds session lifetime.
 _LOCAL_SESSION_CACHE: dict[str, dict] = {}
 
 
@@ -33,79 +72,111 @@ def _clean_expired_local_sessions() -> None:
         _LOCAL_SESSION_CACHE.pop(sid, None)
 
 
-def save_session(session_id: str, data: dict, ttl_seconds: int = _DEFAULT_SESSION_TTL_SECONDS) -> None:
-    """Saves session state to both local in-memory cache and Firestore."""
+def _cache_put(session_id: str, data: dict, ttl_seconds: int = _DEFAULT_SESSION_TTL_SECONDS) -> None:
+    now = time.time()
+    _LOCAL_SESSION_CACHE[session_id] = {
+        "data": data,
+        "cached_at": now,
+        "expires_at": now + ttl_seconds,
+    }
+
+
+def save_session(session_id: str, data: dict, ttl_seconds: int = _DEFAULT_SESSION_TTL_SECONDS, *, client=None) -> None:
+    """Saves session state to Firestore and refreshes the local cache.
+
+    `client` is injectable so tests can assert the write really happens with the
+    right payload (ĐỢT 12 NHÓM 4: previously the only way to keep tests off real
+    Firestore was the PYTEST_CURRENT_TEST early-return below, which meant no test
+    covered this code path at all).
+    """
     now_dt = datetime.now(timezone.utc)
     expire_dt = now_dt + timedelta(seconds=ttl_seconds)
 
-    # 1. Update local cache
     _clean_expired_local_sessions()
-    _LOCAL_SESSION_CACHE[session_id] = {
-        "data": data,
-        "expires_at": time.time() + ttl_seconds,
-    }
+    _cache_put(session_id, data, ttl_seconds)
 
-    # 2. Persist to Firestore if not disabled in unit tests
-    if _is_testing():
+    db = client or _default_client()
+    if db is None:
         return
 
     try:
-        from eduagent.memory.firestore_memory import _client
-
         payload = dict(data)
         payload["_session_id"] = session_id
         payload["_updated_at"] = now_dt.isoformat()
-        payload["expire_at"] = expire_dt  # Firestore TTL field
+        payload["expire_at"] = expire_dt  # consumed by the Firestore TTL policy (deploy.txt STEP 2)
 
-        _client().collection("debate_sessions").document(session_id).set(payload)
+        db.collection("debate_sessions").document(session_id).set(payload)
     except Exception as exc:
+        # Non-fatal: the local tier still holds the session, so the current
+        # request succeeds. It degrades to single-instance behaviour, which is
+        # strictly better than failing the student's debate outright.
         _logger.warning(f"Could not persist session {session_id} to Firestore: {exc}")
 
 
-def load_session(session_id: str) -> dict | None:
-    """Loads session from local cache or Firestore."""
-    # 1. Check local cache
+def load_session(session_id: str, *, client=None) -> dict | None:
+    """Loads a session, preferring Firestore as the source of truth.
+
+    The local cache is consulted only if the entry is younger than
+    `_CACHE_FRESHNESS_SECONDS`. If Firestore is unreachable, a stale cached copy
+    is returned as a last resort -- losing a debate to an infrastructure blip is
+    worse than serving state that is a few minutes old on one instance.
+    """
     cached = _LOCAL_SESSION_CACHE.get(session_id)
-    if cached and cached.get("expires_at", 0) > time.time():
+    now = time.time()
+    cache_is_live = bool(cached) and cached.get("expires_at", 0) > now
+    if cache_is_live and (now - cached.get("cached_at", 0)) < _CACHE_FRESHNESS_SECONDS:
         return cached.get("data")
 
-    # 2. Query Firestore
-    if _is_testing():
-        return None
+    db = client or _default_client()
+    if db is None:
+        return cached.get("data") if cache_is_live else None
 
     try:
-        from eduagent.memory.firestore_memory import _client
-
-        doc = _client().collection("debate_sessions").document(session_id).get()
+        doc = db.collection("debate_sessions").document(session_id).get()
         if doc.exists:
             data = doc.to_dict() or {}
-            # Strip metadata fields
-            data.pop("_session_id", None)
-            data.pop("_updated_at", None)
-            data.pop("expire_at", None)
-
-            # Warm local cache
-            _LOCAL_SESSION_CACHE[session_id] = {
-                "data": data,
-                "expires_at": time.time() + _DEFAULT_SESSION_TTL_SECONDS,
-            }
+            for meta_field in ("_session_id", "_updated_at", "expire_at"):
+                data.pop(meta_field, None)
+            _cache_put(session_id, data)
             return data
+        # Authoritatively absent (e.g. end_debate_session deleted it): drop any
+        # local copy so this instance stops resurrecting a finished session.
+        _LOCAL_SESSION_CACHE.pop(session_id, None)
+        return None
     except Exception as exc:
         _logger.warning(f"Could not load session {session_id} from Firestore: {exc}")
+        return cached.get("data") if cache_is_live else None
 
-    return None
 
-
-def delete_session(session_id: str) -> None:
+def delete_session(session_id: str, *, client=None) -> None:
     """Deletes session from local cache and Firestore."""
     _LOCAL_SESSION_CACHE.pop(session_id, None)
 
-    if _is_testing():
+    db = client or _default_client()
+    if db is None:
         return
 
     try:
-        from eduagent.memory.firestore_memory import _client
-
-        _client().collection("debate_sessions").document(session_id).delete()
+        db.collection("debate_sessions").document(session_id).delete()
     except Exception as exc:
         _logger.warning(f"Could not delete session {session_id} from Firestore: {exc}")
+
+
+def _default_client():
+    """The real Firestore client, or None when no client should be used.
+
+    Returns None under pytest so a test that does not inject a fake client stays
+    offline. Tests that DO care about the Firestore path inject one explicitly
+    (see tests/test_firestore_session.py) -- that is the ĐỢT 12 NHÓM 4 fix for
+    "the durable path had no test coverage because it was switched off by an
+    environment variable".
+    """
+    if _is_testing():
+        return None
+    try:
+        from eduagent.memory.firestore_memory import _client
+
+        return _client()
+    except Exception as exc:
+        _logger.warning(f"Firestore client unavailable: {exc}")
+        return None

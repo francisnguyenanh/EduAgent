@@ -43,6 +43,7 @@ from eduagent.api import (
     ParentNoteRequest,
     UnknownSessionError,
     class_priority,
+    get_debate_session,
     get_settings,
     login,
     parent_note,
@@ -60,6 +61,7 @@ from eduagent.config import PUBSUB
 from eduagent.demo_page import DEMO_PAGE_HTML
 from eduagent.logging_config import configure_json_logging
 from eduagent.memory.firestore_memory import list_students_by_class
+from eduagent.rate_limit import RateLimitExceeded, client_key, debate_limiter, login_limiter
 
 configure_json_logging()
 _logger = logging.getLogger(__name__)
@@ -106,18 +108,28 @@ def _verify_pubsub_push_auth(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="OIDC token not issued to the expected push service account.")
 
 
-def _verify_class_auth(class_id: str, authorization: str | None, required_role: str | None = None) -> dict:
-    """ĐỢT 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
-    for the exact class_id in the URL path, and verifies role if required."""
+def _require_token(authorization: str | None) -> dict:
+    """Verifies the Bearer token's signature and expiry only -- no class or role
+    check. Split out so a route can establish "this caller is authenticated at
+    all" BEFORE doing any lookup whose result would leak information. A test
+    caught the concrete case: `/api/debate/turn` resolved the session first, so
+    an anonymous caller got 404 for an unknown session and 403 for a real one --
+    an oracle for probing which session_ids exist."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required: missing or invalid Bearer token.")
     token = authorization.split(" ", 1)[1].strip()
     try:
-        claims = verify_access_token(token)
+        return verify_access_token(token)
     except LoginError as exc:
         raise HTTPException(status_code=401, detail=f"Invalid authentication token: {exc}")
     except Exception:
         raise HTTPException(status_code=401, detail="Failed to verify authentication token.")
+
+
+def _verify_class_auth(class_id: str, authorization: str | None, required_role: str | None = None) -> dict:
+    """ĐỢT 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
+    for the exact class_id in the URL path, and verifies role if required."""
+    claims = _require_token(authorization)
 
     if claims.get("class_id") != class_id:
         raise HTTPException(
@@ -132,6 +144,69 @@ def _verify_class_auth(class_id: str, authorization: str | None, required_role: 
     return claims
 
 
+def _verify_student_auth(*, student_id: str, class_id: str, authorization: str | None) -> dict:
+    """ĐỢT 12 NHÓM 2 / ADR-018: authorizes a student-facing debate action.
+
+    Before this existed, all five debate endpoints (`start`, `start-with-image`,
+    `start-with-gdoc`, `turn`, `reflect`) took an arbitrary caller-supplied
+    `student_id` and `class_id` with NO token check at all, while every
+    `/api/classes/*` route was properly gated. Two concrete consequences the
+    audit identified, on a public `--allow-unauthenticated` URL:
+      1. Anyone could POST as any student in any class, writing junk into that
+         student's Firestore profile and publishing a Pub/Sub event that skews
+         the teacher's intervention ranking -- an integrity attack on a third
+         party's record, not just a nuisance.
+      2. Each call fans out into several Gemini requests, so the endpoints were
+         an unauthenticated, unmetered spend channel (cost-DoS).
+
+    Authorization rules:
+      - a `student` token may only act as ITSELF (`user_id == student_id`), which
+        is what stops student A from writing into student B's profile;
+      - a `teacher` token for the same class is also accepted, since a teacher
+        demonstrating or reproducing a student's debate is a legitimate action
+        and is already trusted with that class's data;
+      - the token's `class_id` must match the target class either way (the same
+        tenancy boundary ADR-013 established for the teacher routes).
+    """
+    effective_class_id = class_id or (student_id.split("_", 1)[0] if "_" in student_id else "")
+    if not effective_class_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot determine class for student_id={student_id!r} -- expected '<class_id>_<local_id>' or an explicit class_id.",
+        )
+
+    claims = _verify_class_auth(effective_class_id, authorization)
+    role = claims.get("role")
+
+    if role == "student" and claims.get("user_id") != student_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: a student token may only submit work for its own student_id.",
+        )
+    if role not in ("student", "teacher"):
+        raise HTTPException(status_code=403, detail=f"Forbidden: role {role!r} cannot start or advance a debate.")
+    return claims
+
+
+def _enforce_rate_limit(request: Request, limiter) -> None:
+    """Applies the token-bucket limiter (rate_limit.py) keyed by client IP.
+    See that module's docstring for the honest scope of this mitigation --
+    it is per-instance, not distributed."""
+    key = client_key(
+        x_forwarded_for=request.headers.get("x-forwarded-for"),
+        peer_host=request.client.host if request.client else None,
+    )
+    try:
+        limiter.check(key)
+    except RateLimitExceeded as exc:
+        _logger.warning("Rate limit exceeded", extra={"client_key": key, "path": request.url.path})
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many requests. Retry in {exc.retry_after_seconds}s.",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
+
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/demo", response_class=HTMLResponse)
 async def demo_page() -> HTMLResponse:
@@ -144,7 +219,10 @@ async def demo_page() -> HTMLResponse:
 
 
 @app.post("/api/auth/login")
-async def api_login(payload: LoginRequest) -> dict:
+async def api_login(request: Request, payload: LoginRequest) -> dict:
+    # Rate-limited because this is the brute-force surface for the shared demo
+    # password (auth.py's EDUAGENT_MOCK_PASSWORD).
+    _enforce_rate_limit(request, login_limiter)
     try:
         return login(payload)
     except LoginError as exc:
@@ -207,7 +285,9 @@ async def api_parent_note(payload: ParentNoteRequest, authorization: str | None 
 
 
 @app.post("/api/debate/start")
-async def api_debate_start(payload: DebateStartRequest) -> dict:
+async def api_debate_start(request: Request, payload: DebateStartRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
     try:
         return start_debate(payload)
     except ValueError as exc:
@@ -218,7 +298,9 @@ async def api_debate_start(payload: DebateStartRequest) -> dict:
 
 
 @app.post("/api/debate/start-with-image")
-async def api_debate_start_with_image(payload: DebateStartFromImageRequest) -> dict:
+async def api_debate_start_with_image(request: Request, payload: DebateStartFromImageRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
     try:
         return start_debate_from_image(payload)
     except ValueError as exc:
@@ -229,7 +311,9 @@ async def api_debate_start_with_image(payload: DebateStartFromImageRequest) -> d
 
 
 @app.post("/api/debate/start-with-gdoc")
-async def api_debate_start_with_gdoc(payload: DebateStartFromGDocRequest) -> dict:
+async def api_debate_start_with_gdoc(request: Request, payload: DebateStartFromGDocRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
     try:
         return start_debate_from_gdoc(payload)
     except PermissionError as exc:
@@ -242,7 +326,25 @@ async def api_debate_start_with_gdoc(payload: DebateStartFromGDocRequest) -> dic
 
 
 @app.post("/api/debate/turn")
-async def api_debate_turn(payload: DebateTurnRequest) -> dict:
+async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    # This payload carries only a session_id, so ownership is resolved from the
+    # session's own stored student_id/class_id -- otherwise anyone holding a
+    # guessed session_id could drive someone else's debate to completion and
+    # have the result written into that student's profile.
+    #
+    # Authenticate BEFORE the session lookup: otherwise an anonymous caller
+    # distinguishes real session_ids (403) from fake ones (404).
+    _require_token(request.headers.get("authorization"))
+    try:
+        session = get_debate_session(payload.session_id)
+    except UnknownSessionError:
+        raise HTTPException(status_code=404, detail=f"Unknown session_id: {payload.session_id!r}")
+    _verify_student_auth(
+        student_id=session.get("student_id", ""),
+        class_id=session.get("class_id", ""),
+        authorization=request.headers.get("authorization"),
+    )
     try:
         return submit_debate_turn(payload)
     except UnknownSessionError:
@@ -254,9 +356,14 @@ async def api_debate_turn(payload: DebateTurnRequest) -> dict:
 
 
 @app.post("/api/debate/reflect")
-async def api_debate_reflect(payload: DebateReflectionRequest) -> dict:
+async def api_debate_reflect(request: Request, payload: DebateReflectionRequest) -> dict:
     """ĐỢT 7: Metacognitive self-correction loop -- evaluates the student's
     post-debate revised claim and updates their profile with growth bonus."""
+    _enforce_rate_limit(request, debate_limiter)
+    # This route WRITES a growth bonus into a student profile, so it needs the
+    # same ownership check as the debate routes -- otherwise anyone could
+    # inflate any student's breakthrough_count.
+    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
     try:
         return submit_reflection(payload)
     except ValueError as exc:

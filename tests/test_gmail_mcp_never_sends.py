@@ -48,3 +48,23 @@ def test_gmail_mcp_only_exports_draft_creation():
         f"gmail_mcp.py exports unexpected public functions: {public_functions}. "
         "Only draft creation should be exposed from this module."
     )
+
+
+def test_gmail_mcp_credentials_from_env(monkeypatch):
+    import json
+    from datetime import datetime, timezone, timedelta
+    sample_token = {
+        "token": "fake-token",
+        "refresh_token": "fake-refresh-token",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "client_id": "fake-client-id",
+        "client_secret": "fake-client-secret",
+        "scopes": ["https://www.googleapis.com/auth/gmail.compose"],
+        "expiry": (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    monkeypatch.setenv("GMAIL_COMPOSE_TOKEN_JSON", json.dumps(sample_token))
+    gmail_mcp._credentials.cache_clear()
+    creds = gmail_mcp._credentials()
+    assert creds is not None
+    assert creds.token == "fake-token"
+    gmail_mcp._credentials.cache_clear()

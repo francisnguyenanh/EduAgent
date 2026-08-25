@@ -1,8 +1,8 @@
 {
   "overall": {
     "total": 50,
-    "passed": 50,
-    "pass_rate": 1.0
+    "passed": 48,
+    "pass_rate": 0.96
   },
   "layers": {
     "Layer 1: Safety & Security": {
@@ -12,8 +12,8 @@
     },
     "Layer 2: Behavioral Discipline": {
       "total": 15,
-      "passed": 15,
-      "pass_rate": 1.0
+      "passed": 13,
+      "pass_rate": 0.8667
     },
     "Layer 3: Long-Term Memory": {
       "total": 10,
@@ -225,9 +225,9 @@
     {
       "id": "persona-skeptic",
       "layer": "Layer 2: Behavioral Discipline",
-      "group": "persona_fidelity",
+      "group": "persona_fidelity_live",
       "passed": true,
-      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none",
+      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none | LIVE: live signature matched on turns [1, 2, 3] (need >= 2 of 3); validator failures on turns none",
       "raw_output": {
         "persona": "skeptic",
         "focus": "evidence_quality",
@@ -235,15 +235,27 @@
           1,
           2,
           3
-        ]
+        ],
+        "live": {
+          "questions": [
+            "How do you know that your little brother's grade improvement was actually caused by playing fewer video games, rather than other potential factors like a change in his curriculum, better sleep, or different teaching styles?",
+            "Since your entire argument relies on a handful of personal observations of your brother and friends, how can you be sure that their experiences aren't just isolated cases rather than a general truth that applies to the millions of other teenagers worldwide?",
+            "Given that your evidence is entirely anecdotal and you now admit your concerns may only apply to specific \"violent or addictive\" games played for long hours, do you still stand by your original thesis that all video games should be banned for teenagers, or how exactly would you now revise your main claim to make it a defensible argument?"
+          ],
+          "matched_turns": [
+            1,
+            2,
+            3
+          ]
+        }
       }
     },
     {
       "id": "persona-devils_advocate",
       "layer": "Layer 2: Behavioral Discipline",
-      "group": "persona_fidelity",
-      "passed": true,
-      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none",
+      "group": "persona_fidelity_live",
+      "passed": false,
+      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none | LIVE: live signature matched on turns [] (need >= 2 of 3); validator failures on turns none",
       "raw_output": {
         "persona": "devils_advocate",
         "focus": "counterargument_handling",
@@ -251,15 +263,23 @@
           1,
           2,
           3
-        ]
+        ],
+        "live": {
+          "questions": [
+            "If millions of teenagers around the world play video games daily while maintaining excellent academic records and non-violent behavior, how can we justify a complete ban based solely on the personal struggles of your brother and acquaintances?",
+            "Since you concede that your proposal relies entirely on your personal circle rather than scientific data, how can we possibly justify using the law to restrict the freedom of millions of teenagers worldwide based solely on the private struggles of your brother and friends?",
+            "Since you have now shifted from demanding a complete ban on all video games for teenagers to only restricting \"really violent or addictive ones\" played for \"a lot of hours,\" are you officially abandoning your original thesis, and if so, how exactly would you revise your main claim to reflect what you now believe is a defensible policy?"
+          ],
+          "matched_turns": []
+        }
       }
     },
     {
       "id": "persona-nitpicker",
       "layer": "Layer 2: Behavioral Discipline",
-      "group": "persona_fidelity",
-      "passed": true,
-      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none",
+      "group": "persona_fidelity_live",
+      "passed": false,
+      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none | LIVE: live signature matched on turns [2] (need >= 2 of 3); validator failures on turns none",
       "raw_output": {
         "persona": "nitpicker",
         "focus": "logical_coherence",
@@ -267,15 +287,25 @@
           1,
           2,
           3
-        ]
+        ],
+        "live": {
+          "questions": [
+            "How can we be certain that your brother's improved grades were directly caused by his decrease in gaming, rather than by other potential factors like a change in course difficulty, study habits, or sleep?",
+            "Since you acknowledge your evidence is limited to a handful of personal observations, how can you logically justify using the behavior of this tiny, self-selected group to mandate a sweeping, universal ban on video games for millions of teenagers whose circumstances may be entirely different?",
+            "Since you have shifted from advocating a universal ban to targeting only \"really violent or addictive\" games played for \"a lot of hours,\" will you now explicitly state how you are revising your original thesis, or do you still maintain that all video games should be banned for teenagers?"
+          ],
+          "matched_turns": [
+            2
+          ]
+        }
       }
     },
     {
       "id": "persona-expander",
       "layer": "Layer 2: Behavioral Discipline",
-      "group": "persona_fidelity",
+      "group": "persona_fidelity_live",
       "passed": true,
-      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none",
+      "detail": "production builder injects anchor on turns [1, 2, 3] (need [1, 2, 3]); signature match=True; anchor unique=True; confusable with=none | LIVE: live signature matched on turns [1, 2] (need >= 2 of 3); validator failures on turns none",
       "raw_output": {
         "persona": "expander",
         "focus": "scope_awareness",
@@ -283,7 +313,18 @@
           1,
           2,
           3
-        ]
+        ],
+        "live": {
+          "questions": [
+            "Does your proposal for a complete ban on video games still hold if we consider educational games that teach strategy and coding, or cooperative games that help isolated teenagers build vital social connections?",
+            "If your proposal for a complete ban relies on your personal observations of your immediate circle, does that justification still hold when we look at teenagers in vastly different circumstances, such as those with physical disabilities who rely on specialized gaming for cognitive therapy and social connection, or those in marginalized communities who use it as a safe, low-cost alternative to unsafe streets?",
+            "Given your recognition that the issue is limited to violent or addictive games played excessively rather than gaming itself, how exactly would you now revise your original proposal for a total ban on video games for teenagers to reflect these crucial distinctions?"
+          ],
+          "matched_turns": [
+            1,
+            2
+          ]
+        }
       }
     },
     {

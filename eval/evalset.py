@@ -9,7 +9,15 @@ Design Principle (ZERO LLM-as-Judge):
   - Layer 1: Safety & Security (15 cases: Answer Leak, Injection, Tenancy IDOR)
   - Layer 2: Behavioral Discipline (15 cases: Persona Fidelity, Single Question, Bounds, Escalation)
   - Layer 3: Long-Term Memory (10 cases: Streak Breaking, Taxonomy Deduplication, Score Trends, Context Injection)
-  - Layer 4: Learning Outcomes (10 cases: Metacognitive Delta Scoring, Fallacy Resolution)
+  - Layer 4: Learning Outcomes (10 cases: 6 against the real metacognitive
+    growth logic, 4 against the measured learning-outcome artifact)
+
+ĐỢT 12 NHÓM 1 correction: Layer 4 previously carried 8 cases whose `before`
+and `after` values were integer literals declared in this file, and whose
+runner asserted `after - before >= 4`. Those cases passed unconditionally --
+they were arithmetic on constants, not tests of the system. They have been
+replaced by assertions against real production functions and against the
+measured artifact written by scripts/evaluate_learning_outcomes.py.
 """
 
 from __future__ import annotations
@@ -159,7 +167,11 @@ PERSONA_FIDELITY_CASES = [
         "essay": _PERSONA_FIDELITY_ESSAY,
         "summary": _PERSONA_FIDELITY_SUMMARY,
         "student_replies": _PERSONA_FIDELITY_REPLIES,
-        "signature_keywords": ["context", "different", "still hold", "every", "case", "exception", "apply", "generaliz"],
+        # ĐỢT 12: "every"/"case"/"apply" were removed -- they are generic enough
+        # to appear in the Skeptic's and Devil's Advocate's anchors too, which
+        # made this persona's signature non-discriminating. The mutual-exclusion
+        # check in run_persona_fidelity_cases() now enforces that property.
+        "signature_keywords": ["edge case", "different context", "still hold", "generaliz", "doesn't cover", "time horizon", "exception"],
     },
 ]
 
@@ -296,71 +308,81 @@ MEMORY_ADAPTATION_CASES = [
 # =============================================================================
 
 LEARNING_OUTCOME_CASES = [
-    {
-        "id": "outcome-evidence-growth",
-        "dimension": "evidence_quality",
-        "before": 2,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-counterarg-growth",
-        "dimension": "counterargument_handling",
-        "before": 2,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-logic-growth",
-        "dimension": "logical_coherence",
-        "before": 3,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-scope-growth",
-        "dimension": "scope_awareness",
-        "before": 2,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-ev-popularity-growth",
-        "dimension": "evidence_quality",
-        "before": 2,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-nuclear-nuance-growth",
-        "dimension": "counterargument_handling",
-        "before": 2,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-gaming-correlation-growth",
-        "dimension": "logical_coherence",
-        "before": 3,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
-    {
-        "id": "outcome-remote-work-scope-growth",
-        "dimension": "scope_awareness",
-        "before": 3,
-        "after": 8,
-        "expect_delta_gte_4": True,
-    },
+    # -- Group A: deterministic assertions against the REAL metacognitive
+    #    growth logic in memory/student_profile.py::merge_reflection_into_profile.
+    #    These execute production code and fail if that code regresses.
     {
         "id": "outcome-metacognitive-growth-bonus",
+        "kind": "reflection_logic",
         "resolved": True,
         "expected_growth_bonus": 0.5,
     },
     {
         "id": "outcome-breakthrough-accumulation",
+        "kind": "reflection_logic",
         "breakthroughs": 3,
         "expected_total_bonus": 1.5,
+    },
+    {
+        "id": "outcome-unresolved-earns-no-bonus",
+        "kind": "reflection_logic",
+        "resolved": False,
+        "growth_bonus": 0.5,
+        "expected_growth_bonus": 0.0,
+        "expected_breakthrough_count": 0,
+    },
+    {
+        "id": "outcome-unresolved-still-recorded-in-history",
+        "kind": "reflection_logic",
+        "resolved": False,
+        "growth_bonus": 0.5,
+        "expected_reflections_recorded": 1,
+    },
+    {
+        "id": "outcome-mixed-resolutions-count-only-resolved",
+        "kind": "reflection_logic",
+        "resolution_sequence": [True, False, True, False, True],
+        "growth_bonus": 0.5,
+        "expected_total_bonus": 1.5,
+        "expected_breakthrough_count": 3,
+        "expected_reflections_recorded": 5,
+    },
+    {
+        "id": "outcome-last-reflection-tracks-latest",
+        "kind": "reflection_logic",
+        "resolution_sequence": [True, False],
+        "growth_bonus": 0.5,
+        "expected_last_resolved": False,
+    },
+    # -- Group B: assertions against the MEASURED learning-outcome artifact
+    #    (eval/results/learning_outcome_measured.json), produced by
+    #    scripts/evaluate_learning_outcomes.py running the real production
+    #    scorer against Vertex AI. ĐỢT 12 NHÓM 1: these replaced 8 cases that
+    #    asserted `8 - 2 >= 4` on literals declared in this very file -- those
+    #    could not fail even with the entire src/ tree deleted. These CAN fail:
+    #    if the artifact is missing, stale in shape, or the measurement did not
+    #    show growth, the case reports FAIL.
+    {
+        "id": "outcome-measurement-artifact-present",
+        "kind": "measured",
+        "assertion": "artifact_present",
+    },
+    {
+        "id": "outcome-measured-mean-targeted-delta-positive",
+        "kind": "measured",
+        "assertion": "mean_targeted_delta_gt",
+        "threshold": 1.0,
+    },
+    {
+        "id": "outcome-measured-majority-of-scenarios-improved",
+        "kind": "measured",
+        "assertion": "improved_fraction_gte",
+        "threshold": 0.75,
+    },
+    {
+        "id": "outcome-measured-covers-all-four-axes",
+        "kind": "measured",
+        "assertion": "all_axes_covered",
     },
 ]
 

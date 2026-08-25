@@ -1,0 +1,228 @@
+{
+  "measured_at": "2026-08-25T12:44:52.468025+00:00",
+  "runs_per_text": 2,
+  "scorer": "nodes/scorer.py::score_essay (production prompt/schema, Gemini via Vertex AI)",
+  "all_passed": false,
+  "total_scenarios": 8,
+  "pass_count": 7,
+  "avg_targeted_growth": 2.75,
+  "avg_overall_growth": 2.05,
+  "evaluations": [
+    {
+      "id": "scenario_01_evidence_skeptic",
+      "topic": "Electric Vehicle Emissions",
+      "dimension": "evidence_quality",
+      "persona": "skeptic",
+      "before_score": 0.5,
+      "after_score": 2.5,
+      "delta_targeted": 2.0,
+      "before_scores": {
+        "logical_coherence": 1.5,
+        "evidence_quality": 0.5,
+        "counterargument_handling": 0.5,
+        "scope_awareness": 0.5
+      },
+      "after_scores": {
+        "logical_coherence": 4.0,
+        "evidence_quality": 2.5,
+        "counterargument_handling": 3.0,
+        "scope_awareness": 4.5
+      },
+      "before_avg": 0.75,
+      "after_avg": 3.5,
+      "delta_avg": 2.75,
+      "passed": true,
+      "initial_thesis": "Electric cars are completely clean and produce zero pollution anywhere.",
+      "revised_thesis": "While EVs produce zero tailpipe emissions, lifecycle studies show a 40-60% net reduction in carbon emissions depending on whether regional grid electricity comes from renewables."
+    },
+    {
+      "id": "scenario_02_counterarg_devils_advocate",
+      "topic": "AI in High School Classrooms",
+      "dimension": "counterargument_handling",
+      "persona": "devils_advocate",
+      "before_score": 1.0,
+      "after_score": 1.0,
+      "delta_targeted": 0.0,
+      "before_scores": {
+        "logical_coherence": 2.0,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 1.0,
+        "scope_awareness": 1.0
+      },
+      "after_scores": {
+        "logical_coherence": 2.5,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 1.0,
+        "scope_awareness": 1.5
+      },
+      "before_avg": 1.25,
+      "after_avg": 1.5,
+      "delta_avg": 0.25,
+      "passed": false,
+      "initial_thesis": "AI writing tools must be encouraged for all assignments because technology is the future.",
+      "revised_thesis": "AI tools should be integrated as collaborative brainstorming aids rather than essay generators, paired with oral defenses to preserve critical reasoning."
+    },
+    {
+      "id": "scenario_03_logic_nitpicker",
+      "topic": "Homework Policy Reform",
+      "dimension": "logical_coherence",
+      "persona": "nitpicker",
+      "before_score": 2.0,
+      "after_score": 4.0,
+      "delta_targeted": 2.0,
+      "before_scores": {
+        "logical_coherence": 2.0,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 0.0,
+        "scope_awareness": 1.0
+      },
+      "after_scores": {
+        "logical_coherence": 4.0,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 1.0,
+        "scope_awareness": 3.0
+      },
+      "before_avg": 1.0,
+      "after_avg": 2.25,
+      "delta_avg": 1.25,
+      "passed": true,
+      "initial_thesis": "Students feel stressed on Mondays, so all homework across K-12 education should be abolished immediately.",
+      "revised_thesis": "Because excessive repetitive homework correlates with stress without improving retention in early grades, daily homework should be capped at 10 minutes per grade level and focused on conceptual practice."
+    },
+    {
+      "id": "scenario_04_scope_expander",
+      "topic": "Social Media Age Restrictions",
+      "dimension": "scope_awareness",
+      "persona": "expander",
+      "before_score": 1.0,
+      "after_score": 2.0,
+      "delta_targeted": 1.0,
+      "before_scores": {
+        "logical_coherence": 1.5,
+        "evidence_quality": 0.5,
+        "counterargument_handling": 0.5,
+        "scope_awareness": 1.0
+      },
+      "after_scores": {
+        "logical_coherence": 2.5,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 1.0,
+        "scope_awareness": 2.0
+      },
+      "before_avg": 0.88,
+      "after_avg": 1.62,
+      "delta_avg": 0.74,
+      "passed": true,
+      "initial_thesis": "Social media destroys every teenager's mental health without exception.",
+      "revised_thesis": "High-frequency consumption of algorithmic feeds with engagement-maximizing loops significantly increases adolescent anxiety, while moderated interest-based communities show neutral to positive peer support effects."
+    },
+    {
+      "id": "scenario_05_evidence_popularity",
+      "topic": "Renewable Energy Transition",
+      "dimension": "evidence_quality",
+      "persona": "skeptic",
+      "before_score": 1.0,
+      "after_score": 5.5,
+      "delta_targeted": 4.5,
+      "before_scores": {
+        "logical_coherence": 2.0,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 0.5,
+        "scope_awareness": 1.0
+      },
+      "after_scores": {
+        "logical_coherence": 4.5,
+        "evidence_quality": 5.5,
+        "counterargument_handling": 1.0,
+        "scope_awareness": 2.5
+      },
+      "before_avg": 1.12,
+      "after_avg": 3.38,
+      "delta_avg": 2.26,
+      "passed": true,
+      "initial_thesis": "Solar panels are obviously the best energy source because all my friends are getting them.",
+      "revised_thesis": "According to IRENA 2024 data, utility-scale solar PV has achieved an LCOE of $0.04/kWh, making it economically competitive when paired with grid-scale battery storage for intermittent demand."
+    },
+    {
+      "id": "scenario_06_counterarg_nuclear",
+      "topic": "Nuclear Energy in Clean Grids",
+      "dimension": "counterargument_handling",
+      "persona": "devils_advocate",
+      "before_score": 0.0,
+      "after_score": 3.5,
+      "delta_targeted": 3.5,
+      "before_scores": {
+        "logical_coherence": 1.5,
+        "evidence_quality": 0.0,
+        "counterargument_handling": 0.0,
+        "scope_awareness": 0.5
+      },
+      "after_scores": {
+        "logical_coherence": 4.5,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 3.5,
+        "scope_awareness": 4.0
+      },
+      "before_avg": 0.5,
+      "after_avg": 3.25,
+      "delta_avg": 2.75,
+      "passed": true,
+      "initial_thesis": "Nuclear energy is completely unsafe and should be shut down everywhere.",
+      "revised_thesis": "While long-term waste management and high upfront capital remain critical challenges, modern passively safe reactors provide vital zero-emission firm power to complement intermittent renewables."
+    },
+    {
+      "id": "scenario_07_logic_correlation",
+      "topic": "Video Games and Academic Performance",
+      "dimension": "logical_coherence",
+      "persona": "nitpicker",
+      "before_score": 1.5,
+      "after_score": 5.0,
+      "delta_targeted": 3.5,
+      "before_scores": {
+        "logical_coherence": 1.5,
+        "evidence_quality": 1.0,
+        "counterargument_handling": 0.0,
+        "scope_awareness": 1.0
+      },
+      "after_scores": {
+        "logical_coherence": 5.0,
+        "evidence_quality": 2.0,
+        "counterargument_handling": 2.5,
+        "scope_awareness": 5.0
+      },
+      "before_avg": 0.88,
+      "after_avg": 3.62,
+      "delta_avg": 2.74,
+      "passed": true,
+      "initial_thesis": "Tim started playing video games and his math score dropped, so gaming causes academic failure.",
+      "revised_thesis": "While unmoderated late-night screen time disrupts sleep and reduces study hours leading to grade declines, moderate gaming shows no statistically significant causal negative impact on cognitive skills."
+    },
+    {
+      "id": "scenario_08_scope_remote_work",
+      "topic": "Universal Remote Work",
+      "dimension": "scope_awareness",
+      "persona": "expander",
+      "before_score": 1.0,
+      "after_score": 6.5,
+      "delta_targeted": 5.5,
+      "before_scores": {
+        "logical_coherence": 2.0,
+        "evidence_quality": 0.0,
+        "counterargument_handling": 0.0,
+        "scope_awareness": 1.0
+      },
+      "after_scores": {
+        "logical_coherence": 6.5,
+        "evidence_quality": 1.5,
+        "counterargument_handling": 3.0,
+        "scope_awareness": 6.5
+      },
+      "before_avg": 0.75,
+      "after_avg": 4.38,
+      "delta_avg": 3.63,
+      "passed": true,
+      "initial_thesis": "All companies must switch 100% to remote work permanently because in-person offices are obsolete.",
+      "revised_thesis": "While knowledge-work tasks benefit from remote autonomy and reduced commute friction, hybrid models remain optimal for sectors requiring physical collaboration, specialized equipment, and intensive junior mentorship."
+    }
+  ]
+}

@@ -46,11 +46,11 @@ flowchart TD
         IN["Intake\n(Function Node)"] -->|route: image| OCR["Multimodal OCR\n(Gemini Vision, self-consistency cross-check)"]
         IN -->|route: text| SAN["Sanitizer\n(Function Node, anti-injection regex)"]
         OCR --> SAN
-        SAN --> SUM["Summarizer\n(Agent Node, Gemini Flash)"]
+        SAN --> SUM["Summarizer\n(Function Node → Gemini Flash)"]
         SUM --> PS["Persona Selector\n(Function Node)\nreads Firestore history"]
         PS --> DEBATE["Debate Loop (3 turns)\npersona anchoring + escalation"]
         DEBATE <--> VAL["Challenge Validator\n(Function Node, ZERO LLM)"]
-        VAL --> SCORE["Cognitive Scorer\n(Agent Node)\n+ student_feedback"]
+        VAL --> SCORE["Cognitive Scorer\n(Function Node → Gemini Flash)\n+ student_feedback"]
         SCORE --> MUT["Profile Mutator\n(Function Node)\nFirestore read-modify-write"]
     end
 
@@ -60,7 +60,7 @@ flowchart TD
         direction TB
         SUB["Cloud Run: POST /\n(server.py)"] --> IDEM["Idempotency claim\n(Firestore create())"]
         IDEM --> RANK["Priority Engine\n(Function Node, ZERO LLM)\nfallacy clustering + ranking"]
-        RANK --> DIGEST["Teacher Digest Synthesizer\n(Agent Node, Gemini heavy)"]
+        RANK --> DIGEST["Teacher Digest Synthesizer\n(Function Node → Gemini heavy)"]
         DIGEST --> GMAIL["Gmail MCP\ncompose-only draft"]
         DIGEST --> SHEETS["Sheets MCP\nappend-only audit row"]
         DIGEST --> ANALYTICS[("Firestore\nclass_analytics/digests")]
@@ -71,6 +71,8 @@ flowchart TD
     PS -.->|"read history"| PROFILES
     GMAIL -.->|"teacher clicks Send\n(human, outside any code path)"| TEACHER["Teacher's Gmail inbox"]
 ```
+
+> **On node types (ĐỢT 12):** every node in the Tier 1 graph is an ADK2 `FunctionNode` — there is no `AgentNode` anywhere in this project (`grep -rn "AgentNode" src/` returns nothing; see `graph/tier1_pipeline.py`). The three nodes above that reach Gemini do so *inside* a Python function we control, which is the point of the deterministic-first design: every LLM call sits in a testable function with an explicit timeout, retry policy and degradation path. An earlier version of this diagram (and of `docs/For_notebookLM.md`) labelled them "Agent Node", which understated exactly the property that makes the architecture defensible.
 
 **Data flow in one sentence:** an essay (text or photo) goes through a deterministic-first ADK2 graph that debates, scores, and mutates a per-student Firestore profile; every graded essay fires a Pub/Sub event that a separate Cloud Run service picks up to compute a class-wide priority ranking and draft a teacher digest — with exactly one human-in-the-loop gate (the teacher pressing Send in their own Gmail).
 
@@ -181,6 +183,32 @@ curl localhost:8080/health-check   # -> {"status": "ok"}
 
 ### 3.10 Deploy to Cloud Run
 
+Two one-time steps come **first**. `deploy.txt` is the copy-pasteable runbook for all of this.
+
+**(a) Create the session signing secret — required, not optional (ADR-016).**
+
+`auth.py` ships a default signing key that is committed to this public repository. Deploying without overriding it means the live service signs teacher and student tokens with a key anyone can read, so anyone can mint a `role=teacher` token for any `class_id` and read that class's student PII. The ĐỢT 12 audit found exactly this on the live deployment. Because that failure is silent, the code now makes it loud: **the container refuses to start** when it detects Cloud Run (`K_SERVICE`) while the secret is unset, still the default, or shorter than 32 characters.
+
+```bash
+printf '%s' "$(openssl rand -base64 48)" | \
+  gcloud secrets create eduagent-session-secret --data-file=- --replication-policy=automatic
+
+gcloud secrets add-iam-policy-binding eduagent-session-secret \
+  --member=serviceAccount:eduagent-sa@<project>.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor
+```
+
+**(b) Enable the Firestore TTL policy for debate sessions.**
+
+`memory/firestore_session.py` writes an `expire_at` timestamp, but Firestore only deletes documents when a TTL *policy* exists on that field. Without this command the documented 24h retention behaviour simply does not happen and live sessions accumulate indefinitely — another ĐỢT 12 finding, since the claim was in the docs while the policy was never created. `scripts/doctor.py` now checks this and reports FAIL if the policy is missing.
+
+```bash
+gcloud firestore fields ttls update expire_at --collection-group=debate_sessions --enable-ttl
+gcloud firestore fields ttls list --collection-group=debate_sessions   # expect state: ACTIVE
+```
+
+**Then deploy:**
+
 ```bash
 gcloud run deploy eduagent-class-aggregator \
   --source . \
@@ -190,6 +218,7 @@ gcloud run deploy eduagent-class-aggregator \
   --max-instances=5 \
   --concurrency=80 \
   --min-instances=0 \
+  --update-secrets EDUAGENT_SESSION_SECRET=eduagent-session-secret:latest \
   --set-env-vars GCP_PROJECT_ID=<project>,GOOGLE_GENAI_USE_VERTEXAI=True
 
 # Then point the class-aggregator-sub subscription at the deployed URL as a
@@ -215,6 +244,7 @@ gcloud run deploy eduagent-class-aggregator \
   --max-instances=5 \
   --concurrency=80 \
   --min-instances=0 \
+  --update-secrets EDUAGENT_SESSION_SECRET=eduagent-session-secret:latest \
   --set-env-vars GCP_PROJECT_ID=<project>,GOOGLE_GENAI_USE_VERTEXAI=True,PUBSUB_PUSH_AUDIENCE=<the deployed service URL>,PUBSUB_PUSH_SERVICE_ACCOUNT=<push-subscription-invoker>@<project>.iam.gserviceaccount.com
 ```
 
@@ -258,7 +288,13 @@ Before leaving this project running unattended for any length of time:
 | ADR-013 | Issue stateless, HMAC-signed scoped access tokens at `/api/auth/login` to prevent Insecure Direct Object References (IDOR) across classes. | All teacher and student analytics endpoints (`/api/classes/{class_id}/*`) require a valid Bearer token and verify that the token's authorized `class_id` matches the path, preventing unauthorized cross-class PII exposure while maintaining zero external identity provider dependencies for hackathon judging. | Trusting client-supplied `class_id` headers or leaving class API paths unverified. |
 | ADR-014 | Verify the Pub/Sub push subscription's OIDC token in the application layer (`server.py::_verify_pubsub_push_auth`, using `google.oauth2.id_token.verify_oauth2_token`) instead of relying solely on Cloud Run IAM to gate `POST /`. | Live testing (ĐỢT 8) found the deployed service uses `--allow-unauthenticated` (needed so judges can open the Web UI without a GCP identity) — `curl`-ing `POST /` directly returned `500` (a real internal error from malformed input), proving the request reached the container **unauthenticated**. Cloud Run IAM was not protecting this endpoint at all; a prior README draft claimed otherwise before this was caught. | Assuming `--no-allow-unauthenticated` was in effect because that was the original plan — not verified against the actually-deployed service until this review. |
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the "Cải tiến Đợt 2" and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/ĐỢT 6; ADR-014 was added during ĐỢT 8 — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence behind each one.)
+| ADR-015 | Back live debate sessions with a Firestore `debate_sessions/{session_id}` document, with the in-process dict demoted to a **3-second** read cache (`memory/firestore_session.py`). | A 3-turn debate is 3+ HTTP requests, and Cloud Run load-balances across instances, so in-process-only state lost debates mid-conversation. The 3s bound is the ĐỢT 12 correction to this ADR: the first implementation preferred any cache entry inside the 24h *session* TTL, which meant turn 3 landing back on instance A served a stale copy and then overwrote Firestore with it — the bug this ADR claimed to fix. Turns are gated on a human typing, so a 3s window only absorbs repeat reads within one request. Regression test: `tests/test_firestore_session.py::test_two_instances_do_not_lose_a_debate_turn`, verified to fail against the old cache-first read. | Treating "we added a durable store" as equivalent to "reads use it". Durability without read preference only narrows the failure window. |
+| ADR-016 | Refuse to start the process when it detects Cloud Run (`K_SERVICE`) while `EDUAGENT_SESSION_SECRET` is unset, still the committed demo default, or shorter than 32 chars (`auth.py::_resolve_session_secret`). | The default signing key is committed to this public repo, and the ĐỢT 12 audit found it had never been set at deploy time — so the live service was signing tokens with a publicly-known key, and anyone reading the repo could mint a `role=teacher` token for any `class_id` and read that class's student PII. That silently voided ADR-013. A missing env var is a silent failure mode; a container that will not boot is a loud one. Local development still uses the default so `pytest` and a laptop demo need no setup. See `deploy.txt` STEP 1. | Documenting "remember to set the secret" and trusting the deploy step to be remembered — it was not, for the entire life of the deployment. |
+| ADR-017 | Implement a real in-process token-bucket rate limiter (`rate_limit.py`) rather than deleting the DoS claim from the STRIDE table. | The STRIDE table asserted "Token bucket rate limiting" while `grep -rniE "rate.?limit\|token.?bucket\|slowapi\|throttl" src/` returned zero results. The exposure was real (each debate call fans out into several Gemini requests on a public URL, so a `curl` loop was an unmetered spend channel), so the honest fix was to build it, not to un-claim it. **Stated scope:** buckets are per-process, so the real ceiling is `N_instances × capacity` — this bounds cost and stops casual abuse; it is not a distributed limiter, and a production deployment belongs behind Cloud Armor / API Gateway. | Either leaving the false claim in a security table, or quietly deleting the row and shipping with no ceiling at all. |
+| ADR-018 | Require a Bearer token on all five student-facing debate endpoints, with a `student` token authorized only for its own `user_id` (`server.py::_verify_student_auth`). | `/api/debate/{start,start-with-image,start-with-gdoc,turn,reflect}` accepted an arbitrary caller-supplied `student_id` with no token check at all, while every `/api/classes/*` route was properly gated — on a service deployed `--allow-unauthenticated`. Anyone could write junk into any student's Firestore profile and publish a Pub/Sub event skewing the teacher's ranking. `/api/debate/turn` carries only a `session_id`, so ownership is resolved from the session's own stored `student_id`/`class_id`, and the token is verified **before** the session lookup — otherwise the route was an oracle distinguishing real session ids (403) from fake ones (404), a bug a test caught during this work. A same-class `teacher` token is accepted, since reproducing a student's debate is legitimate. | Assuming the input-size caps from ADR-012 were sufficient protection. A size cap bounds one request; it does not bound who may write to whose record, nor how many requests arrive. |
+| ADR-019 | Every eval case must be falsifiable, verified by a sabotage test: break the production code on purpose and confirm the case goes red. | The ĐỢT 12 audit found 12 of 50 eval cases could not fail. Layer 4's eight "cognitive growth" cases subtracted integer literals declared in the fixture file (`8 - 2 >= 4`) and would have passed with `src/` deleted; the persona-fidelity cases rebuilt the system instruction inside the test and then asserted the anchor was in the string they had just concatenated. Both now drive production code (`nodes/debate.py::build_system_instruction`, `merge_reflection_into_profile`, and a measured artifact from a live scorer run). Verified: removing persona anchoring fails 4/4 cases, deleting the measurement artifact fails 4/4 Layer 4 cases. | Treating a green suite as evidence without asking whether any case was *capable* of being red. Reward hacking does not require a reward model — a human writing an assertion that restates its own setup produces the same worthless metric. |
+
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the "Cải tiến Đợt 2" and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/ĐỢT 6; ADR-014 was added during ĐỢT 8; ADR-015 during ĐỢT 10 and **corrected** in ĐỢT 12; ADR-016 through ADR-019 came out of the ĐỢT 12 full audit — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence behind each one.)
 
 ---
 
@@ -269,6 +305,10 @@ Before leaving this project running unattended for any length of time:
 - **Sheets**: `append_audit_row()` is the only exported write — no update/delete, so the audit trail can't be quietly edited by a bug or a future feature.
 - **Cloud Run**: this project's live deployment uses `--allow-unauthenticated` (so a judge can open the Web UI directly), which means Cloud Run IAM does not gate `POST /`. Instead, `server.py::_verify_pubsub_push_auth` verifies the Pub/Sub push subscription's OIDC token in the application layer using `google.oauth2.id_token.verify_oauth2_token` (real signature verification against Google's public keys, not a shared secret) before `process_event()` ever runs — see ADR-014. A redeploy that doesn't need a public UI should prefer `--no-allow-unauthenticated` instead, which needs no application-layer check.
 - **Authentication & Authorization**: `auth.py` provides a lightweight, stateless role-based authentication model with a shared demo passcode (`eduagent2026`) designed specifically for streamlined hackathon judging without external IdP dependencies. Scoped HMAC-signed session tokens enforce multi-tenant isolation, ensuring a logged-in user in class `c1` cannot inspect or modify rosters/digests in other classes (IDOR prevention, see ADR-013).
+- **Session signing key (ADR-016)**: the token-signing secret must come from Secret Manager at deploy time. Since the repo's fallback default is public, the process **refuses to start** on Cloud Run while that default is still in effect — see §3.10(a). `scripts/doctor.py` reports which key is in use before a demo.
+- **Student-facing endpoint authorization (ADR-018)**: all five debate endpoints require a Bearer token; a `student` token may act only as its own `user_id`, and `/api/debate/turn` resolves ownership from the session's stored `student_id`/`class_id` rather than from the request, verifying the token *before* the session lookup so the route is not an existence oracle. A same-class `teacher` token is also accepted. Covered by `tests/test_student_endpoint_auth.py`.
+- **Rate limiting (ADR-017)**: `rate_limit.py` applies a per-IP token bucket to the debate endpoints (burst 10, sustained 1 per 5s) and to `/api/auth/login` (burst 5, sustained 1 per 10s), returning `429` with `Retry-After`. **Honest scope:** buckets are per-process, so the real ceiling is `N_instances × capacity`. This bounds Vertex AI spend and stops casual abuse; it is not a distributed limiter, and a production deployment belongs behind Cloud Armor / API Gateway.
+- **Session retention**: `debate_sessions` documents carry a 24h `expire_at` **and** an ACTIVE Firestore TTL policy on that field (§3.10(b)) — verified via `gcloud firestore fields ttls list`, since writing the field alone deletes nothing.
 - **Layered Prompt-Injection Defense**: Regex sanitization (`strip_injection_attempts`) executes at both the HTTP API boundary (`api.py`) and the ADK workflow graph (`intake.py`), ensuring that essays, OCR outputs, GDocs, and turn-by-turn student replies are stripped of instruction-override attempts before LLM prompt construction.
 - **Input Boundaries & Cost-DoS Protection**: Strict upper bounds are enforced on all ingress vectors (max 20,000 chars for essays, max 4,000 chars for debate replies, max 10MB for base64 handwriting images, max 100KB for Google Doc fetches).
 - **XSS & Output Hygiene**: The Web UI uses contextual HTML escaping (`esc()`), strict `textContent` DOM node population, and event delegation to prevent stored XSS attacks across student submissions and teacher dashboards.
@@ -279,16 +319,34 @@ Before leaving this project running unattended for any length of time:
 
 ## 6. ADK Eval Suite results
 
-Last run (see `eval/results/eval_report.md` / `.json` for the full machine-readable report, committed to this repo):
+Last run — **50/50 deterministic test cases passed**. Full machine-readable report in `eval/results/eval_report.md` / `.json`.
 
-| Group | Passed | Total | Pass rate |
-|---|---|---|---|
-| answer_leak | 6 | 6 | 100% |
-| prompt_injection | 5 | 5 | 100% |
-| persona_fidelity | 4 | 4 | 100% |
-| **Overall** | **15** | **15** | **100%** |
+Read that as "the test suite is green", **not** "the system is 100% correct". Those are different claims.
 
-Every metric is deterministic (re-runs the real validator/sanitizer, or does plain keyword matching on real model output) — see ADR-006 for why this suite deliberately does not use an LLM-as-judge.
+| Layer | Group | Passed | Total | What it actually executes |
+|---|---|:---:|:---:|---|
+| 1. Safety & Security | `answer_leak` | 6 | 6 | the real `validate_debate_turn()` |
+| 1. Safety & Security | `prompt_injection` | 5 | 5 | the real `strip_injection_attempts()` |
+| 1. Safety & Security | `tenancy_isolation` | 4 | 4 | the real `server._verify_class_auth()` used by the HTTP routes |
+| 2. Behavioral Discipline | `persona_fidelity` | 4 | 4 | the real `debate.build_system_instruction()` — anchor present on all 3 turns, anchors mutually distinct, no cross-persona signature collision |
+| 2. Behavioral Discipline | `single_question_constraint` | 4 | 4 | the real validator |
+| 2. Behavioral Discipline | `formatting_bounds` | 4 | 4 | the real validator |
+| 2. Behavioral Discipline | `escalation_protocol` | 3 | 3 | the real escalation instruction table |
+| 3. Long-Term Memory | `memory_adaptation` | 10 | 10 | the real `merge_essay_into_profile()`, `_score_trend()`, `_build_prompt()` |
+| 4. Learning Outcomes | `metacognitive_growth_logic` | 6 | 6 | the real `merge_reflection_into_profile()` |
+| 4. Learning Outcomes | `measured_learning_outcome` | 4 | 4 | assertions against `eval/results/learning_outcome_measured.json`, produced by a live-scorer measurement run |
+| | **Overall** | **50** | **50** | |
+
+No LLM judges another LLM's output anywhere in this suite (ADR-006).
+
+**Falsifiability (ADR-019).** The ĐỢT 12 audit found 12 of these 50 cases could not fail: Layer 4's eight "growth" cases subtracted integer literals declared in the fixture file (`8 - 2 >= 4`, green even with `src/` deleted), and the persona-fidelity cases rebuilt the system instruction inside the test before asserting the anchor was in the string they had just built. Both were rewritten to drive production code, then checked by sabotage:
+
+| Sabotage | Result |
+|---|---|
+| Remove persona anchoring from `build_system_instruction()` | 4/4 persona cases FAIL |
+| Delete `learning_outcome_measured.json` | 4/4 measured Layer 4 cases FAIL |
+
+**Opt-in live mode.** `python scripts/run_eval_suite.py --live-persona` runs the real 3-turn debate against Gemini and matches the model's actual questions against each persona's lexicon, writing to a *separate* report (`eval_report_live_persona.md`) so the main suite keeps its zero-LLM guarantee. Its current result is worth stating plainly: **2 of 4 personas drift** — the Devil's Advocate and the Nitpicker both slide into the Skeptic's evidence-and-causation register on a hard essay. Anchoring keeps the instruction in the prompt; it does not guarantee the model obeys it. We left that failure in the report rather than widening the lexicons until it went green.
 
 ---
 

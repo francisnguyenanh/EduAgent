@@ -11,9 +11,15 @@ from fastapi.testclient import TestClient
 
 from eduagent.api import DebateReflectionRequest, submit_reflection
 from eduagent.memory.student_profile import empty_profile, merge_reflection_into_profile
+from eduagent.auth import create_access_token
 from eduagent.server import app
 
 client = TestClient(app)
+
+# ĐỢT 12 NHÓM 2: /api/debate/reflect writes a growth bonus into a student
+# profile, so it is now authenticated.
+_STUDENT_ID = "c1_stu01"
+_STUDENT_HEADERS = {"Authorization": f"Bearer {create_access_token(_STUDENT_ID, 'student', 'c1')}"}
 
 
 def test_merge_reflection_into_profile_pure_function():
@@ -125,12 +131,13 @@ def test_api_debate_reflect_endpoint():
         response = client.post(
             "/api/debate/reflect",
             json={
-                "student_id": "s1",
+                "student_id": _STUDENT_ID,
                 "class_id": "c1",
                 "original_fallacy": "hasty generalization",
                 "original_claim": "Claim A",
                 "revised_claim": "Revised Claim A with strong evidence.",
             },
+            headers=_STUDENT_HEADERS,
         )
 
     assert response.status_code == 200
@@ -144,6 +151,7 @@ def test_api_debate_reflect_endpoint_rejects_oversized():
     oversized = "Z" * 4001
     response = client.post(
         "/api/debate/reflect",
-        json={"student_id": "s1", "revised_claim": oversized},
+        json={"student_id": _STUDENT_ID, "class_id": "c1", "revised_claim": oversized},
+        headers=_STUDENT_HEADERS,
     )
     assert response.status_code == 400

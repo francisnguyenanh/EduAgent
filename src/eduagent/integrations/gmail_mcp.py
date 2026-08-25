@@ -41,13 +41,26 @@ def _find_client_secret() -> Path:
 
 @functools.lru_cache(maxsize=1)
 def _credentials():
+    import json
+    import os
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     creds = None
-    if _TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(_TOKEN_PATH), COMPOSE_ONLY_SCOPES)
+    token_json_env = os.getenv("GMAIL_COMPOSE_TOKEN_JSON")
+    if token_json_env:
+        try:
+            creds_data = json.loads(token_json_env)
+            creds = Credentials.from_authorized_user_info(creds_data, COMPOSE_ONLY_SCOPES)
+        except Exception:
+            pass
+
+    if not creds and _TOKEN_PATH.exists():
+        try:
+            creds = Credentials.from_authorized_user_file(str(_TOKEN_PATH), COMPOSE_ONLY_SCOPES)
+        except Exception:
+            pass
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -55,7 +68,10 @@ def _credentials():
         else:
             flow = InstalledAppFlow.from_client_secrets_file(str(_find_client_secret()), COMPOSE_ONLY_SCOPES)
             creds = flow.run_local_server(port=0)
-        _TOKEN_PATH.write_text(creds.to_json())
+            try:
+                _TOKEN_PATH.write_text(creds.to_json())
+            except Exception:
+                pass
 
     return creds
 

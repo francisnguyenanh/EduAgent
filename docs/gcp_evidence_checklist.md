@@ -55,6 +55,10 @@ python scripts/verify_firestore.py
 | 4 | `04_pubsub_topic_dlq.png` | **Pub/Sub** | Topic `essay-evaluated` + cấu hình Dead Letter Queue (DLQ) |
 | 5 | `05_cloud_logging_structured.png` | **Cloud Logging** | Log JSON có trường `logging.googleapis.com/trace` |
 | 6 | `06_web_portal_live.png` | **Web UI** | Giao diện chạy live trên domain `.run.app` |
+| 7 | `07_secret_manager_session_key.png` | **Secret Manager** | Secret `eduagent-session-secret` tồn tại, và Cloud Run revision mount nó vào `EDUAGENT_SESSION_SECRET` (**ĐỢT 13 / ADR-016** — bằng chứng khoá ký token KHÔNG còn là chuỗi mặc định trong repo). Chụp cả 2: trang Secret Manager, và tab "Variables & Secrets" của revision |
+| 8 | `08_firestore_ttl_policy.png` | **Firestore** | TTL policy trên `debate_sessions.expire_at` ở trạng thái **ACTIVE** (**ĐỢT 13** — chứng minh phát biểu retention "TTL 24h rồi tự xoá" là thật, không chỉ ghi field `expire_at` rồi không ai xoá). Lệnh CLI tương đương: `gcloud firestore fields ttls list --collection-group=debate_sessions` |
+| 9 | `09_rate_limit_429.png` | **Cloud Run / terminal** | HTTP **429 + header `Retry-After`** khi flood endpoint tranh biện (**ĐỢT 13 / ADR-017** — bằng chứng "Token bucket rate limiting" trong bảng STRIDE là thật; trước ĐỢT 13 claim này không tồn tại trong code) |
+| 10 | `10_student_endpoint_401.png` | **Cloud Run / terminal** | `curl` POST `/api/debate/start` **không kèm token → 401**, và kèm token của học sinh khác → **403** (**ĐỢT 13 / ADR-018**). Đây là bằng chứng mạnh vì giám khảo có thể tự chạy lại đúng lệnh này trên URL live |
 
 ---
 
@@ -103,6 +107,35 @@ python scripts/verify_firestore.py
 ### 6. Live Web Portal trên Cloud Run (`06_web_portal_live.png`)
 * **Cách vào:** Mở tab ẩn danh trình duyệt $\rightarrow$ gõ URL `.run.app`.
 * **Thao tác:** Chụp toàn màn hình bao gồm thanh địa chỉ trình duyệt hiển thị rõ domain `.asia-southeast1.run.app` và giao diện Student / Teacher Portal.
+
+---
+
+## E-bis. Lệnh verify nhanh 4 bằng chứng bảo mật ĐỢT 13 (chạy được, không cần Console)
+
+Bốn hạng mục mới (#7–#10) verify bằng CLI/curl nhanh hơn là chụp Console, và **giám khảo có thể tự chạy lại** — điều đó thuyết phục hơn ảnh chụp:
+
+```bash
+# (7) Secret tồn tại + revision đang mount nó
+gcloud secrets describe eduagent-session-secret
+gcloud run services describe eduagent-class-aggregator --region asia-southeast1 \
+  --format='value(spec.template.spec.containers[0].env)'
+
+# (8) TTL policy ACTIVE (không chỉ có field expire_at)
+gcloud firestore fields ttls list --collection-group=debate_sessions
+
+# (9) Rate limit thật: flood 15 request, phải thấy 429
+URL=https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app
+for i in $(seq 1 15); do
+  curl -s -o /dev/null -w "%{http_code} " -X POST $URL/api/debate/start \
+    -H 'Content-Type: application/json' -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
+done; echo
+
+# (10) Endpoint học sinh có xác thực: không token -> 401
+curl -s -o /dev/null -w "no-token: %{http_code}\n" -X POST $URL/api/debate/start \
+  -H 'Content-Type: application/json' -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
+```
+
+⚠️ **Chỉ chạy được SAU KHI redeploy.** Trên revision hiện tại (code cũ) lệnh (10) sẽ trả `200` — tức lỗ hổng vẫn còn. Nếu bạn chụp bằng chứng trước khi redeploy, bạn đang chụp bằng chứng ngược lại điều mình muốn chứng minh.
 
 ---
 

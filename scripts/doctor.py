@@ -17,6 +17,7 @@ Usage: python scripts/doctor.py
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -176,9 +177,69 @@ def check_cloud_run_deployment() -> tuple[str, str]:
     return PASS, f"GET {health_url} -> 200 {response.json()} (live revision reachable, {auth_detail})."
 
 
+def check_session_secret() -> tuple[str, str]:
+    """ĐỢT 12 NHÓM 2 / ADR-016: surface the signing-key state BEFORE a demo.
+
+    The audit's worst finding was invisible precisely because nothing reported
+    it: the live service was signing teacher tokens with the repo's committed
+    default. auth.py now hard-fails on Cloud Run, but a local run legitimately
+    uses the default -- so this check reports which mode is active rather than
+    pretending either one is always wrong.
+    """
+    from eduagent.auth import using_insecure_default_secret
+
+    if not using_insecure_default_secret():
+        return PASS, "EDUAGENT_SESSION_SECRET is set to a non-default value (tokens signed with a private key)."
+    if os.getenv("K_SERVICE"):
+        # Unreachable in practice -- auth.py refuses to import. Kept so that if
+        # that guard is ever weakened, this check catches it instead of nothing.
+        return FAIL, "Running on Cloud Run with the PUBLIC default signing key -- anyone can forge a teacher token."
+    return WARN, (
+        "Using the committed default signing key. Fine for local development; "
+        "MUST be set via Secret Manager before deploying (see deploy.txt STEP 1). "
+        "The container refuses to start on Cloud Run without it."
+    )
+
+
+def check_firestore_ttl_policy() -> tuple[str, str]:
+    """ĐỢT 12 NHÓM 3: firestore_session.py writes `expire_at`, but Firestore only
+    deletes documents when a TTL POLICY exists on that field. Without it, the
+    documented "TTL 24h then permanently deleted" retention behaviour silently
+    does not happen and sessions accumulate forever."""
+    from google.cloud import firestore_admin_v1
+
+    project_id = FIRESTORE.project_id or os.getenv("GCP_PROJECT_ID", "")
+    if not project_id:
+        return WARN, "No project_id resolved -- cannot check the debate_sessions TTL policy."
+
+    client = firestore_admin_v1.FirestoreAdminClient()
+    field_path = (
+        f"projects/{project_id}/databases/(default)/collectionGroups/debate_sessions/fields/expire_at"
+    )
+    field = client.get_field(name=field_path)
+    ttl = getattr(field, "ttl_config", None)
+    state = getattr(ttl, "state", 0) if ttl is not None else 0
+
+    # 1 = CREATING, 2 = ACTIVE, 3 = NEEDS_REPAIR (google.firestore.admin.v1.Field.TtlConfig.State)
+    if state == 2:
+        return PASS, "TTL policy ACTIVE on debate_sessions.expire_at -- sessions are really auto-deleted."
+    if state == 1:
+        return WARN, "TTL policy on debate_sessions.expire_at is still CREATING -- re-check before demo."
+    if state == 3:
+        return FAIL, "TTL policy on debate_sessions.expire_at is NEEDS_REPAIR -- documents are not being deleted."
+    return FAIL, (
+        "No TTL policy on debate_sessions.expire_at. `expire_at` is being written but nothing deletes "
+        "the documents, so the 24h-retention claim is not true. Fix: "
+        "`gcloud firestore fields ttls update expire_at --collection-group=debate_sessions --enable-ttl` "
+        "(deploy.txt STEP 2)."
+    )
+
+
 CHECKS = [
     ("GCP credentials (ADC)", check_gcp_credentials),
+    ("Session signing secret", check_session_secret),
     ("Firestore connectivity", check_firestore_connectivity),
+    ("Firestore TTL policy (debate_sessions)", check_firestore_ttl_policy),
     ("Pub/Sub topic/DLQ/subscription", check_pubsub_topology),
     ("Gmail OAuth token", check_gmail_oauth_token),
     ("Sheets spreadsheet permission", check_sheets_permission),

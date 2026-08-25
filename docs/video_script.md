@@ -5,6 +5,28 @@
 
 ---
 
+## 🥇 The Golden Path (ĐỢT 11/12) — ONE story, told identically everywhere
+
+Video, Devpost, README and slides all follow **this single flow**, in this order. If an artifact tells a different story, the artifact is wrong, not this list.
+
+```
+handwritten photo → OCR (self-consistency cross-check) → weak evidence detected
+  → SKEPTIC → 3-turn debate → self-correction → memory updated
+  → essay 2 → PERSONA CHANGES BECAUSE IT REMEMBERED
+  → class-level fallacy pattern → deterministic teacher priority + mini-lesson
+  → human approval (teacher clicks Send)
+```
+
+**The single most important moment in the video is "the persona changed because it remembered" (~2:10).** Everything else is context for that moment. Do not attempt to demo the whole system.
+
+Two lines worth putting on screen as text, because they land harder read than heard:
+* *"We don't trust the model's own confidence score."* (during the OCR beat)
+* *"The agent doesn't replace the teacher or the student's thinking. It makes both more scalable."* (closing)
+
+**Numbers discipline for the whole recording:** never say a number that is not visible on screen at that moment. Every headline figure in this project is reproducible from a script (`run_eval_suite.py`, `evaluate_learning_outcomes.py`, `experiment_memory_ab.py`) — run it live or screenshot it beforehand, and read what it shows.
+
+---
+
 ## ⏱️ Timeline & Shot Breakdown
 
 ```mermaid
@@ -13,7 +35,7 @@ timeline
     00:00 - 00:40 : The Problem (AI as Cheat Engine vs Cognitive Partner)
     00:40 - 01:45 : Single-Student Proof Sequence (Socratic Debate, Memory Adaptation, Metacognition)
     01:45 - 02:45 : Autonomous Class Synthesis (Priority Engine, Mini-Lesson, Parent Note)
-    02:45 - 03:30 : Architectural Rigor (Cloud Run, Trace, 4-Layer ADK Eval 50/50, Memory A/B)
+    02:45 - 03:30 : Architectural Rigor (Cloud Run, Trace, 4-Layer ADK Eval 50/50 deterministic cases, Memory A/B)
     03:30 - 04:00 : Summary & Live Verification Links
 ```
 
@@ -37,7 +59,7 @@ timeline
     > *"This student has previously struggled with: unsupported claim. Probing broader context..."*
 * **Visual 3 (1:25 - 1:45):** **Metacognitive Reflection Node**.
   - Binh submits a revised thesis statement based on the debate.
-  - The Scorer evaluates the cognitive delta: **Evidence Quality leaps from 2/10 to 8/10 ($\Delta = +6.0$)**.
+  - The Scorer evaluates the cognitive delta — **read the delta the screen actually shows.** ⚠️ Do NOT say "2/10 to 8/10, +6.0": those were hand-typed constants in an earlier version of the evaluation script, not measured values (ĐỢT 12 NHÓM 1). Live scoring of a short revised thesis typically lands in the low single digits in absolute terms; the honest framing is *"the delta is positive on the axis the persona targeted"*, and the measured mean across our 8 benchmark scenarios is **+2.75**, not +5.62. If you want a number on screen here, run `scripts/evaluate_learning_outcomes.py` beforehand and show `docs/learning_outcome_eval.md`.
 
 ---
 
@@ -46,7 +68,7 @@ timeline
   - Show the **Intervention Priority Index**: Ranked strictly by a deterministic rule engine (ZERO LLM-as-judge).
   - Binh is flagged at Priority 1.5 due to a stuck streak and common fallacy.
 * **Visual 2 (2:10 - 2:30):** **Actionable 15-Minute Mini-Lesson**.
-  - Show the newly generated class digest: The system detected 3 students struggling with *Unsupported Claims* and synthesized a 3-step in-class workshop with concrete examples and counterexamples.
+  - Show the newly generated class digest, and read out whatever number the screen actually shows: the systemic-pattern threshold is **2 or more distinct students** sharing a fallacy (`priority_engine.MIN_STUDENTS_FOR_COMMON_FALLACY = 2`), counted per student rather than per essay. Don't say "3 students" unless the digest on screen says 3 — the earlier draft of this line hard-coded a number the run may not produce.
 * **Visual 3 (2:30 - 2:45):** **1-Click Parent Progress Note**.
   - Click on Binh -> Generate Note. Gemini drafts an empathetic progress report citing Binh's cognitive breakthrough (do NOT say "FERPA-compliant" on camera — this is a privacy-by-design prototype, not a legally certified product).
 
@@ -55,12 +77,14 @@ timeline
 ### 🎬 Scene 4: Architectural Discipline & Empirical Evaluation (2:45 - 3:30)
 * **Visual 1 (2:45 - 3:05):** Architecture Diagram & Google Cloud Trace.
   - Show live Google Cloud Run deployment (`asia-southeast1`), Firestore Memory, Pub/Sub Event Ingestion, and W3C Trace context propagation across nodes. (Do NOT say "sub-250ms" on camera — that number is from a `time.sleep()` simulation script, not measured Gemini latency; see `docs/trace_evidence.md` caveat. If a real Cloud Trace screenshot is captured before recording, use the real number instead — otherwise just show the span hierarchy/order, no latency claim.)
-* **Visual 2 (3:05 - 3:20):** **4-Layer Deterministic ADK Eval Suite (50/50 PASS)**.
+* **Visual 2 (3:05 - 3:20):** **4-Layer Deterministic ADK Eval Suite — 50/50 deterministic test cases passed**.
   - Show terminal output of `scripts/run_eval_suite.py --strict`:
     1. Safety & Security (15/15)
     2. Behavioral Discipline (15/15)
     3. Long-Term Memory (10/10)
     4. Learning Outcomes (10/10)
+  - Say "**50 out of 50 deterministic test cases passed**", never "the system is 100% correct" — a judge will hear the difference.
+  - **Strongest 15 seconds available if you have them:** *"We audited our own suite and found twelve tests that could not fail — one group was asserting that eight minus two is at least four. We rewired them to production code and now prove every case can go red by breaking the code on purpose."* This is a credibility gain, not an admission; it is also the core of the bonus blog post (ADR-019).
 * **Visual 3 (3:20 - 3:30):** **Memory A/B Experiment Evidence**.
   - Show comparative graph: Stateless Baseline (repeated stagnant persona) vs. eduagent Persistent Memory (0% repeated stagnant interventions, 100% contextual adaptation).
 

@@ -13,14 +13,14 @@
 ---
 
 ## 2. Elevator Pitch
-An adversarial Socratic debate agent that challenges students' essays instead of correcting them — remembering each student's persistent weaknesses across sessions, and automatically triaging an entire class for the teacher via a deterministic priority ranking and a human-approved digest draft.
+eduagent is a persistent Socratic partner that challenges students instead of correcting them, **mutates a persistent learning profile** from each student's history, and turns individual learning signals into prioritized, human-approved actions for teachers.
 
 ---
 
 ## 3. Project Story (Markdown + LaTeX)
 
 ## Inspiration
-Overcrowded classrooms often leave a single teacher responsible for 40+ students, making it impossible to provide personalized critical-thinking feedback on writing assignments. Existing AI writing assistants tend to take a lazy shortcut: they simply rewrite the student's text, fixing the grammar and logic for them. This creates a feedback loop of dependency, teaching students how to copy AI instead of how to construct a sound argument. 
+Overcrowded classrooms often leave a single teacher responsible for 40+ students, making it impossible to provide personalized critical-thinking feedback on writing assignments. Many AI writing assistants optimize for producing a better answer. We wanted to optimize for producing a better thinker. An assistant that rewrites the student's text — fixing the grammar and the logic for them — creates a feedback loop of dependency, teaching students how to copy AI rather than how to construct a sound argument. 
 
 Our philosophy is the exact opposite: **we use AI to teach students how not to depend on AI.** We wanted to build a persistent, collaborative Socratic partner that challenges student reasoning, remembers their logical blind spots over time, and acts as a force multiplier for overloaded educators.
 
@@ -52,24 +52,29 @@ We built eduagent as a new system around Google ADK and GCP services:
 - **Google Cloud Pub/Sub:** Acts as our event broker, decoupling Tier 1 and Tier 2.
 - **Google Cloud Run:** Deploys a FastAPI HTTP server running inside a secure, multi-stage, non-root Docker container to handle Pub/Sub push subscriptions.
 - **Cloud Trace & OpenTelemetry:** Captures complete distributed span trees from intake to profile mutations.
-- **4-Layer Deterministic ADK Eval Suite:** A custom, fully deterministic testing framework that evaluates **50 test cases** across 4 layers (Safety & Security, Behavioral Discipline, Long-Term Memory, and Learning Outcomes) without utilizing an LLM-as-judge, eliminating the risk of reward-hacking.
+- **4-Layer Deterministic ADK Eval Suite:** A custom testing framework running **50 deterministic test cases** across 4 layers (Safety & Security, Behavioral Discipline, Long-Term Memory, Learning Outcomes) with no LLM-as-judge anywhere — and, after our own audit, with every case verified *falsifiable* by sabotage testing (break the production code on purpose, confirm the case goes red). See "Challenges" below: 12 of those 50 originally could not fail at all.
 
 ## Challenges we ran into
 - **Gmail OAuth Limitations:** We originally planned to restrict the Gmail API to draft-creation only at the OAuth scope layer. However, testing revealed that `gmail.compose` officially permits message sending. To enforce a strict Human-in-the-Loop gate, we had to move this constraint to the code layer by writing a static AST-based parser test that fails the build if the `.send()` method is ever called in the integrations code.
 - **OCR Hallucinations on Blur:** On highly degraded photos, Gemini Vision would occasionally hallucinate completely fabricated sentences while confidently self-reporting "high" confidence. We resolved this by building a deterministic, zero-LLM text comparison backstop that compares two independent Vision transcriptions and downgrades the confidence to "low" if they differ.
 - **Cloud Run Knative Routing:** Real deployment testing revealed that `/healthz` is intercepted by Knative's proxy layer on Cloud Run and returns a 404. We had to pivot and expose `/health-check` instead, which successfully routed to our FastAPI application.
+- **Our own eval suite contained 12 tests that could not fail.** Auditing our repository against its own documentation, we found that Layer 4's eight "cognitive growth" cases were subtracting two integer literals declared in the test fixture file — asserting `8 - 2 >= 4` — and would have passed with the entire `src/` tree deleted. The persona-fidelity cases rebuilt the system instruction *inside the test*, then asserted the persona anchor was present in the string they had just concatenated. Both are the same mistake: an assertion that restates its own setup. We rewired them to call production code (`build_system_instruction()`, `merge_reflection_into_profile()`, and a measured artifact from a live scorer run) and adopted a standing rule — every eval case must be proven capable of failing. Sabotage results: removing persona anchoring fails 4/4 cases; deleting the measurement artifact fails 4/4 Layer 4 cases. **Reward hacking does not require a reward model.** A human writing a tautological assertion produces the same worthless green metric.
+- **Our "empirical" learning-outcome number measured nothing.** The script behind our headline `+5.62` cognitive-growth figure carried its `before_scores` and `after_scores` as hand-typed literals and simply subtracted them. No essay was scored; no model was called; the report nonetheless claimed "independent re-scoring". We rewired it to run both texts through the real `summarize_essay()` → `score_essay()` path against Vertex AI, with the scorer shown one text at a time and never told which was the revision. The honest number is **+2.75**, and one of the eight scenarios does not improve at all. Losing half our headline metric was the correct outcome.
+- **The live service was signing teacher tokens with a key published in our own repo.** `EDUAGENT_SESSION_SECRET` had a committed default and had never been set at deploy time, so anyone who read the repository could mint a `role=teacher` token for any class and read that class's student data — silently voiding the tenancy isolation we had documented. Fix: the secret now comes from Secret Manager, and the container **refuses to start** on Cloud Run while the default is in effect. Separately, all five student-facing debate endpoints turned out to have no authentication at all (while every teacher route was gated), so any caller could write into any student's profile; they now require a token scoped to that student. The lesson we'd generalize: a security control that exists only in a design document is worth exactly zero, and the only way we found these was auditing the code *against* the doc rather than trusting it.
 
 ## Accomplishments that we're proud of
 - **Deterministic Safety Backstops:** Our validator and sanitizer are regex-based guards that block known answer-leak and injection patterns instantly, without invoking an LLM or wasting Vertex AI tokens.
 - **GCP Native Decoupling:** The Pub/Sub event-driven design lets essay submissions be buffered and processed asynchronously without blocking the student workflow, so the teacher co-pilot won't overload or skip an update.
 - **Real Handwriting Validation:** Instead of synthetic text, we validated the multimodal OCR using **12 photos of real handwriting** with cross-outs, low light, and messy margins.
 - **Zero-LLM Priority Index:** The teacher ranking engine uses pure arithmetic. The teacher can audit exactly *why* a student was flagged, keeping the AI-assisted classroom transparent and fair.
-- **Empirical Memory & Outcome Verification:** Our Memory A/B Experiment demonstrated, in our 3-essay controlled scenario, that persistent profiles eliminate repeated stagnant interventions (0% in Branch B vs 1 repeated in Stateless Branch A). Our Learning Outcome Evaluation showed that 8/8 controlled evaluation scenarios improved on their targeted cognitive dimension, with a $+5.62$ point average growth.
+- **Empirical Memory & Outcome Verification:** Our Memory A/B Experiment demonstrated, in our 3-essay controlled scenario, that persistent profiles eliminate repeated stagnant interventions (0% in Branch B vs 1 repeated in Stateless Branch A). Our Learning Outcome Measurement pushes 8 controlled thesis pairs through the real production scorer (`score_essay()` against Vertex AI, one text at a time, never shown which text is the revision): the targeted cognitive dimension improved in **7 of 8** scenarios, mean **+2.75** points on the targeted axis. n = 8 author-written thesis pairs, not 8 students, and no control group — this measures whether the production scorer detects the improvement each persona targets, not real classroom learning gains.
 
 ## What we learned
 - **LLMs are brilliant at generation but risky for validation.** Zero-trust architectures require hard code guards (regex, AST parsers, string matching) to act as backstops for GenAI features.
 - **Observability is critical.** Hooking OpenTelemetry into the ADK2 workflow allowed us to trace exactly how latency is distributed across OCR calls and database updates.
 - **Platform behaviors deviate from specs.** Testing on real GCP services (such as Cloud Run routing and Pub/Sub IAM policies) early in the development cycle is essential to catch silent failures.
+- **A green test suite is a claim, not evidence.** The question worth asking is not "did the tests pass" but "was any test *able* to fail". Sabotage testing — break the production code deliberately, confirm red — is the cheapest way to find out, and it is how we caught 12 dead cases in our own suite.
+- **Audit the code against the documentation, in that direction.** Every serious defect we found in our final pass came from reading a claim in a doc and then grepping for the mechanism it described. Two mitigations in our own STRIDE table did not exist in the source at all.
 
 ## What's next for eduagent
 - **Teacher Intervention Feedback Loop:** Track whether a teacher's chosen intervention actually improved that student's later outcomes, closing the loop `Observe → Diagnose → Intervene → Measure → Adapt`.
@@ -85,7 +90,9 @@ We built eduagent as a new system around Google ADK and GCP services:
 | Evaluation harness | **Deterministic** (regex/assertions, zero LLM) |
 | LLM-as-judge in eval suite | **No** |
 | Memory A/B experiment | 3-essay controlled scenario, n=1 student — not a statistical claim |
-| Learning-outcome experiment | 8 controlled evaluation scenarios, not 8 distinct students |
+| Learning-outcome measurement | 8 author-written thesis pairs, not 8 students; no control group; live-model scores, so re-runs move the numbers |
+| Eval case falsifiability | Every case verified by sabotage test (ADR-019) |
+| Persona fidelity, live mode | Opt-in `--live-persona` run, separate report: **2 of 4 personas drift** into the Skeptic's register on a hard essay |
 
 We do not use an LLM to judge whether our system passed its safety and behavioral tests — Gemini remains the production scorer, while the evaluation harness verifies deterministic output constraints and score deltas.
 

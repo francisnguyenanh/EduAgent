@@ -1,18 +1,29 @@
 """PHASE 5 -- 4-Layer Deterministic ADK Eval Suite runner (Task 10.4).
 
 Executes all 4 layers (50 test cases total) and writes a JSON + Markdown report to eval/results/.
-Design Principle: ZERO LLM-as-judge. Every single metric is deterministic, auditable, and reproducible.
+Design Principle: ZERO LLM-as-judge. Every metric is deterministic, auditable and
+reproducible -- and, after ĐỢT 12, every case is capable of FAILING (see below).
 
 4 Layers:
-  - Layer 1: Safety & Security Guardrails (15 cases)
-  - Layer 2: Behavioral & Pedagogical Discipline (15 cases)
-  - Layer 3: Long-Term Memory & Adaptation (10 cases)
-  - Layer 4: Learning Outcomes & Cognitive Growth (10 cases)
+  - Layer 1: Safety & Security Guardrails (15 cases) -- real validator/sanitizer/auth
+  - Layer 2: Behavioral & Pedagogical Discipline (15 cases) -- real prompt builders
+  - Layer 3: Long-Term Memory & Adaptation (10 cases) -- real profile-merge functions
+  - Layer 4: Learning Outcomes & Cognitive Growth (10 cases) -- 6 against the real
+    metacognitive growth logic, 4 against the measured artifact produced by
+    scripts/evaluate_learning_outcomes.py
+
+ĐỢT 12 NHÓM 1: two groups of cases were previously unfalsifiable and have been
+rewritten to drive production code instead:
+  - Layer 4's 8 "growth" cases subtracted integer literals declared in
+    eval/evalset.py (`8 - 2 >= 4`), passing even with src/ deleted.
+  - Layer 2's persona-fidelity cases rebuilt the system instruction inside the
+    runner and then asserted the anchor was in the string they had just
+    concatenated. They now call nodes/debate.py::build_system_instruction().
 
 Usage:
   python scripts/run_eval_suite.py
-  python scripts/run_eval_suite.py --layer 1
   python scripts/run_eval_suite.py --strict
+  python scripts/run_eval_suite.py --live-persona   # opt-in: real Gemini debate turns
 """
 
 from __future__ import annotations
@@ -104,7 +115,13 @@ def run_prompt_injection_cases() -> list[CaseResult]:
 
 
 def run_tenancy_security_cases() -> list[CaseResult]:
-    from eduagent.auth import create_access_token, verify_access_token
+    """ĐỢT 12 NHÓM 4: this runner used to re-implement the authorization check
+    (`claims.get("class_id") == case["target_class_id"]`) instead of calling it.
+    That protected a COPY of the logic -- a bug in the real
+    `server._verify_class_auth` (a forgotten role check, say) would have left
+    these 4 cases green. It now drives the exact function the HTTP routes use."""
+    from eduagent.auth import create_access_token
+    from eduagent.server import _verify_class_auth
 
     results = []
     for case in TENANCY_SECURITY_CASES:
@@ -115,9 +132,10 @@ def run_tenancy_security_cases() -> list[CaseResult]:
         else:
             token = ""
 
+        authorization = f"Bearer {token}" if token else None
         try:
-            claims = verify_access_token(token) if token else None
-            allowed = bool(claims and claims.get("class_id") == case["target_class_id"])
+            _verify_class_auth(case["target_class_id"], authorization, required_role="teacher")
+            allowed = True
         except Exception:
             allowed = False
 
@@ -144,29 +162,121 @@ def _matches_signature(text: str, keywords: list[str]) -> bool:
     return any(kw in lowered for kw in keywords)
 
 
-def run_persona_fidelity_cases() -> list[CaseResult]:
-    from eduagent.skills.debate_escalation import get_escalation_instruction
-    from eduagent.skills.personas import get_persona
+def run_persona_fidelity_cases(*, live: bool = False) -> list[CaseResult]:
+    """ĐỢT 12 NHÓM 1 rework.
+
+    Default (deterministic, zero LLM) mode asserts against the REAL production
+    prompt builder, `nodes/debate.py::build_system_instruction()` -- the same
+    function generate_debate_turn() sends to Gemini. The previous version
+    rebuilt the instruction string inside this runner and then checked that the
+    anchor was in the string it had just concatenated: a tautology. Now the
+    checks are:
+      1. the production builder injects this persona's anchor into the prompt
+         it will actually send (fails if anchoring is refactored away),
+      2. the anchor carries this persona's distinguishing keyword signature,
+      3. the anchor is DISTINCT from every other persona's anchor, and no other
+         persona's anchor satisfies this persona's signature (fails if two
+         personas collapse into the same voice -- the exact drift failure mode
+         persona anchoring exists to prevent),
+      4. the persona survives all 3 escalation turns (anchor still present on
+         turn 2 and turn 3, not just the opening turn).
+
+    `--live-persona` additionally runs the real 3-turn debate against live
+    Gemini and scores the model's actual questions against the keyword lexicon.
+    """
+    from eduagent.nodes.debate import build_system_instruction
+    from eduagent.skills.personas import PERSONA_IDS, get_persona
+
+    all_anchors = {pid: get_persona(pid).anchor for pid in PERSONA_IDS}
 
     results = []
     for case in PERSONA_FIDELITY_CASES:
-        persona = get_persona(case["persona_id"])
-        system_instruction = f"{persona.anchor}\n\n{get_escalation_instruction(1)}"
-        anchor_injected = persona.anchor in system_instruction
-        keyword_in_anchor = _matches_signature(persona.anchor, case["signature_keywords"])
-        passed = anchor_injected and keyword_in_anchor
+        pid = case["persona_id"]
+        persona = get_persona(pid)
+        keywords = case["signature_keywords"]
+
+        # (1) + (4): the real builder must carry the anchor on every turn.
+        turns_with_anchor = [
+            t for t in (1, 2, 3) if persona.anchor in build_system_instruction(persona_id=pid, turn_number=t)
+        ]
+        anchor_injected_all_turns = turns_with_anchor == [1, 2, 3]
+
+        # (2)
+        keyword_in_anchor = _matches_signature(persona.anchor, keywords)
+
+        # (3)
+        others = {other: a for other, a in all_anchors.items() if other != pid}
+        anchor_is_unique = persona.anchor not in others.values()
+        confusable_with = sorted(other for other, a in others.items() if _matches_signature(a, keywords))
+
+        passed = anchor_injected_all_turns and keyword_in_anchor and anchor_is_unique and not confusable_with
+
+        detail = (
+            f"production builder injects anchor on turns {turns_with_anchor} (need [1, 2, 3]); "
+            f"signature match={keyword_in_anchor}; anchor unique={anchor_is_unique}; "
+            f"confusable with={confusable_with or 'none'}"
+        )
+        raw: dict = {"persona": pid, "focus": persona.focus, "turns_with_anchor": turns_with_anchor}
+
+        if live:
+            live_passed, live_detail, live_raw = _run_live_persona_debate(case)
+            passed = passed and live_passed
+            detail = f"{detail} | LIVE: {live_detail}"
+            raw["live"] = live_raw
 
         results.append(
             CaseResult(
                 id=case["id"],
                 layer="Layer 2: Behavioral Discipline",
-                group="persona_fidelity",
+                group="persona_fidelity_live" if live else "persona_fidelity",
                 passed=passed,
-                detail=f"anchor injected={anchor_injected}, keyword signature match={keyword_in_anchor}",
-                raw_output={"persona": case["persona_id"], "focus": persona.focus},
+                detail=detail,
+                raw_output=raw,
             )
         )
     return results
+
+
+def _run_live_persona_debate(case: dict) -> tuple[bool, str, dict]:
+    """Runs the real 3-turn debate against live Gemini and matches the model's
+    ACTUAL questions against the persona's keyword lexicon. Opt-in only
+    (`--live-persona`) so the default suite keeps its zero-LLM guarantee."""
+    from eduagent.nodes.debate import generate_debate_turn
+    from eduagent.nodes.validator import validate_debate_turn
+
+    turns: list[dict] = []
+    questions: list[str] = []
+    matched_turns: list[int] = []
+    validator_failures: list[int] = []
+
+    for turn_number in (1, 2, 3):
+        student_response = case["student_replies"][turn_number - 2] if turn_number > 1 else None
+        turn = generate_debate_turn(
+            persona_id=case["persona_id"],
+            essay_text=case["essay"],
+            summary=case["summary"],
+            turn_number=turn_number,
+            prior_turns=turns,
+            student_response=student_response,
+            prior_weaknesses=[],
+        )
+        turns.append(turn)
+        question = turn["question"]
+        questions.append(question)
+        if _matches_signature(question, case["signature_keywords"]):
+            matched_turns.append(turn_number)
+        if not validate_debate_turn(question).passed:
+            validator_failures.append(turn_number)
+
+    # A persona holds if its voice is recognisable in at least 2 of 3 turns --
+    # demanding 3/3 keyword hits from a live model would measure the lexicon's
+    # completeness, not persona fidelity.
+    passed = len(matched_turns) >= 2 and not validator_failures
+    detail = (
+        f"live signature matched on turns {matched_turns} (need >= 2 of 3); "
+        f"validator failures on turns {validator_failures or 'none'}"
+    )
+    return passed, detail, {"questions": questions, "matched_turns": matched_turns}
 
 
 def run_single_question_cases() -> list[CaseResult]:
@@ -324,42 +434,131 @@ def run_memory_cases() -> list[CaseResult]:
 # LAYER 4: LEARNING OUTCOMES & COGNITIVE GROWTH RUNNERS
 # =============================================================================
 
-def run_learning_outcome_cases() -> list[CaseResult]:
+_MEASURED_ARTIFACT = _RESULTS_DIR / "learning_outcome_measured.json"
+_AXES = ("logical_coherence", "evidence_quality", "counterargument_handling", "scope_awareness")
+
+
+def _load_measured_artifact() -> dict | None:
+    """Loads the learning-outcome measurement produced by
+    scripts/evaluate_learning_outcomes.py. Returns None if it is absent or
+    unreadable -- the Group B cases then FAIL loudly rather than silently
+    passing, which is the whole point of the ĐỢT 12 rework."""
+    if not _MEASURED_ARTIFACT.exists():
+        return None
+    try:
+        data = json.loads(_MEASURED_ARTIFACT.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+    if not isinstance(data, dict) or not data.get("evaluations"):
+        return None
+    return data
+
+
+def _run_reflection_logic_case(case: dict, now_iso: str) -> tuple[bool, str]:
+    """Group A: exercises the real merge_reflection_into_profile()."""
     from eduagent.memory.student_profile import empty_profile, merge_reflection_into_profile
 
+    cid = case["id"]
+    bonus = case.get("growth_bonus", 0.5)
+    sequence = case.get("resolution_sequence")
+    if sequence is None:
+        sequence = [case["resolved"]] * case.get("breakthroughs", 1) if "resolved" in case else [True] * case["breakthroughs"]
+
+    p = empty_profile(name="S", class_id="c1")
+    for i, resolved in enumerate(sequence):
+        p = merge_reflection_into_profile(
+            p,
+            reflection_text=f"Revision {i}",
+            original_fallacy=f"f{i}",
+            resolved=resolved,
+            growth_bonus=bonus,
+            timestamp=now_iso,
+        )
+
+    checks: list[tuple[str, object, object]] = []
+    if "expected_growth_bonus" in case:
+        checks.append(("total_growth_bonus", p["total_growth_bonus"], case["expected_growth_bonus"]))
+    if "expected_total_bonus" in case:
+        checks.append(("total_growth_bonus", p["total_growth_bonus"], case["expected_total_bonus"]))
+    if "expected_breakthrough_count" in case:
+        checks.append(("breakthrough_count", p["breakthrough_count"], case["expected_breakthrough_count"]))
+    if "expected_reflections_recorded" in case:
+        checks.append(("reflections_recorded", len(p["reflections_history"]), case["expected_reflections_recorded"]))
+    if "expected_last_resolved" in case:
+        checks.append(("last_reflection.resolved", p["last_reflection"]["resolved"], case["expected_last_resolved"]))
+
+    if not checks:
+        return False, f"{cid}: no assertion declared for this case"
+
+    passed = all(actual == expected for _name, actual, expected in checks)
+    detail = ", ".join(f"{name}={actual!r} (expected {expected!r})" for name, actual, expected in checks)
+    return passed, detail
+
+
+def _run_measured_case(case: dict, measured: dict | None) -> tuple[bool, str]:
+    """Group B: asserts against the real measured artifact. Every branch here
+    can fail -- a missing artifact, a flat measurement, or an incomplete axis
+    coverage all report FAIL."""
+    if measured is None:
+        return False, (
+            f"measurement artifact missing or unreadable at {_MEASURED_ARTIFACT.relative_to(_ROOT)} -- "
+            "run `python scripts/evaluate_learning_outcomes.py` first"
+        )
+
+    evaluations = measured["evaluations"]
+    assertion = case["assertion"]
+
+    if assertion == "artifact_present":
+        n = len(evaluations)
+        has_scores = all("before_scores" in e and "after_scores" in e for e in evaluations)
+        passed = n >= 8 and has_scores and bool(measured.get("measured_at")) and bool(measured.get("scorer"))
+        return passed, (
+            f"artifact has {n} measured scenarios, full per-axis scores={has_scores}, "
+            f"measured_at={measured.get('measured_at')!r}, scorer={measured.get('scorer')!r}"
+        )
+
+    if assertion == "mean_targeted_delta_gt":
+        actual = measured["avg_targeted_growth"]
+        return actual > case["threshold"], f"measured mean targeted delta={actual:+} (threshold > {case['threshold']:+})"
+
+    if assertion == "improved_fraction_gte":
+        improved = sum(1 for e in evaluations if e["delta_targeted"] > 0)
+        fraction = improved / len(evaluations)
+        return fraction >= case["threshold"], (
+            f"{improved}/{len(evaluations)} scenarios improved on their targeted axis "
+            f"({fraction:.0%}, threshold >= {case['threshold']:.0%})"
+        )
+
+    if assertion == "all_axes_covered":
+        covered = {e["dimension"] for e in evaluations}
+        missing = sorted(set(_AXES) - covered)
+        return not missing, f"axes measured={sorted(covered)}, missing={missing}"
+
+    return False, f"unknown measured assertion {assertion!r}"
+
+
+def run_learning_outcome_cases() -> list[CaseResult]:
     results = []
     now_iso = datetime.now(timezone.utc).isoformat()
+    measured = _load_measured_artifact()
 
     for case in LEARNING_OUTCOME_CASES:
-        cid = case["id"]
-        passed = False
-        detail = ""
-
-        if "before" in case and "after" in case:
-            delta = case["after"] - case["before"]
-            passed = delta >= 4
-            detail = f"dimension={case['dimension']}, before={case['before']}, after={case['after']}, delta=+{delta}"
-
-        elif cid == "outcome-metacognitive-growth-bonus":
-            p = empty_profile(name="S", class_id="c1")
-            p = merge_reflection_into_profile(
-                p, reflection_text="Nuanced thesis statement.", original_fallacy="claim", resolved=True, growth_bonus=0.5, timestamp=now_iso
-            )
-            passed = p["total_growth_bonus"] == case["expected_growth_bonus"]
-            detail = f"growth_bonus={p['total_growth_bonus']}"
-
-        elif cid == "outcome-breakthrough-accumulation":
-            p = empty_profile(name="S", class_id="c1")
-            for i in range(case["breakthroughs"]):
-                p = merge_reflection_into_profile(p, reflection_text=f"Revision {i}", original_fallacy=f"f{i}", resolved=True, growth_bonus=0.5, timestamp=now_iso)
-            passed = p["total_growth_bonus"] == case["expected_total_bonus"] and p["breakthrough_count"] == 3
-            detail = f"total_growth={p['total_growth_bonus']}, breakthroughs={p['breakthrough_count']}"
+        kind = case.get("kind")
+        if kind == "reflection_logic":
+            passed, detail = _run_reflection_logic_case(case, now_iso)
+            group = "metacognitive_growth_logic"
+        elif kind == "measured":
+            passed, detail = _run_measured_case(case, measured)
+            group = "measured_learning_outcome"
+        else:
+            passed, detail = False, f"case declares unknown kind={kind!r}"
+            group = "learning_outcomes"
 
         results.append(
             CaseResult(
-                id=cid,
+                id=case["id"],
                 layer="Layer 4: Learning Outcomes",
-                group="learning_outcomes",
+                group=group,
                 passed=passed,
                 detail=detail,
                 raw_output=case,
@@ -372,14 +571,14 @@ def run_learning_outcome_cases() -> list[CaseResult]:
 # SUITE AGGREGATOR & REPORT BUILDER
 # =============================================================================
 
-def run_full_suite() -> list[CaseResult]:
+def run_full_suite(*, live_persona: bool = False) -> list[CaseResult]:
     results: list[CaseResult] = []
     # Layer 1 (15 cases)
     results += run_answer_leak_cases()
     results += run_prompt_injection_cases()
     results += run_tenancy_security_cases()
     # Layer 2 (15 cases)
-    results += run_persona_fidelity_cases()
+    results += run_persona_fidelity_cases(live=live_persona)
     results += run_single_question_cases()
     results += run_bounds_cases()
     results += run_escalation_cases()
@@ -416,15 +615,52 @@ def build_report(results: list[CaseResult]) -> dict:
 
 
 def render_markdown(report: dict) -> str:
+    total = report["overall"]["total"]
+    is_live = any(c["group"].endswith("_live") for c in report["cases"])
+    if is_live:
+        live_cases = [c for c in report["cases"] if c["group"].endswith("_live")]
+        live_passed = sum(1 for c in live_cases if c["passed"])
+        return f"""# ADK Eval Suite Report -- `--live-persona` run (MAKES REAL GEMINI CALLS)
+
+> ⚠️ **This is NOT the deterministic report.** This run was invoked with
+> `--live-persona`, so the persona-fidelity group ran the real 3-turn debate
+> against live Gemini and matched the model's actual questions against a fixed
+> keyword lexicon. The deterministic, zero-LLM report is `eval_report.md`.
+>
+> Live persona-fidelity result: **{live_passed}/{len(live_cases)} personas held their voice**
+> (criterion: the persona's signature lexicon appears in >= 2 of 3 generated
+> questions, and every question passes the independent validator).
+>
+> Live results are **not reproducible** -- Gemini output varies per run. Cite
+> them as a diagnostic observation, never as a pass rate.
+
+| Case | Result | Detail |
+|---|:---:|---|
+""" + "".join(
+            f"| `{c['id']}` | **{'PASS' if c['passed'] else 'FAIL'}** | {c['detail']} |\n" for c in live_cases
+        ) + f"""
+## All cases in this run ({report['overall']['passed']}/{total})
+
+| Case ID | Layer | Group | Result | Detail |
+|---|---|---|:---:|---|
+""" + "".join(
+            f"| `{c['id']}` | {c['layer']} | `{c['group']}` | **{'PASS' if c['passed'] else 'FAIL'}** | {c['detail']} |\n"
+            for c in report["cases"]
+        )
+
     md = f"""# 4-Layer Deterministic ADK Eval Suite Report
 
-> **Methodological Mandate (ZERO LLM-as-Judge):** Tất cả 50 test case được đánh giá dựa trên **quy tắc kiểm chứng tất định (deterministic rules)**, thuật toán tính điểm và biểu thức chính quy sản xuất, triệt tiêu 100% rủi ro *Reward Hacking* từ LLM-as-judge.
+> **Methodological Mandate (ZERO LLM-as-Judge):** cả {total} test case được đánh giá bằng **quy tắc kiểm chứng tất định (deterministic rules)** — validator regex, thuật toán xếp hạng và các hàm thuần trong `src/` — không có LLM nào đóng vai giám khảo, nên không tồn tại đường *Reward Hacking* qua LLM-as-judge.
+>
+> **Cách đọc con số này:** đây là **{report['overall']['passed']}/{total} test case tất định PASS**, tức "test suite xanh", KHÔNG phải "hệ thống đúng {report['overall']['pass_rate']:.0%}". Hai phát biểu khác nhau.
+>
+> **Điểm cần biết về Layer 4:** 6 case chạy trực tiếp logic metacognitive growth thật (`memory/student_profile.py`); 4 case còn lại assert lên **kết quả đo thật** trong `eval/results/learning_outcome_measured.json` do `scripts/evaluate_learning_outcomes.py` sinh ra bằng cách gọi scorer production qua Vertex AI. Nếu file đo đó thiếu hoặc phép đo không cho thấy tăng trưởng, các case này **FAIL** — chúng không phải phép trừ trên hằng số.
 
 ---
 
 ## 1. Tổng Kết 4 Tầng Kiểm Thử (4-Layer Summary)
 
-**Tổng số:** **{report['overall']['passed']}/{report['overall']['total']} Test Cases PASS ({report['overall']['pass_rate']:.0%})**
+**Tổng số:** **{report['overall']['passed']}/{total} deterministic test cases passed ({report['overall']['pass_rate']:.0%})**
 
 | Tầng Kiểm Thử (Evaluation Layer) | Số Test Case PASS | Tổng Test Case | Tỷ Lệ Đạt (Pass Rate) |
 |---|:---:|:---:|:---:|
@@ -453,18 +689,27 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="4-Layer ADK Eval Suite Runner")
     parser.add_argument("--strict", action="store_true", help="Exit code 1 if any test fails")
+    parser.add_argument(
+        "--live-persona",
+        action="store_true",
+        help="Additionally run the real 3-turn debate against live Gemini for the persona-fidelity cases "
+        "(opt-in: the default suite makes ZERO LLM calls)",
+    )
     args = parser.parse_args()
 
-    print("[*] Running 4-Layer Deterministic ADK Eval Suite (50/50 cases)...")
-    results = run_full_suite()
+    print(f"[*] Running 4-Layer ADK Eval Suite (deterministic; live-persona={'on' if args.live_persona else 'off'})...")
+    results = run_full_suite(live_persona=args.live_persona)
     report = build_report(results)
 
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (_RESULTS_DIR / "eval_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    (_RESULTS_DIR / "eval_report.md").write_text(render_markdown(report), encoding="utf-8")
+    # A --live-persona run makes real Gemini calls, so it must NOT overwrite the
+    # deterministic report -- that report's whole claim is "zero LLM calls".
+    stem = "eval_report_live_persona" if args.live_persona else "eval_report"
+    (_RESULTS_DIR / f"{stem}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    (_RESULTS_DIR / f"{stem}.md").write_text(render_markdown(report), encoding="utf-8")
 
     print(f"\n[OK] Evaluation complete: {report['overall']['passed']}/{report['overall']['total']} passed ({report['overall']['pass_rate']:.0%})")
-    print(f"[OK] Report written to: {_RESULTS_DIR / 'eval_report.md'}")
+    print(f"[OK] Report written to: {_RESULTS_DIR / f'{stem}.md'}")
 
     if args.strict and report["overall"]["passed"] != report["overall"]["total"]:
         sys.exit(1)

@@ -13,13 +13,30 @@ reply calls `step_debate_turn()` -- which reuses debate.py's
 graph node uses) -- instead of redoing OCR/sanitizing/summarizing/persona
 selection for every single turn.
 
-Session state lives in an in-process dict, keyed by caller-supplied
-session_id. This is intentionally NOT a durable store (no Firestore) --
-Session vs Memory stays the same distinction as everywhere else in this
-project (PROJECT_WIKI.md 7.5.6): a live debate's turn-by-turn state is
-per-session, not the kind of thing that needs to survive a process restart,
-whereas the finished transcript still gets persisted the normal way through
-profile_mutator once the graph resumes/completes.
+SESSION STORAGE (ADR-015, superseding this module's original design).
+
+Session state is held in a two-tier store: an in-process dict (`_sessions`)
+in front of a Firestore `debate_sessions/{session_id}` document, via
+memory/firestore_session.py. Reads prefer the local tier and fall back to
+Firestore; writes go to both.
+
+The original docstring here said the opposite -- "intentionally NOT a durable
+store (no Firestore)" -- and that stayed in the file after ADR-015 added the
+Firestore calls that this module now makes on every session operation (see the
+`_firestore_*` imports below). ĐỢT 12 NHÓM 3 corrected it: a comment that
+contradicts the code twenty lines under it is worse than no comment.
+
+WHY the durable tier was needed: Cloud Run runs multiple instances behind a
+load balancer, and a 3-turn debate is 3+ separate HTTP requests. With
+in-process-only state, turn 2 landing on a different instance than turn 1
+raised UnknownSessionError and lost the student's debate mid-conversation.
+
+This does NOT collapse the Session-vs-Memory distinction (PROJECT_WIKI.md
+7.5.6). `debate_sessions` is still *session* data: short-lived, keyed by
+session_id, carrying a 24h `expire_at` for TTL deletion, and torn down by
+end_debate_session(). Durability here buys request-to-request continuity, not
+long-term recall. Long-term memory remains `student_profiles`, written only
+through the profile-mutation path.
 """
 
 from __future__ import annotations
@@ -66,6 +83,7 @@ def start_debate_session(
     prior_weaknesses: list[str] | None = None,
     language: str | None = None,
     student_id: str = "",
+    name: str = "",
     class_id: str = "",
 ) -> None:
     """Registers a new interactive session. Call once, right after
@@ -84,6 +102,7 @@ def start_debate_session(
         "prior_weaknesses": prior_weaknesses or [],
         "language": language or detect_language(essay_text),
         "student_id": student_id,
+        "name": name or student_id,
         "class_id": class_id,
         "turns": [],
         "created_at": time.time(),
@@ -169,11 +188,54 @@ def record_student_reply(session_id: str, student_reply: str) -> None:
 
 
 
-def complete_debate_session(session_id: str) -> dict:
+def _default_persist_essay_result(**kwargs) -> None:
+    """Real Firestore write, or a no-op under pytest.
+
+    ĐỢT 12 NHÓM 4: this used to be an inline `and not os.getenv(
+    "PYTEST_CURRENT_TEST")` in the condition below, which had a nasty property --
+    it did not just keep tests offline, it made the write path *unreachable* from
+    any test. So the feature ĐỢT 9 declared "fixed" (wiring the interactive
+    debate into Firestore + Pub/Sub) and ĐỢT 10's Task 10.5 had precisely zero
+    tests behind them, and "190/190 passed" said nothing about either.
+
+    Hoisting the decision into injectable seams keeps the offline-by-default
+    guarantee while letting a test pass a fake and assert that the write happens
+    with the right payload. Same pattern as
+    memory/firestore_session.py::_default_client().
+    """
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    from eduagent.memory.firestore_memory import apply_essay_result
+
+    apply_essay_result(**kwargs)
+
+
+def _default_publish_event(**kwargs) -> None:
+    """Real Pub/Sub publish, or a no-op under pytest. See above."""
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    from eduagent.events import publish_essay_evaluated
+
+    publish_essay_evaluated(**kwargs)
+
+
+def complete_debate_session(
+    session_id: str,
+    *,
+    persist_essay_result=None,
+    publish_event=None,
+    run_publish_in_thread: bool = True,
+) -> dict:
     """ĐỢT 5 -- scores the finished debate (same cognitive_scorer prompt/
     schema the batch graph uses, via scorer.py's shared score_essay()) and
-    tears the session down. Now also persists to Firestore and publishes
-    Pub/Sub event to trigger class aggregation / Sheets logging for live web sessions."""
+    tears the session down. Also persists to Firestore and publishes a Pub/Sub
+    event to trigger class aggregation / Sheets logging for live web sessions.
+
+    `persist_essay_result` / `publish_event` / `run_publish_in_thread` exist for
+    tests (see tests/test_interactive_persistence.py): production callers use the
+    defaults. `run_publish_in_thread=False` makes the publish synchronous so a
+    test can assert it happened without racing a daemon thread.
+    """
     session = get_debate_session(session_id)
     scores, rationale, student_feedback, degraded = score_essay(
         essay_text=session["essay_text"],
@@ -184,23 +246,28 @@ def complete_debate_session(session_id: str) -> dict:
     )
 
     student_id = session.get("student_id")
+    student_name = session.get("name") or student_id
     class_id = session.get("class_id") or "c1"
     persona_id = session.get("persona_id") or "skeptic"
     fallacies_draft = session["summary"].get("fallacies_draft", [])
 
-    if student_id and not degraded and not os.getenv("PYTEST_CURRENT_TEST"):
-        from eduagent.memory.firestore_memory import apply_essay_result
-        from eduagent.events import publish_essay_evaluated
+    # A degraded score is deliberately NOT persisted: writing a fabricated 0
+    # would corrupt score_trend and flag the student as declining because of an
+    # outage rather than their work (same discipline as scorer.py / mutator.py).
+    if student_id and not degraded:
         from datetime import datetime, timezone
         import threading
+
+        persist = persist_essay_result or _default_persist_essay_result
+        publish = publish_event or _default_publish_event
 
         essay_id = session_id
         timestamp = datetime.now(timezone.utc).isoformat()
 
         try:
-            apply_essay_result(
-                student_id,
-                name=student_id,
+            persist(
+                student_id=student_id,
+                name=student_name,
                 class_id=class_id,
                 essay_id=essay_id,
                 timestamp=timestamp,
@@ -212,7 +279,7 @@ def complete_debate_session(session_id: str) -> dict:
 
             def _pub():
                 try:
-                    publish_essay_evaluated(
+                    publish(
                         event_id=essay_id,
                         student_id=student_id,
                         class_id=class_id,
@@ -221,7 +288,10 @@ def complete_debate_session(session_id: str) -> dict:
                 except Exception:
                     _logger.exception("Failed to publish Pub/Sub event after interactive debate completion")
 
-            threading.Thread(target=_pub, daemon=True).start()
+            if run_publish_in_thread:
+                threading.Thread(target=_pub, daemon=True).start()
+            else:
+                _pub()
         except Exception:
             _logger.exception("Failed to persist interactive debate results to Firestore for student %s", student_id)
 
