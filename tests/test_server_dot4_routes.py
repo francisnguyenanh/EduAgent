@@ -64,3 +64,22 @@ def test_parent_note_route_returns_note():
     assert response.status_code == 200
     assert response.json()["note"] == "Hi"
 
+
+def test_login_route_rejects_mismatched_roles(monkeypatch):
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
+    resp_t = client.post("/api/auth/login", json={"role": "teacher", "user_id": "c1_stu01", "password": "eduagent2026"})
+    assert resp_t.status_code == 401
+    assert "student account" in resp_t.json()["detail"]
+
+    resp_s = client.post("/api/auth/login", json={"role": "student", "user_id": "c1_teacher", "password": "eduagent2026"})
+    assert resp_s.status_code == 401
+    assert "teacher account" in resp_s.json()["detail"]
+
+
+def test_teacher_routes_reject_student_tokens():
+    student_headers = {"Authorization": f"Bearer {create_access_token('c1_stu01', 'student', 'c1')}"}
+    resp = client.get("/api/classes/c1/priority", headers=student_headers)
+    assert resp.status_code == 403
+    assert "not authorized" in resp.json()["detail"]
+
+

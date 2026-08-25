@@ -106,9 +106,9 @@ def _verify_pubsub_push_auth(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="OIDC token not issued to the expected push service account.")
 
 
-def _verify_class_auth(class_id: str, authorization: str | None) -> dict:
+def _verify_class_auth(class_id: str, authorization: str | None, required_role: str | None = None) -> dict:
     """ĐỢT 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
-    for the exact class_id in the URL path."""
+    for the exact class_id in the URL path, and verifies role if required."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required: missing or invalid Bearer token.")
     token = authorization.split(" ", 1)[1].strip()
@@ -123,6 +123,11 @@ def _verify_class_auth(class_id: str, authorization: str | None) -> dict:
         raise HTTPException(
             status_code=403,
             detail=f"Forbidden: token for class {claims.get('class_id')!r} cannot access class {class_id!r}.",
+        )
+    if required_role and claims.get("role") != required_role:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Forbidden: role {claims.get('role')!r} is not authorized for this action (expected {required_role!r}).",
         )
     return claims
 
@@ -148,7 +153,7 @@ async def api_login(payload: LoginRequest) -> dict:
 
 @app.get("/api/classes/{class_id}/priority")
 async def api_class_priority(class_id: str, authorization: str | None = Header(None)) -> dict:
-    _verify_class_auth(class_id, authorization)
+    _verify_class_auth(class_id, authorization, required_role="teacher")
     try:
         return class_priority(class_id)
     except Exception:
@@ -158,7 +163,7 @@ async def api_class_priority(class_id: str, authorization: str | None = Header(N
 
 @app.get("/api/classes/{class_id}/settings")
 async def api_get_settings(class_id: str, authorization: str | None = Header(None)) -> dict:
-    _verify_class_auth(class_id, authorization)
+    _verify_class_auth(class_id, authorization, required_role="teacher")
     try:
         return get_settings(class_id)
     except Exception:
@@ -168,7 +173,7 @@ async def api_get_settings(class_id: str, authorization: str | None = Header(Non
 
 @app.put("/api/classes/{class_id}/settings")
 async def api_update_settings(class_id: str, payload: ClassSettingsRequest, authorization: str | None = Header(None)) -> dict:
-    _verify_class_auth(class_id, authorization)
+    _verify_class_auth(class_id, authorization, required_role="teacher")
     try:
         return update_settings(class_id, payload)
     except Exception:
@@ -178,7 +183,7 @@ async def api_update_settings(class_id: str, payload: ClassSettingsRequest, auth
 
 @app.post("/api/classes/{class_id}/test-sheets")
 async def api_test_sheets(class_id: str, payload: TestSheetsRequest | None = None, authorization: str | None = Header(None)) -> dict:
-    _verify_class_auth(class_id, authorization)
+    _verify_class_auth(class_id, authorization, required_role="teacher")
     try:
         return test_sheets_connection(class_id, payload)
     except ValueError as exc:
@@ -191,7 +196,7 @@ async def api_test_sheets(class_id: str, payload: TestSheetsRequest | None = Non
 
 @app.post("/api/parent-note")
 async def api_parent_note(payload: ParentNoteRequest, authorization: str | None = Header(None)) -> dict:
-    _verify_class_auth(payload.class_id, authorization)
+    _verify_class_auth(payload.class_id, authorization, required_role="teacher")
     try:
         return parent_note(payload)
     except ValueError as exc:
@@ -264,7 +269,7 @@ async def api_debate_reflect(payload: DebateReflectionRequest) -> dict:
 
 @app.get("/api/classes/{class_id}/analytics")
 async def api_class_analytics(class_id: str, limit: int = 10, authorization: str | None = Header(None)) -> dict:
-    _verify_class_auth(class_id, authorization)
+    _verify_class_auth(class_id, authorization, required_role="teacher")
     try:
         digests = list_recent_digests(class_id=class_id, limit=limit)
     except Exception:
@@ -278,7 +283,7 @@ async def api_class_students(class_id: str, limit: int = 50, authorization: str 
     """ĐỢT 3: class roster ordered by most-recently-active student, backed
     by the composite index in firestore.indexes.json -- see
     memory/firestore_memory.py::list_students_by_class."""
-    _verify_class_auth(class_id, authorization)
+    _verify_class_auth(class_id, authorization, required_role="teacher")
     try:
         students = list_students_by_class(class_id, limit=limit)
     except Exception:

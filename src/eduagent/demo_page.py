@@ -42,7 +42,8 @@ DEMO_PAGE_HTML = """<!doctype html>
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
   .panel + .panel { margin-top: 1rem; }
   label { display: block; font-size: 0.8rem; color: var(--muted); margin: 0.75rem 0 0.25rem; }
-  input, textarea { width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
+  input:not([type="checkbox"]), textarea { width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
+  input[type="checkbox"] { cursor: pointer; }
   textarea { min-height: 120px; resize: vertical; }
   button.action { margin-top: 1rem; padding: 0.6rem 1.1rem; border-radius: 8px; border: none; background: var(--accent); color: var(--accent-text); font-weight: 600; cursor: pointer; }
   button.action:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -307,12 +308,21 @@ function pickRole(role) {
   document.getElementById('login-step').classList.remove('hidden');
   document.getElementById('login-heading').textContent = role === 'student' ? 'Student sign-in' : 'Teacher sign-in';
   document.getElementById('id-example').textContent = role === 'student' ? 'c1_stu01' : 'c1_teacher';
+  const idInput = document.getElementById('login_user_id');
+  if (idInput) {
+    idInput.value = '';
+    idInput.placeholder = role === 'student' ? 'c1_stu01' : 'c1_teacher';
+  }
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.classList.add('hidden');
 }
 
 function backToRolePick() {
   auth = null;
   document.getElementById('login-step').classList.add('hidden');
   document.getElementById('role-pick-step').classList.remove('hidden');
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.classList.add('hidden');
 }
 
 async function autoLogin(userId, role, displayName) {
@@ -354,7 +364,14 @@ async function doLogin() {
         password: enteredPass,
       }),
     });
-    if (!resp.ok) throw new Error((await resp.json()).detail || `HTTP ${resp.status}`);
+    if (!resp.ok) {
+      let errDetail = `HTTP ${resp.status}`;
+      try {
+        const errJson = await resp.json();
+        if (errJson.detail) errDetail = errJson.detail;
+      } catch (_) {}
+      throw new Error(errDetail);
+    }
     auth = await resp.json();
     enterApp();
   } catch (e) {

@@ -44,3 +44,24 @@ def test_login_rejects_unknown_role(monkeypatch):
     monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
     with pytest.raises(LoginError):
         login(LoginRequest(role="admin", user_id="c1_teacher", password="eduagent2026"))
+
+
+def test_login_succeeds_for_teacher(monkeypatch):
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
+    result = login(LoginRequest(role="teacher", user_id="c1_teacher", password="eduagent2026"))
+    assert result.role == "teacher"
+    assert result.class_id == "c1"
+    assert result.user_id == "c1_teacher"
+
+
+def test_login_rejects_student_account_on_teacher_portal(monkeypatch):
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
+    with pytest.raises(LoginError, match="student account"):
+        login(LoginRequest(role="teacher", user_id="c1_stu02", password="eduagent2026"))
+
+
+def test_login_rejects_teacher_account_on_student_portal(monkeypatch):
+    monkeypatch.setattr("eduagent.auth._MOCK_PASSWORD", "eduagent2026")
+    with pytest.raises(LoginError, match="teacher account"):
+        login(LoginRequest(role="student", user_id="c1_teacher", password="eduagent2026"))
+

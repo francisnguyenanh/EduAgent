@@ -101,12 +101,29 @@ def split_class_id(user_id: str) -> tuple[str, str]:
     return class_id, local_id
 
 
+def is_teacher_id(user_id: str) -> bool:
+    """Returns True if the ID belongs to a teacher account."""
+    _, local_id = split_class_id(user_id)
+    return "teacher" in local_id.lower()
+
+
 def login(payload: LoginRequest) -> LoginResult:
     if payload.role not in ("student", "teacher"):
         raise LoginError(f"Unknown role {payload.role!r} -- expected 'student' or 'teacher'.")
     if payload.password != _MOCK_PASSWORD:
         raise LoginError("Incorrect password.")
     class_id, local_id = split_class_id(payload.user_id)
+
+    is_teacher = "teacher" in local_id.lower()
+    if payload.role == "teacher" and not is_teacher:
+        raise LoginError(
+            f"User ID {payload.user_id.strip()!r} is a student account. Please use your teacher ID (e.g. '{class_id}_teacher') or sign in via the Student Portal."
+        )
+    if payload.role == "student" and is_teacher:
+        raise LoginError(
+            f"User ID {payload.user_id.strip()!r} is a teacher account. Please sign in via the Teacher Portal."
+        )
+
     token = create_access_token(payload.user_id.strip(), payload.role, class_id)
     return LoginResult(
         role=payload.role,
@@ -122,6 +139,7 @@ __all__ = [
     "LoginResult",
     "LoginRequest",
     "split_class_id",
+    "is_teacher_id",
     "login",
     "create_access_token",
     "verify_access_token",
