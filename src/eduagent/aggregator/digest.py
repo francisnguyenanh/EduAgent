@@ -47,6 +47,22 @@ _SCHEMA = {
             "type": "string",
             "description": "One concrete ~15-minute mini-lesson idea addressing the class-wide pattern, or empty string if none.",
         },
+        "actionable_lesson_plan": {
+            "type": "object",
+            "description": "Structured 15-minute in-class pedagogical delivery plan if common fallacy detected.",
+            "properties": {
+                "title": {"type": "string", "description": "Catchy title for the 15-minute mini-lesson."},
+                "objective": {"type": "string", "description": "Clear pedagogical objective."},
+                "in_class_activity_steps": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "3 concrete chronological steps for the classroom activity.",
+                },
+                "example": {"type": "string", "description": "Concrete real-world example illustrating the fallacy."},
+                "counterexample": {"type": "string", "description": "Concrete counterexample showing rigorous reasoning."},
+            },
+            "required": ["title", "objective", "in_class_activity_steps", "example", "counterexample"],
+        },
     },
     "required": ["headline", "priority_students", "class_wide_pattern", "mini_lesson_suggestion"],
 }
@@ -66,13 +82,25 @@ def _fallback_digest(*, ranked_students: list[dict], common_fallacies: list[str]
     down. Plain but still actionable: a teacher can read this and know
     exactly who to check on, even without the narrative prose."""
     top = ranked_students[:top_n]
+    fallacy_str = ", ".join(common_fallacies) if common_fallacies else ""
     return {
         "headline": f"[Digest narrative unavailable -- Gemini degraded] {len(top)} student(s) flagged for review.",
         "priority_students": [
             {"student_id": r["student_id"], "why": f"priority={r['priority']}, reason={r['reason']}"} for r in top
         ],
-        "class_wide_pattern": f"Common fallacies: {', '.join(common_fallacies)}" if common_fallacies else "",
-        "mini_lesson_suggestion": "",
+        "class_wide_pattern": f"Common fallacies: {fallacy_str}" if fallacy_str else "",
+        "mini_lesson_suggestion": f"Hold a 15-minute review addressing {fallacy_str}." if fallacy_str else "",
+        "actionable_lesson_plan": {
+            "title": f"15-Minute Workshop: Deconstructing {fallacy_str}" if fallacy_str else "15-Minute Critical Thinking Workshop",
+            "objective": f"Help students identify and eliminate {fallacy_str} in their argumentative writing." if fallacy_str else "Strengthen core reasoning.",
+            "in_class_activity_steps": [
+                "1. Display an unreferenced claim on the board (3 mins).",
+                "2. Have pairs identify the missing evidential link (7 mins).",
+                "3. Rewrite the claim collaboratively into a verifiable thesis (5 mins).",
+            ],
+            "example": "Claims presented without peer-reviewed empirical evidence or reliable data sources.",
+            "counterexample": "Claims qualified by scope, methodology, and peer-reviewed statistical evidence.",
+        } if common_fallacies else None,
     }
 
 

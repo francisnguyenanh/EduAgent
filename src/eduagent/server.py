@@ -16,6 +16,8 @@ Pub/Sub push message contract: https://cloud.google.com/pubsub/docs/push
 
 from __future__ import annotations
 
+import eduagent  # noqa: F401 -- ensures GAPIC routing header patch is applied before any GCP SDK call
+
 import base64
 import json
 import logging

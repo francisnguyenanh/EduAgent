@@ -153,7 +153,7 @@ def weakness_taxonomy_from_profile(profile: dict) -> list[str]:
     since `all_time_weaknesses` is the cumulative counter for exactly that
     case. Falls back to scanning essay_history for profiles written before
     that field existed."""
-    if "all_time_weaknesses" in profile:
+    if profile.get("all_time_weaknesses"):
         return list(profile["all_time_weaknesses"])
     seen: dict[str, None] = {}
     for essay in profile.get("essay_history", []):

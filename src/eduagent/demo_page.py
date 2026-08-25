@@ -1032,13 +1032,17 @@ async function loadAnalytics() {
       resultsEl.innerHTML = '<p>No digests found for this class yet.</p>';
       return;
     }
-    let rows = data.digests.map(d => `
+    let rows = data.digests.map(d => {
+      const miniLessonText = d.digest?.mini_lesson_suggestion || d.digest?.actionable_lesson_plan?.title || d.actionable_lesson_plan?.title || 'None';
+      return `
       <tr>
         <td>${esc(formatShortTimestamp(d.timestamp))}</td>
         <td>${esc((d.ranked_students || []).map(s => s.name || s.student_id).join(', '))}</td>
         <td>${esc((d.common_fallacies || []).join(', '))}</td>
-      </tr>`).join('');
-    resultsEl.innerHTML = `<table><thead><tr><th>Timestamp</th><th>Priority ranking</th><th>Common fallacies</th></tr></thead><tbody>${rows}</tbody></table>`;
+        <td><span style="font-size:12px;color:var(--accent);font-weight:bold;">${esc(miniLessonText)}</span></td>
+      </tr>`;
+    }).join('');
+    resultsEl.innerHTML = `<table><thead><tr><th>Timestamp</th><th>Priority ranking</th><th>Common fallacies</th><th>Suggested Mini-Lesson</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');

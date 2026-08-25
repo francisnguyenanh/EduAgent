@@ -52,37 +52,9 @@ class DebateSessionComplete(ValueError):
     pass
 
 
-def _firestore_save_session(session_id: str, data: dict) -> None:
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        return
-    try:
-        from eduagent.memory.firestore_memory import _client
-        _client().collection("debate_sessions").document(session_id).set(data)
-    except Exception:
-        pass
-
-
-def _firestore_get_session(session_id: str) -> dict | None:
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        return None
-    try:
-        from eduagent.memory.firestore_memory import _client
-        doc = _client().collection("debate_sessions").document(session_id).get()
-        if doc.exists:
-            return doc.to_dict()
-    except Exception:
-        pass
-    return None
-
-
-def _firestore_delete_session(session_id: str) -> None:
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        return
-    try:
-        from eduagent.memory.firestore_memory import _client
-        _client().collection("debate_sessions").document(session_id).delete()
-    except Exception:
-        pass
+from eduagent.memory.firestore_session import delete_session as _firestore_delete_session
+from eduagent.memory.firestore_session import load_session as _firestore_get_session
+from eduagent.memory.firestore_session import save_session as _firestore_save_session
 
 
 def start_debate_session(
@@ -129,6 +101,7 @@ def evict_stale_sessions(ttl_seconds: float = _SESSION_TTL_SECONDS, *, now: floa
     stale = [sid for sid, session in _sessions.items() if now - session.get("created_at", 0) > ttl_seconds]
     for sid in stale:
         _sessions.pop(sid, None)
+        _firestore_delete_session(sid)
     return stale
 
 

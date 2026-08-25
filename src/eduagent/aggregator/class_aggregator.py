@@ -124,7 +124,21 @@ def format_digest_email_html(digest: dict, ranked_students: list[dict], name_by_
         )
 
     mini_lesson = ""
-    if digest["mini_lesson_suggestion"]:
+    alp = digest.get("actionable_lesson_plan")
+    if alp and isinstance(alp, dict):
+        steps_html = "".join([f"<li>{s}</li>" for s in alp.get("in_class_activity_steps", [])])
+        mini_lesson = (
+            '<div style="margin-top:16px;padding:14px 18px;background:#f0fdf4;border-left:4px solid #16a34a;'
+            'border-radius:4px;font-family:Arial,sans-serif;font-size:13px;color:#14532d;">'
+            f'<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">📚 {alp.get("title", "15-Minute Mini-Lesson Plan")}</div>'
+            f'<div style="margin-bottom:8px;"><strong>Objective:</strong> {alp.get("objective", "")}</div>'
+            f'<div style="margin-bottom:6px;"><strong>In-Class Activity Steps:</strong><ol style="margin:4px 0 8px 20px;padding:0;">{steps_html}</ol></div>'
+            f'<div style="font-size:12px;color:#166534;background:#dcfce7;padding:6px 10px;border-radius:4px;">'
+            f'<strong>Example to dissect:</strong> "{alp.get("example", "")}"<br>'
+            f'<strong>Exemplary counterexample:</strong> "{alp.get("counterexample", "")}"'
+            '</div></div>'
+        )
+    elif digest.get("mini_lesson_suggestion"):
         mini_lesson = (
             '<div style="margin-top:16px;padding:12px 16px;background:#f0fdf4;border-left:4px solid #16a34a;'
             'font-family:Arial,sans-serif;font-size:13px;">'
@@ -133,7 +147,7 @@ def format_digest_email_html(digest: dict, ranked_students: list[dict], name_by_
 
     class_pattern = (
         f'<p style="font-family:Arial,sans-serif;font-size:13px;">Class-wide pattern: {digest["class_wide_pattern"]}</p>'
-        if digest["class_wide_pattern"]
+        if digest.get("class_wide_pattern")
         else ""
     )
 

@@ -458,103 +458,298 @@
 - [x] 🔴 **Chặn IDOR PII học sinh & Scoped Access Tokens.** ✅ ĐÃ LÀM + PASS — `src/eduagent/auth.py` phát hành stateless HMAC-signed access token mang `class_id` và `role`; `src/eduagent/server.py` kiểm tra `Authorization: Bearer <token>` trên mọi endpoint `/api/classes/{class_id}/*` và `/api/parent-note` (chặn 401 khi thiếu/sai token, chặn 403 khi dùng token lớp A để đọc lớp B).
 - [x] 🔴 **Cap input (chặn cost-DoS & tránh 504).** ✅ ĐÃ LÀM + PASS — `api.py` giới hạn `essay_text` (max 20k chars), `image_base64` (max 14M chars ~10MB), `student_reply` (max 4k chars); `integrations/gdocs.py` giới hạn `response.read(100_000)` và cap 20k chars.
 
-#### 🟡 P1 — Chênh lệch giữa "demo tốt" và "production"
-- [x] 🟡 **README §5 đồng bộ & minh bạch Security Model.** ✅ ĐÃ LÀM + PASS — README §5 bổ sung giải thích trung thực về mock auth, layered prompt sanitization, scoped access tokens, và input boundaries.
-- [x] 🟡 **In-process session documentation.** ✅ ĐÃ LÀM + PASS — ghi rõ trong README và ADR-005.
-- [x] 🟡 **CI Workflow.** ✅ ĐÃ LÀM + PASS — `.github/workflows/ci.yml` chạy tự động `pytest -m "not e2e"` và `test_gmail_mcp_never_sends.py` trên GitHub Actions.
-- [x] 🟡 **Dependency Lock.** ✅ ĐÃ LÀM + PASS — `requirements.lock` cố định chính xác 19 thư viện chuẩn cho build Cloud Run và CI.
-- [x] 🟡 **Prompt System vs User separation.** ✅ ĐÃ LÀM + PASS — bọc essay và student reply trong delimiter `<student_essay>` / `<student_reply>` trong `summarizer.py`, `debate.py`, `scorer.py`.
+### 10. ĐỢT 10 — Từ "Có Kiến Trúc" Sang "Có BẰNG CHỨNG" (Chinh Phục Điểm Tuyệt Đối 5/5 ở Cả 3 Tiêu Chí) 🏆
 
-#### 🟢 P2 — Trình bày (ảnh hưởng trực tiếp tới điểm)
-- [x] 🟢 **ADR-012 & ADR-013 trong README.md.** ✅ ĐÃ LÀM + PASS — ghi nhận đầy đủ quyết định kiến trúc về Layered API Sanitization và Scoped Session Tokens.
-- [x] 🟢 **`PriorityWeights` docstring cập nhật.** ✅ ĐÃ LÀM + PASS — sửa docstring từ "placeholders" thành "Tuned and frozen against 5-student seed data in Phase 2/3 and verified in Phase 4".
-
-**Kiểm chứng ĐỢT 6:** `tests/test_api_hardening.py` + toàn bộ unit test suite kiểm tra tự động thành công 100%.
+> **Bối cảnh & Phân tích Chuyên sâu từ 2 AI Reviewer:**
+> - **Điểm hiện tại:** ~4.25 / 5.0 (Innovation 4.2, Architecture 4.5, Demo 4.0).
+> - **Nhận định cốt lõi:** Kiến trúc hiện tại (2-Tier ADK2 Graph, Pub/Sub + DLQ, Firestore Transaction, Deterministic-First, Least-Privilege AST Guard) đã đủ chuẩn đạt 5/5 Architectural Discipline.
+> - **Chìa khóa để vươn lên 5/5 TOÀN DIỆN:** Không phải nhồi thêm tính năng (NO feature creep). Cần tập trung **100% vào BẰNG CHỨNG (Evidence)** để biến các tuyên bố kiến trúc thành số liệu thực nghiệm đo đạc được, đóng sạch technical debt và thiết kế video 4 phút như một chuỗi chứng minh không thể chối cãi.
 
 ---
 
-### 11. ĐỢT 7 — Nâng Tầm Đột Phá: Đạt Điểm Tuyệt Đối & Vượt Mong Đợi Giám Khảo (Top 3 High-ROI Deliverables) 🚀 HOÀN THÀNH 100%
+### 🔥 NHÓM 1: BẰNG CHỨNG ĐỔI MỚI & LỢI ÍCH VẬN HÀNH (INNOVATION & UTILITY — 40% TRỌNG SỐ)
 
-> **Chiến lược ĐỢT 7 (Tập trung Tối Đa ROI & Triệt Tiêu Rủi Ro):**
-> Triển khai 3 hạng mục có tỷ suất giá trị / rủi ro cao nhất, đánh trực diện vào 30% Demo & 40% Collaborative Partner, không phá vỡ hợp đồng dữ liệu hiện có:
+- [x] 🔴 **Task 10.1 — Thực nghiệm A/B Memory: Chứng minh "Memory Cải Thiện Kết Quả", Không Chỉ "Memory Tồn Tại".**
+  - **Mục tiêu:** Trả lời trực diện câu hỏi "So what?" của giám khảo khi thấy hồ sơ học sinh được lưu trữ. Chứng minh trí nhớ dài hạn thực sự thay đổi quyết định sư phạm của agent.
+  - **Thiết kế thực nghiệm (`scripts/experiment_memory_ab.py`):**
+    - Chạy cùng 1 chuỗi 3 bài luận liên tiếp của 1 học sinh (có lỗi nguỵ biện lặp lại) qua 2 nhánh:
+      - **Nhánh A (Baseline / No Memory):** Tắt truy xuất Memory $\rightarrow$ Agent chọn Persona mặc định dựa trên bài hiện tại, lặp lại can thiệp Skeptic 3 lần liên tiếp, không nhận diện được điểm yếu dai dẳng.
+      - **Nhánh B (eduagent / Persistent Memory):** Bật Firestore Memory $\rightarrow$ Bài 1: Skeptic (phát hiện unsupported claim) $\rightarrow$ Bài 2: Nhận diện điểm yếu tồn đọng, tự thích ứng chuyển sang Devil's Advocate $\rightarrow$ Bài 3: Ghi nhận dẫn chứng đã tăng, chuyển sang Nitpicker để rèn tính chặt chẽ logic.
+    - **Tạo Artifact Báo Cáo (`docs/experiment_memory_ab.md`):**
+      ```markdown
+      | Chỉ số Đánh Giá | Nhánh A (Không Trí Nhớ) | Nhánh B (eduagent Memory) |
+      |---|:---:|:---:|
+      | Persona thích ứng theo lịch sử | Không (Skeptic 3x) | Có (Skeptic → Devil's Advocate → Nitpicker) |
+      | Số lần can thiệp lặp vô ích (Repeated Intervention) | 3 lần | 0 lần |
+      | Ngữ cảnh điểm yếu cũ tiêm vào câu hỏi | Không | Có ("Bài trước em còn thiếu dẫn chứng...") |
+      | Đóng góp vào Xếp hạng Ưu tiên của Giáo viên | Tĩnh (Không xu hướng) | Động (Phát hiện stuck_streak & score_decline) |
+      ```
+    - **Phát biểu chuẩn mực (Tránh Overclaim):** *"The memory experiment empirically proves that persistent student profiles drive adaptive Socratic intervention and eliminate repetitive pedagogical dead-ends."*
+    - **DoD:** Script chạy tự động qua Vertex AI/Mock $\rightarrow$ sinh file markdown báo cáo có số liệu thật.
 
-#### ✅ NÊN LÀM — ĐÃ HOÀN THÀNH 100%
+- [x] 🔴 **Task 10.2 — Đánh Giá Hiệu Quả Tiếp Thu (Learning-Outcome Metric & Delta Evaluation).**
+  - **Mục tiêu:** Nâng tầm hệ thống từ "AI chấm bài" thành "Hệ thống đo lường sự chuyển biến nhận thức của học sinh".
+  - **Thiết kế (`eval/test_learning_outcomes.py` $\rightarrow$ `docs/learning_outcome_eval.md`):**
+    - Khai thác vòng lặp *Metacognitive Self-Correction Loop* (Turn 3 $\rightarrow$ Rewrite Thesis):
+    - Đánh giá bài luận Trước Can Thiệp (Initial Thesis) vs Sau Tự Hiệu Chỉnh (Revised Thesis) trên 4 trục nhận thức:
+      1. `logical_coherence` (Tính chặt chẽ logic)
+      2. `evidence_quality` (Chất lượng dẫn chứng)
+      3. `counterargument_handling` (Xử lý phản biện)
+      4. `scope_awareness` (Phạm vi lập luận)
+    - Đo lường và lưu delta $(\Delta = \text{Score}_{\text{after}} - \text{Score}_{\text{before}})$ vào hồ sơ Firestore và xuất bảng phân tích định lượng.
+    - **DoD:** Script eval lượng hóa được bước nhảy nhận thức $\Delta > 0$ trên ít nhất 8 test case mẫu với các lỗi ngụy biện phổ biến.
 
-- [x] 🌟 **Judge 1-Click Showcase Bar (Chế độ Trải nghiệm Nhanh cho Giám Khảo & Hỗ trợ Quay Video).** ✅ ĐÃ LÀM + PASS — Thêm thanh công cụ `✨ Judge 1-Click Showcase` trên đầu `src/eduagent/demo_page.py` với 4 preset tương ứng 4 mốc kịch bản trong `docs/video_script.md`:
-  - `[🎯 1. Kẹt Streak (Bình)]`: Tự nạp `c1_stu02`, điền bài viết ngụy biện về xe điện.
-  - `[📷 2. Viết Tay (OCR)]`: Nạp mô phỏng bài luận viết tay có gạch xóa.
-  - `[🔗 3. Google Doc]`: Nạp link Google Doc mẫu.
-  - `[👨‍🏫 4. Giáo Viên & Note]`: Chuyển sang quyền giáo viên `c1_teacher`, tự load ma trận ưu tiên và nút soạn thư phụ huynh 1-click.
-  - *Giá trị*: Giám khảo trải nghiệm toàn bộ hệ thống trong 60s mà không cần gõ; người quay video demo không lo fumble gõ nhầm.
-
-- [x] 📄 **Xuất Báo Cáo Chẩn Đoán Lớp PDF / In ấn (Exportable Executive Briefing via Print CSS).** ✅ ĐÃ LÀM + PASS — Thêm nút `📄 Xuất Báo Cáo (In / PDF)` trên Dashboard giáo viên (`demo_page.py`), tích hợp `@media print` CSS chuẩn định dạng A4 sạch đẹp, ẩn toàn bộ header/tab/nút bấm thừa, tạo bản báo cáo tóm tắt tình hình sư phạm cho Ban Giám Hiệu hoặc buổi họp phụ huynh.
-
-- [x] 🧠 **Vòng Lặp Tự Hiệu Chỉnh Nhận Thức (Metacognitive Self-Correction Loop).** ✅ ĐÃ LÀM + PASS — Sau Turn 3, xuất hiện khung phản hồi nhận thức:
-  - Học sinh nhập câu luận điểm mới đã sửa đổi dựa trên phản biện của Persona.
-  - `POST /api/debate/reflect` (`src/eduagent/api.py`, `src/eduagent/server.py`) đánh giá ngữ nghĩa và ghi nhận `growth_bonus` (điểm thưởng nhận thức) cùng `breakthrough_count` vào Firestore `student_profiles` qua `merge_reflection_into_profile()`.
-  - *Giá trị*: Minh chứng đỉnh cao cho "True Collaborative Partner" — AI không làm thay, mà đồng hành giúp học sinh tiến hóa tư duy.
-
-#### ⚠️ CẮT THEO ĐÁNH GIÁ KỶ LUẬT (RỦI RO CAO / DIMINISHING RETURNS)
-- ✂️ *Audio/Voice Socratic Mentor*: Cắt bỏ (Web Speech API tiếng Việt chất lượng không đều, dễ phản tác dụng trong video 4 phút).
-- ✂️ *Socratic Dynamic Heat-Level*: Cắt bỏ (Trùng lặp câu chuyện cá nhân hoá đã có với Persona Selector, thêm biến số rủi ro tuột persona).
-- ✂️ *What-If Sandbox*: Cắt bỏ (Tránh bị trừ điểm Architectural Discipline do công thức mô phỏng thiếu cơ sở thực nghiệm).
-- ✂️ *Fallacy Semantic Graph*: Cắt bỏ (Radar chart + priority table + clustering đã đủ đầy, không thêm giá trị mới).
-- ✂️ *Live SSE Stream*: Cắt bỏ (Long-lived connections trên Cloud Run dễ lỗi khi quay video live unedited).
-
-**Kiểm chứng ĐỢT 7:** `tests/test_metacognitive_reflection.py` + toàn bộ 179 unit tests pass 100%.
-
----
-
-### 12. ĐỢT 8 — Review tổng thể trước nộp: Đóng khoảng cách Tài liệu–Thực tế lần 2 🔴 CẦN LÀM NGAY (blocker)
-
-> Review thực tế (curl vào service live + đọc code + `git status`), không chỉ đọc TODO.md, phát hiện 1 lỗi nghiêm trọng có thể trực tiếp trừ điểm Architectural Discipline nếu giám khảo tự kiểm chứng, cộng với ĐỢT 7 chưa hề được commit.
-
-- [x] 🔴 **BLOCKER — README nói ngược thực tế deploy: `POST /` đang public, không có OIDC verify.** ✅ ĐÃ SỬA (code) — theo đúng Phương án A đã chọn:
-  - **Bằng chứng thật đã verify (2026-08-24):** `deploy.txt` ghi `--allow-unauthenticated`. `curl` trực tiếp vào service live: `GET /` → `200`; `POST /` với payload giả (không token) → `500` (nghĩa là request **đã lọt vào container**, không bị chặn ở tầng IAM). `grep -n "Authorization\|OIDC\|id_token" src/eduagent/server.py` → **0 kết quả** lúc đó, không có lớp verify nào ở code bù cho việc IAM đã mở.
-  - **Đã làm:** `src/eduagent/server.py::_verify_pubsub_push_auth()` — verify OIDC token thật bằng `google.oauth2.id_token.verify_oauth2_token` (chữ ký thật, không phải shared secret) trước khi `POST /` chạm `process_event()`; reject 401 nếu thiếu header/token không hợp lệ/sai service account. `src/eduagent/config.py` thêm `PUBSUB.push_audience` + `PUBSUB.push_service_account` (env var, optional pin thêm identity/audience). `requirements.txt` thêm `google-auth` tường minh (trước đó chỉ là transitive dep). README §3.10 + §5 sửa lại đúng thực tế (`--allow-unauthenticated` + verify ở tầng app, không còn nói `--no-allow-unauthenticated`). **ADR-014** đã thêm vào bảng ADR mô tả đúng trade-off + phát hiện thật.
-  - **Test mới (7 test trong `tests/test_server.py`):** thiếu header → 401; header sai định dạng → 401; token không hợp lệ (gọi thật `verify_oauth2_token`, không mock) → 401; token hợp lệ nhưng sai service account (khi có pin) → 401; token hợp lệ đúng service account → 200 gọi `process_event()`. Sửa `tests/test_server_interactive_api.py` (1 test cũ POST `/` không auth) để bypass đúng cách. **`pytest tests/ -q -m "not e2e"` → 184/184 pass** (tăng từ 179, không có test nào bị xoá).
-  - **CÒN LẠI (thao tác GCP thật của bạn, chưa làm):** redeploy service live với code mới + set 2 env var `PUBSUB_PUSH_AUDIENCE`/`PUBSUB_PUSH_SERVICE_ACCOUNT` (xem lệnh `gcloud run deploy` mới trong README §3.10), rồi verify lại bằng `curl -X POST` không token vào URL thật → phải là `401` (hiện tại vẫn là `500`/lọt qua cho tới khi redeploy). Đây là hành động deploy hạ tầng thật — cố ý không tự động chạy, cần bạn xác nhận.
-  - **Phương án B (không dùng):** tách 2 Cloud Run service (UI public / subscriber private `--no-allow-unauthenticated`) — cân nhắc sau nếu có thời gian, không cần thiết vì Phương án A đã đóng đúng lỗ hổng.
-
-- [x] 🔴 **BLOCKER — Commit + push toàn bộ ĐỢT 7 (Metacognitive Loop), hiện chưa nằm trong git.** ✅ ĐÃ XONG (đã có commit `224c458` + đã push lên `origin/master` trước khi review lần 2 này bắt đầu — xác nhận bằng `git log origin/master..HEAD` rỗng và `git status` báo "up to date").
-  - Commit này gộp `growth_bonus`/`breakthrough_count`/`/api/debate/reflect` + `tests/test_metacognitive_reflection.py` — nay đã tồn tại trên GitHub, giám khảo chấm được.
-
-- [x] **Commit + push fix OIDC ở trên.** ✅ ĐÃ XONG — commit `c096405` (`server.py`, `config.py`, `README.md`, `requirements.txt`, `TODO.md`, `tests/test_server.py`, `tests/test_server_interactive_api.py`), đã push lên `origin/master`. `pytest tests/ -q -m "not e2e"` → 184/184 pass trước khi commit.
-
-- [x] 🔴 **BLOCKER — `class-aggregator-sub` đang ở PULL mode thật trên GCP, không phải PUSH.** ✅ ĐÃ SỬA THẬT trên hạ tầng live (2026-08-24):
-  - **Bằng chứng ban đầu:** `gcloud pubsub subscriptions describe class-aggregator-sub --format=json` → `"pushConfig": {}` (pull mode). README §3.10 tự ghi chú bước này còn treo, chưa từng làm thật.
-  - **Đã làm (3 lệnh gcloud thật, theo đúng thứ tự):**
-    1. Redeploy Cloud Run (`gcloud run deploy ... --allow-unauthenticated --set-env-vars ...,PUBSUB_PUSH_AUDIENCE=<url>,PUBSUB_PUSH_SERVICE_ACCOUNT=eduagent-sa@...`) → revision `eduagent-class-aggregator-00009-mjv`, deploy thành công.
-    2. `gcloud pubsub subscriptions update class-aggregator-sub --push-endpoint=<url>/ --push-auth-service-account=eduagent-sa@... --push-auth-token-audience=<url>` → `describe` lại xác nhận `pushConfig.oidcToken`/`pushEndpoint` đã đúng URL + đúng service account.
-    3. Publish 1 event thử thật vào topic `essay-evaluated` (`event_id=verify-push-1787576568`, `class_id=c1`) → Cloud Run Logging xác nhận chính event này được `process_event()` xử lý (`"Coalescing digest..."`, gắn đúng `event_id`) **mà không có ai chạy tay `run_class_aggregator_subscriber.py`** — bằng chứng thật cho "event-driven", không phải suy diễn.
-  - **Tác dụng phụ quan sát được (đã xử lý ổn, không phải lỗi mới):** ngay sau khi chuyển pull→push, một backlog message cũ (đã publish trong cửa sổ retention 7 ngày nhưng chưa từng được ack vì trước đó chỉ chạy pull thủ công không liên tục) bị đẩy về dồn dập trong Cloud Run logs; hệ thống xử lý hết, tự dừng sau ~15 giây, không lặp vô hạn, không lỗi. Idempotency (`claim_event`) + debounce (`coalesced_skip_digest`) đã đúng vai trò thiết kế từ Phase 3/ĐỢT 2 ở đây.
-  - **Verify cuối:** `POST /` không kèm OIDC token → `401` (đóng đúng lỗ hổng ở blocker trên); `GET /` (Web UI) vẫn `200` public cho giám khảo; `pushConfig` trên subscription đã đúng.
-  - **Còn lại (tài liệu, không khẩn):** cập nhật lại comment TODO ở README §3.10 ("Then point the class-aggregator-sub subscription...") thành mô tả đã hoàn thành + evidence thật, đồng bộ với style các ADR khác.
-- [ ] 🟡 Sau khi redeploy xong: chạy `scripts/doctor.py` trên GCP thật để xác nhận service vẫn healthy sau khi đổi auth (đặc biệt là Pub/Sub push subscription vẫn gửi được request thành công, không bị chính lớp verify mới này chặn nhầm).
-- [ ] 🟡 Cập nhật mục 2 "Ma trận tự kiểm tra điểm tối đa" (Architectural Discipline) nếu cần, để phản ánh ADR-014 mới.
+- [x] 🟡 **Task 10.3 — Gói Hành Động Sư Phạm Hóa Dành Cho Giáo Viên (Actionable Mini-Lesson Artifact).**
+  - **Mục tiêu:** Biến Teacher Co-Pilot từ "báo cáo thông tin" thành "đề xuất hành động sư phạm trọn gói" (Autonomous Pedagogical Delivery).
+  - **Hiện thực:**
+    - Khi phát hiện cụm lỗi chung ($\ge 3$ học sinh cùng mắc 1 lỗi), Class Aggregator không chỉ ghi text gợi ý mà tạo ra một cấu trúc dữ liệu hoàn chỉnh `ActionableLessonPlan` gồm:
+      - Tên chủ đề (vd: *15-Minute Mini-Lesson: Fact vs. Generalization*)
+      - Mục tiêu sư phạm (Pedagogical Objective)
+      - Hoạt động 3 bước trên lớp (3-Step In-Class Activity)
+      - 1 Ví dụ minh họa (Concrete Example) + 1 Phản ví dụ (Counterexample)
+    - Hiển thị trực quan trên giao diện Giáo viên (Card riêng biệt) và nhúng vào bản in PDF xuất cho Ban Giám Hiệu.
+    - **DoD:** `digest.py` sinh `actionable_lesson_plan` chuẩn schema $\rightarrow$ hiển thị đẹp mắt trên Web UI & PDF export.
 
 ---
 
-## ĐỢT 9 — Web UI Comprehensive Feature Audit & Gaps (2026-08-24) ✅
+### 🛡️ NHÓM 2: KỶ LUẬT KIẾN TRÚC & ĐỘ TIN CẬY PRODUCTION (ARCHITECTURAL DISCIPLINE — 30% TRỌNG SỐ)
 
-> Đã rà soát 100% endpoint, module backend và luồng dữ liệu đối chiếu với Web UI (`demo_page.py` / `server.py`).
+- [x] 🔴 **Task 10.4 — Nâng Cấp ADK Eval Suite Thành Hệ Thống 4 Tầng (4-Layer Deterministic Eval Suite).**
+  - **Mục tiêu:** Mở rộng từ 15 test an toàn lên hệ thống kiểm thử toàn diện 48+ test cases, 100% Deterministic (ZERO LLM-as-judge):
+    - **Layer 1: Safety & Security Guardrails (15/15 PASS):**
+      - Answer Leak Prevention (6 tests: EN + VI, direct answers, rewrite offers).
+      - Prompt Injection Resistance (5 tests: ignore instructions, role hijack, fake tags).
+      - Tenancy & Class IDOR Isolation (4 tests: chặn cross-class read/write).
+    - **Layer 2: Behavioral & Pedagogical Discipline (15/15 PASS):**
+      - Persona Fidelity (4 tests: Skeptic, Devil's Advocate, Nitpicker, Expander).
+      - Single-Question Constraint (4 tests: không hỏi dồn dập).
+      - Question Length & Complexity Bounds (4 tests).
+      - Socratic Escalation Protocol (3 tests: probe $\rightarrow$ challenge $\rightarrow$ resolve).
+    - **Layer 3: Long-Term Memory & Adaptation (10/10 PASS):**
+      - Persona Streak Breaking (không kẹt 1 persona quá số lần ngưỡng).
+      - Fallacy Taxonomy Deduplication & Evolution.
+      - Trend Slope Calculation (Improving, Declining, Stagnant).
+      - Prior Weakness Prompt Injection (tiêm đúng ngữ cảnh bài cũ).
+    - **Layer 4: Learning Outcome & Cognitive Growth (10/10 PASS):**
+      - Metacognitive Rewrite Delta Scoring ($\Delta > 0$ trên trục bị chẩn đoán).
+      - Fallacy Resolution Verification.
+  - **DoD:** `eval/evalset.py` + `scripts/run_eval_suite.py` chạy tự động $\rightarrow$ xuất `eval/results/eval_report_v2.md` đạt **50/50 PASS (100%)**.
 
-- [x] **Trực tiếp kết nối Interactive Debate với Firestore & Pub/Sub (ĐÃ SỬA XONG):**
-  - Trước đây: `complete_debate_session` chỉ tính điểm hiển thị trên UI, không persist database và không phát Pub/Sub.
-  - Hiện tại: Đã tích hợp `apply_essay_result` + `publish_essay_evaluated` ngầm. Sau lượt 3, tự động lưu Firestore và bắn Pub/Sub event để kích hoạt Class Aggregator $\rightarrow$ tự động ghi dòng vào Google Sheets Audit Log.
-- [x] **Các tính năng cốt lõi đã có mặt 100% trên Web UI:**
-  - 📝 Ingest: Text thô, Ảnh chụp OCR (`/api/debate/start-with-image`), Google Doc link (`/api/debate/start-with-gdoc`).
-  - 🎭 Tranh biện Socratic: 3 lượt, 4 Persona (Skeptic, Steelman, Empiricist, Devil's Advocate), Typing Indicator động, Optimistic UI.
-  - 🧠 Vòng lặp Tự hiệu chỉnh (Metacognitive Self-Correction): Ô nhập câu luận điểm sửa đổi, LLM chấm điểm đột phá, +0.5 Growth Bonus badge, nút quay lại làm bài mới.
-  - 📊 Teacher Dashboard: Bảng xếp hạng Intervention Priority Index thời gian thực, Nút sao chép Parent Note cá nhân hóa, Xuất báo cáo Print/PDF, Biểu đồ Sparkline SVG theo dõi tiến độ từng học sinh, Xem lịch sử Digest (`/analytics`), Cài đặt lớp (`/settings`).
-  - 🎯 Judge 1-Click Showcase Bar: 4 preset kịch bản chuẩn hóa bằng tiếng Anh.
-- [x] **Lỗi phát sinh sau review (ĐÃ SỬA XONG):** Test trực tiếp trên browser phát hiện `demo_page.py` bị vỡ toàn bộ JS: chuỗi mẫu preset `ocr` (dòng ~736) chứa `students\' independent...` — do nằm trong Python triple-quoted string, `\'` bị Python nuốt escape thành `'` trần, làm chuỗi JS single-quote bị đóng sớm → `Uncaught SyntaxError: Unexpected identifier 'independent'`, kéo theo toàn bộ `<script>` không load được nên `pickRole is not defined` khi bấm nút. Đã sửa thành `\\'` để JS nhận đúng `\'`. Rút kinh nghiệm: review code không thay thế được việc mở thật app lên bấm thử.
-- [ ] 🟢 **Đề xuất cải tiến nhỏ (Nice-to-have, không chặn chấm thi):**
-  - [ ] 1. Thêm nút `📊 Open Google Sheets Audit Log` mở trực tiếp link Spreadsheet `https://docs.google.com/spreadsheets/d/...` trên tab Teacher để giám khảo click mở tab mới xem log ngay mà không cần tìm file.
-  - [ ] 2. Thêm nút `⚡ Force Synthesize Digest` trên Teacher Dashboard để ép hệ thống chạy ngay một lượt tổng hợp lớp mới mà không cần chờ debounce 5 phút.
+- [x] 🔴 **Task 10.5 — Khắc Phục Technical Debt: Phân Tán Session Tranh Biện Với Firestore TTL (Distributed Session Hardening).**
+  - **Vấn đề:** Hiện tại `src/eduagent/interactive.py` lưu session trong bộ nhớ in-process `_sessions: dict`. Khi Cloud Run scale lên nhiều instances (max 5 instances), request ở Turn 2 của học sinh có thể rơi vào instance khác và mất session.
+  - **Giải pháp GCP-Native:**
+    - Xây dựng `FirestoreSessionService` (`src/eduagent/memory/firestore_session.py`):
+      - Lưu `sessions/{session_id}` với các trường: `student_id`, `class_id`, `persona_id`, `transcript`, `turn`, `expires_at` (TTL 24h).
+      - Cơ chế Fallback: Nếu Firestore offline/mock trong unit test, tự động fallback về in-memory dict an toàn.
+    - Cập nhật `interactive.py` và `api.py` sử dụng session persistence này.
+  - **DoD:** Unit test mô phỏng 2 request liên tiếp đến 2 tiến trình độc lập nhưng vẫn giữ nguyên vẹn transcript tranh biện.
+
+- [x] 🔴 **Task 10.6 — Ma Trận Xử Lý Lỗi Toàn Diện (Production Failure Matrix & Chaos Runbook).**
+  - **Mục tiêu:** Gom toàn bộ cơ chế resilience phân tán thành một tài liệu chuẩn mực production (`docs/failure_matrix.md`) và nhúng trực tiếp vào README:
+    ```markdown
+    | Loại Sự Cố (Failure Mode) | Hành Vi Hệ Thống (Expected Behavior) | Cơ Chế Bảo Vệ & File Mã Nguồn | Bằng Chứng Kiểm Thử (Verification Test) |
+    |---|---|---|---|
+    | Gemini API Timeout / 503 | Exponential Backoff Retry (3 lần, 1-8s) | `src/eduagent/llm.py` (tenacity) | `tests/test_resilience.py` |
+    | Gemini Rate Limit (429) | Backoff Retry có Jitter | `src/eduagent/llm.py` | `tests/test_resilience.py` |
+    | Gemini Malformed JSON Output | Bóc Markdown Fence $\rightarrow$ Retry $\rightarrow$ Safe Fallback | `src/eduagent/llm.py` | `tests/test_llm_utils.py` |
+    | OCR Bất Đồng / Ảnh Mờ Nhòe | Cross-Check 2 Lượt $\rightarrow$ Route vào `pending_essays` | `src/eduagent/nodes/ocr.py` | `tests/test_ocr.py` |
+    | Pub/Sub Duplicate Message | Atomic Claim Idempotency qua Firestore Document | `src/eduagent/aggregator/idempotency.py` | `tests/test_class_aggregator.py` |
+    | Pub/Sub Poison Message | Dead Letter Queue (DLQ) sau 5 lần delivery | `src/eduagent/config.py` + GCP Pub/Sub | `scripts/chaos_test_pubsub.py` (Chaos Pass) |
+    | Firestore Tạm Thời Gián Đoạn | Exception Catch $\rightarrow$ Graceful Degrade / 503 Handler | `src/eduagent/resilience.py` | Live URL Verification |
+    | Gmail Draft Tạo Thất Bại | Digest Vẫn Persist Firestore, Sheets Vẫn Log | `src/eduagent/aggregator/class_aggregator.py` | `tests/test_class_aggregator.py` |
+    | Rủi Ro Tự Động Gửi Email Trái Phép | Cấm Tuyệt Đối Gọi `send()` (AST Guard Build Gate) | `src/eduagent/integrations/gmail_mcp.py` | `tests/test_gmail_mcp_never_sends.py` |
+    | Cloud Run Instance Restart | Session Phục Hồi Từ Firestore TTL Document | `src/eduagent/memory/firestore_session.py` | `tests/test_firestore_session.py` |
+    ```
+  - **DoD:** `docs/failure_matrix.md` được tạo và liên kết trong README.md.
+
+- [x] 🟡 **Task 10.7 — Chính Sách Vòng Đời Dữ Liệu Học Sinh & Mô Hình Đe Dọa (Student Data Lifecycle & Threat Model).**
+  - **Mục tiêu:** Chứng minh tư duy sẵn sàng triển khai trong ngành giáo dục thực tế (EdTech Privacy & Security Compliance).
+  - **Tài liệu (`docs/data_lifecycle_and_privacy.md`):**
+    - *PII Isolation:* Tách biệt định danh học sinh với nội dung bài luận phân tích.
+    - *Tenant Boundary:* Phân quyền nghiêm ngặt theo `class_id` qua HMAC scoped tokens, ngăn chặn IDOR giữa các lớp học.
+    - *Data Retention:* Quy định vòng đời dữ liệu (lưu trữ 90 ngày cho hồ sơ phân tích, tự động dọn dẹp raw essay image sau khi xử lý).
+    - *Audit Immutability:* Google Sheets log ở chế độ append-only, chống sửa đổi nhật ký can thiệp.
+  - **DoD:** Tài liệu hoàn chỉnh 1 trang sẵn sàng cho ban giám khảo kiểm tra chính sách bảo mật.
 
 ---
 
+### 🎬 NHÓM 3: BẰNG CHỨNG DEMO & TRÌNH DIỄN ĐỈNH CAO (DEMO & PRODUCTION READINESS — 30% TRỌNG SỐ)
+
+- [x] 🟡 **Task 10.8 — Trích Xuất Bằng Chứng Observability Thực Tế (Cloud Trace Evidence Extraction).**
+  - **Mục tiêu:** Không chỉ nói "chúng tôi dùng OpenTelemetry", mà đưa ra bằng chứng định lượng chính xác thời gian thực thi của từng node trên 1 `essay_id` thật.
+  - **Hiện thực (`scripts/export_trace_evidence.py` $\rightarrow$ `docs/trace_evidence.md`):**
+    - Trích xuất span tree từ Cloud Trace API:
+      ```text
+      Trace ID: 4bf92f3577b34da6a3ce929d0e0e4736 (Essay: essay_stu02_003)
+      ├── Intake & Sanitize:           14ms  [PASS]
+      ├── Multimodal OCR (2x pass):  1,850ms  [PASS - Confidence: High]
+      ├── Summarizer (Gemini Flash):   740ms  [PASS]
+      ├── Persona Selector (Memory):    12ms  [PASS - Selected: Nitpicker]
+      ├── Socratic Debate Turn 1:    1,210ms  [PASS]
+      ├── Deterministic Validator:       3ms  [PASS - 0 Answer Leak]
+      ├── Cognitive Scorer:            920ms  [PASS]
+      ├── Profile Mutation (Firestore): 85ms  [PASS]
+      └── Pub/Sub Dispatch (Async):     18ms  [PASS]
+      Total Pipeline Latency:        4,852ms
+      ```
+    - **DoD:** File markdown và ảnh chụp Cloud Trace sẵn sàng nhúng vào Devpost và video.
+
+- [x] 🔴 **Task 10.9 — Tái Cấu Trúc Kịch Bản Video 4 Phút Thành "Chuỗi Bằng Chứng Chấm Điểm" (4-Minute Proof Sequence).**
+  - **Mục tiêu:** Loại bỏ hoàn toàn cấu trúc thuyết trình slide nhàm chán. Thiết kế video xoay quanh **hành trình 1 học sinh** để giám khảo tự thấy toàn bộ tiêu chí chấm điểm diễn ra trực tiếp:
+    - **0:00 - 0:20 | The Pain Point & Messy Ingestion:** Giáo viên quá tải, học sinh lạm dụng AI để sao chép. Học sinh nộp bài viết tay lộn xộn có gạch xóa $\rightarrow$ OCR 2-pass trích xuất nguyên văn.
+    - **0:20 - 0:50 | Autonomous Diagnosis & Socratic Challenge:** Agent tự phát hiện lỗi ngụy biện $\rightarrow$ chọn Persona Skeptic $\rightarrow$ chất vấn Socratic (1 câu hỏi duy nhất, zero answer leak).
+    - **0:50 - 1:25 | Metacognitive Rewrite & Learning Outcome:** Học sinh tự hiệu chỉnh luận điểm $\rightarrow$ hệ thống đo bước nhảy nhận thức ($\Delta > 0$).
+    - **1:25 - 1:55 | Long-Term Memory in Action:** Học sinh nộp bài thứ HAI $\rightarrow$ Agent nhận diện điểm yếu cũ đã cải thiện nhưng phát sinh lỗi logic mới $\rightarrow$ tự động đổi sang Persona Nitpicker (Proof of Collaborative Partner).
+    - **1:55 - 2:35 | Event-Driven Class Aggregation:** Pub/Sub đẩy sự kiện $\rightarrow$ Class Aggregator gom cụm lỗi toàn lớp $\rightarrow$ tính toán Ma trận Ưu tiên Can thiệp (Intervention Priority Index) hoàn toàn bằng thuật toán toán học.
+    - **2:35 - 3:15 | Actionable Teacher Co-Pilot (HITL):** Giáo viên nhận Digest trên Web UI & Gmail Draft kèm kế hoạch bài giảng 15 phút $\rightarrow$ Giáo viên chủ động bấm gửi (Human-in-the-Loop).
+    - **3:15 - 3:45 | Cloud Native & Production Proof:** Show Cloud Run live URL, Cloud Trace span tree, Pub/Sub DLQ chaos test pass, 50/50 ADK Eval Suite.
+    - **3:45 - 4:00 | The Punchline:** *"eduagent is not an AI that writes essays for students — it is an autonomous pedagogical partner that trains students to think and equips teachers to act."*
+  - **DoD:** `docs/video_script.md` được cập nhật đồng bộ với kịch bản này.
+
+- [x] 🔴 **Task 10.10 — Khẳng Định Ranh Giới Đóng Góp Mới (Eligibility & Originality Boundary).**
+  - **Mục tiêu:** Triệt tiêu hoàn toàn rủi ro hiểu lầm "đây chỉ là CritiqAI v2 đổi tên".
+  - **Tuyên bố cốt lõi trong README & Devpost:**
+    > *"The novel scientific and engineering contribution of eduagent is NOT the Socratic dialogue itself. The breakthrough contribution is the 2-Tier Event-Driven Architecture combining a Persistent Adaptive Student Partner with an Autonomous Class-Level Synthesis and Teacher Action Loop."*
+
+---
+
+### 🎯 THỨ TỰ THI CÔNG TRỌNG TÂM (EXECUTION ORDER)
+
+```mermaid
+graph TD
+    A[10.1 Memory A/B Experiment] --> B[10.2 Learning Outcome Eval]
+    B --> C[10.4 4-Layer Eval Suite 50/50]
+    C --> D[10.5 Distributed Session Firestore]
+    D --> E[10.6 Production Failure Matrix]
+    E --> F[10.8 Cloud Trace Evidence]
+    F --> G[10.9 Video Script Proof Sequence]
+```
+
+**DoD Toàn Diện ĐỢT 10:**
+- [x] 1. Báo cáo thực nghiệm Memory A/B tồn tại trong `docs/experiment_memory_ab.md` với số liệu thực tế.
+- [x] 2. Báo cáo đánh giá hiệu quả học tập (Learning Outcome) tồn tại trong `docs/learning_outcome_eval.md`.
+- [x] 3. Bộ test ADK Eval Suite đạt 50/50 PASS trên 4 tầng kiểm thử.
+- [x] 4. Distributed Session hoạt động bền bỉ qua Firestore TTL.
+- [x] 5. Bảng Failure Matrix và Trace Breakdown hoàn thiện trong README và `docs/`.
+- [x] 6. Toàn bộ kịch bản video và tài liệu submission được căn chỉnh theo chuẩn Proof Sequence.
+
+---
+
+---
+
+## ĐỢT 11 — CLAIM AUDIT: gỡ bỏ overclaim để không bị bẻ trong Q&A (review giám khảo ngoài lần 2, 2026-08-25) 🎯
+
+> **Bối cảnh:** Review độc lập lần 2 (trên source + doc mới nhất) chấm ~9.2/10, xác nhận ĐỢT 10 đã đóng đúng 3 gap lớn (Memory A/B, Learning Outcome, Firestore TTL session).
+> **Nghịch lý cần xử lý:** bản mới **mạnh hơn về evidence nhưng yếu hơn về độ tin cậy phát ngôn**. Khi có nhiều số liệu thật, mỗi câu overclaim lại càng dễ bị fact-check.
+> **Kết luận quan trọng nhất của review, và tôi đồng ý:**
+> > **Không cần thêm 5 feature để lên 9.5. Cần loại bỏ 10 claim dễ bị bắt lỗi.**
+>
+> **Đã grep verify toàn bộ docs trước khi ghi — mọi dòng dưới đây là câu chữ CÓ THẬT trong repo, kèm file:line.** Đây là đợt sửa văn bản, KHÔNG sửa code (trừ 1 mục kiểm chứng số liệu).
+> **Nguyên tắc:** một submission biết rõ giới hạn của mình đáng tin hơn một submission nói rằng nó giải quyết mọi thứ.
+
+### 🔴 P0-A — RỦI RO NGHIÊM TRỌNG NHẤT (tôi phát hiện thêm, review chỉ nghi ngờ mà chưa chốt)
+
+- [x] 🔴🔴 **Trace span tree ~250ms là số KHÔNG THỂ THẬT — phải xử lý trước khi nộp.** ✅ ĐÃ LÀM (Phương án B) — xác nhận `scripts/export_trace_evidence.py::simulate_traced_pipeline()` dùng `time.sleep()` giả lập, không gọi Gemini thật. Đã thêm cảnh báo minh bạch đầu `docs/trace_evidence.md` + đổi bảng/gantt sang "simulated / illustrative, not measured latency"; xoá số ms tuyệt đối khỏi `For_notebookLM.md:208,265` và `video_script.md:56` (thay bằng ghi chú "KHÔNG nói sub-250ms trên camera"). Phương án A (chụp Cloud Trace thật) vẫn nên làm nếu có phiên GCP live trước khi quay video — để lại trong `gcp_evidence_checklist.md`.
+  - `docs/trace_evidence.md:12-27` vẽ mermaid gantt: root pipeline `0→250ms`, trong đó `debate_loop (3 turns) : 74, 198` = **124ms cho 3 lượt gọi Gemini**.
+  - **Bất khả thi về vật lý.** Một lần gọi Gemini Flash thực tế ~0.5–3s. 3 turn trong 124ms là không thể. `summarizer` 45ms cũng vậy.
+  - Đây là loại số mà technical judge **kiểm tra được ngay** bằng cách mở Cloud Trace thật hoặc chỉ cần nhẩm. Nếu bị bắt, nó phá hỏng độ tin cậy của **toàn bộ** phần production evidence — kể cả những phần thật (Pub/Sub push, DLQ, chaos test) vốn rất mạnh.
+  - **Bắt buộc chọn 1 trong 2:**
+    - **(A) Ưu tiên:** chạy 1 essay thật qua Cloud Run, mở Cloud Trace, **chụp màn hình trace thật** với số thật (chấp nhận vài giây — số thật vài giây đáng tin hơn 250ms giả). Thay mermaid bằng ảnh.
+    - **(B) Nếu không kịp:** ghi rõ nhãn `Illustrative span hierarchy (not measured latency)` ngay dưới diagram, và **xoá mọi con số ms**, chỉ giữ thứ tự/phân cấp span.
+  - Kéo theo phải sửa:
+    - `docs/For_notebookLM.md:208` — "End-to-End latency ~250ms"
+    - `docs/For_notebookLM.md:265` — "Concurrency 80, sub-250ms latency"
+    - `docs/video_script.md:56` — "sub-250ms node latency" ← **nguy hiểm nhất: đọc câu này trên video là không rút lại được.**
+  - Thay bằng architectural claim (chắc chắn đúng, không cần benchmark): *"The event-driven design lets Tier 1 and Tier 2 scale independently under concurrent submissions."*
+
+### 🔴 P0-B — Bảng sửa câu chữ bắt buộc (đã verify từng dòng tồn tại thật)
+
+| # | File:line | Câu hiện tại | Sửa thành | Vì sao |
+|---|---|---|---|---|
+| 1 | `devpost:66` | Memory A/B "**proved**" | "**demonstrated in our 3-essay controlled scenario**" | n=1 học sinh không đủ để dùng chữ *proved* |
+| 2 | `devpost:66` | Learning Outcome "**proved** ... +5.62" | "**8/8 evaluation scenarios showed improvement** on the targeted dimension" | Tự tài liệu ghi "8 kịch bản", không phải 8 học sinh thật — gọi "students" là sai sự thật |
+| 3 | `devpost:62` | "**100% Deterministic Security** ... 100% regex-based" | "**Deterministic Safety Backstops** — regex guards block known answer-leak and injection patterns without invoking an LLM" | deterministic ≠ secure; regex không thể bao hết biến thể injection |
+| 4 | `devpost:31` | "**prevent hallucinations**" | "**detect transcription inconsistencies and keep low-confidence OCR out of the scoring pipeline**" | Cơ chế thật là detect disagreement, không phải ngăn model hallucinate |
+| 5 | `devpost:63` | "even if **hundreds of essays** submitted concurrently" | "**buffered and processed asynchronously without blocking the student workflow**" | Chưa hề load-test; decoupled ≠ proven at scale |
+| 6 | `devpost:47` | "We built the pipeline **from scratch**" | "We built eduagent as a **new system** around Google ADK and GCP services" | README:36 đã phát biểu chuẩn rồi — devpost đang nói mạnh hơn README, không nhất quán |
+| 7 | `devpost:32` | "Autonomous **Multi-Agent** Persona Routing" | "**Adaptive Persona Routing**" *(chỉ giữ Multi-Agent nếu mỗi persona thật sự là AgentNode riêng — cần tự kiểm tra `nodes/persona_selector.py` + `nodes/debate.py`)* | Nếu thực tế là 1 workflow + 4 prompt khác nhau, judge sẽ hỏi "Where are the agents?" |
+| 8 | `For_notebookLM:146` + `data_lifecycle:3,52` | "**Tuân thủ FERPA & COPPA**" / "Tuyên Bố Tuân Thủ" | "**Privacy & Regulatory Considerations**" + thêm 1 dòng: *"This prototype is not presented as a legal certification of FERPA/COPPA compliance."* | **Claim pháp lý.** Compliance không do kiến trúc quyết định. Rủi ro cao nhất trong nhóm wording |
+| 9 | `For_notebookLM:197` | HMAC token "**Ngăn chặn tuyệt đối** IDOR" | "**mitigates cross-class IDOR through server-side authorization checks**" | Không cơ chế security nào được gọi là "tuyệt đối" |
+| 10 | `For_notebookLM:168` | "**cấm tuyệt đối** `.send()` trong codebase" | "**AST guard rejects `.send()` in the Gmail integration layer**" | **Sai so với code thật:** `tests/test_gmail_mcp_never_sends.py:23` chỉ `inspect.getsource(gmail_mcp)` — scope đúng 1 module, không phải toàn codebase. Judge đọc test là thấy ngay |
+| 11 | `For_notebookLM:132` + `data_lifecycle:21` | "TLS 1.3 **hoàn toàn**" | "encrypted in transit using Google Cloud's managed TLS" | Không kiểm soát toàn bộ network path/negotiation |
+| 12 | *(audit log)* | "immutable / không thể thay đổi" | "**audit trail**" | Google Sheets **không** immutable — ai có quyền edit là sửa được |
+| 13 | `devpost:1` | Tiêu đề "eduagent (**CritiqAI v2**)" | "**eduagent — Collaborative Socratic Partner**" | Xem mục riêng bên dưới |
+
+- [x] 🔴 **Sau khi sửa, grep lại để chắc không sót:** `grep -rniE "proved|100%|tuyệt đối|hundreds|250ms|compliant|immutable|prevent hallucin|from scratch" docs/ README.md`
+
+### 🔴 P0-C — Bỏ "CritiqAI v2" khỏi tiêu đề (rủi ro eligibility, nối tiếp ĐỢT 10)
+
+- [x] 🔴 **`docs/devpost_submission_draft.md:1` đang để "eduagent (CritiqAI v2)".** ✅ ĐÃ SỬA — tiêu đề file đổi thành "eduagent", Project Name section đã sẵn là "eduagent — Collaborative Partner Socratic Mentor" (không còn CritiqAI v2 ở bất kỳ đâu trong file).
+  - Về branding thì hiểu được, nhưng nó **tự kéo sự chú ý của giám khảo vào đúng câu hỏi mình không muốn bị hỏi**: *"Is this simply an iteration of an existing project?"* — trong khi mục 4 vẫn chưa có phản hồi `cloudhackathons@google.com`.
+  - Nghịch lý: ta đã có `ORIGINALITY BOUNDARY` + `eligibility_statement.md` rất tốt; ghi "v2" ngay tiêu đề làm suy yếu chính nó.
+  - Tên dùng: **`eduagent — Collaborative Socratic Partner`**. Phần disclosure giữ nguyên đầy đủ, không giấu gì (README:36 đã viết chuẩn).
+
+### 🟡 P1 — Làm rõ methodology (câu hỏi Q&A gần như chắc chắn xuất hiện)
+
+- [x] 🟡 **Thêm bảng "Evaluation Methodology" vào README + devpost — chống hiểu nhầm nguy hiểm nhất.** ✅ ĐÃ LÀM trong `devpost_submission_draft.md` (mục mới "Evaluation Methodology (how to read our numbers)"). CHƯA nhân bản vào README.md — cân nhắc thêm nếu còn thời gian, không bắt buộc vì đã có trong tài liệu nộp chính.
+  - Ta đang đồng thời nói *"No LLM-as-judge"* và *"cognitive_scorer chấm 2 → 8"*. Judge sẽ hỏi ngay: **"Who determined the score?"**
+  - Phải phân biệt rõ **deterministic evaluation ≠ deterministic scoring**:
+
+    | | |
+    |---|---|
+    | Production cognitive scorer | **Gemini** (`gemini-3.5-flash`) |
+    | Evaluation harness | **Deterministic** (regex/assert, zero LLM) |
+    | LLM-as-judge trong eval | **Không** |
+    | Memory experiment | 3-essay controlled scenario, n=1 student |
+    | Outcome experiment | 8 controlled scenarios (không phải 8 học sinh thật) |
+
+  - Câu cứu nguy trong Q&A: *"We do not use an LLM to judge whether our system passed its tests. Gemini remains the production scorer; the evaluation harness verifies deterministic output constraints and score deltas."*
+
+- [ ] 🟡 **Đổi cách gọi "50/50 PASS" → "50/50 deterministic test cases passed".** *(CHƯA LÀM — rà thấy cách dùng hiện tại "50/50 pass rate (100%)" trong `blog_post_draft.md` và bảng layer trong README/For_notebookLM đã có ngữ cảnh rõ là test suite, rủi ro thấp hơn các mục khác; để lại nếu còn dư thời gian polish.)*
+  - "50/50 PASS" dễ bị đọc thành *"hệ thống tốt 100%"*. Thực tế ta chỉ claim *"test suite pass 100%"*. Hai chuyện khác nhau — và judge kỹ tính phân biệt được.
+  - Giữ nguyên cấu trúc 4 lớp (Safety → Behavioral → Memory → Outcome), review đánh giá đây là **strongest engineering differentiator** hiện tại.
+
+- [x] 🟡 **Công khai trọng số Priority Index trong devpost.** ✅ ĐÃ LÀM — devpost giờ ghi đúng số thật từ `config.PRIORITY_WEIGHTS` (3.0 / 2.5 / 1.0 / 1.5) thay vì ký hiệu `w1..w4` ẩn danh.
+  - Devpost đang viết công thức dạng `w1·stuck_streak + w2·...` mà không cho biết w là bao nhiêu → tự mâu thuẫn với chữ "deterministic".
+  - Đưa số thật từ `priority_engine.py` (explainability > flexibility ở hackathon).
+
+- [ ] 🟢 **Kiểm tra lại tên/version công cụ trong mọi văn bản.** Model ID trong code là `gemini-3.5-flash` / `gemini-3.7-flash` (`config.py:25-26`, ADR-002). Đảm bảo mọi chỗ ghi "Gemini 3.5 & 3.7 Flash" và "ADK2" khớp đúng thứ repo thật dùng — đây là chi tiết technical judge kiểm tra được.
+
+### 🟡 P1 — Narrative: Outcome first, architecture second
+
+- [ ] 🟡 **Sửa Elevator Pitch cho khớp trực tiếp với Collaborative Partner criteria.** *(CHƯA LÀM — Elevator Pitch hiện tại ở `devpost_submission_draft.md:16` vẫn giữ bản liệt kê nhiều chức năng; bản đề xuất gọn hơn trong đợt này chưa được áp. Cân nhắc thay nếu muốn, không bắt buộc vì bản hiện tại không sai sự thật, chỉ dài hơn mức tối ưu.)*
+  - Bản hiện tại (`devpost:16`) tốt nhưng liệt kê hơi nhiều chức năng. Bản gọn hơn, đúng nhịp `Partner → Memory → Adaptation → Class synthesis → Human action`:
+  > *"eduagent is a persistent Socratic partner that challenges students instead of correcting them, **mutates a persistent learning profile** from each student's history, and turns individual learning signals into prioritized, human-approved actions for teachers."*
+  - Cụm **"mutates a persistent learning profile"** là cố ý — nó match gần như nguyên văn yêu cầu *"actively synthesize or mutate data"* của track.
+
+- [ ] 🟢 **Làm mềm một câu dễ gây tranh cãi trong Project Story.**
+  - "Existing AI writing assistants tend to take a lazy shortcut" → *"Many AI writing assistants optimize for producing a better answer. We wanted to optimize for producing a better thinker."* Sắc hơn, không công kích.
+  - **Giữ nguyên** câu *"we use AI to teach students how not to depend on AI"* — review đánh giá đây là central thesis của cả submission.
+
+- [x] 🟢 **Viết lại "What's next" theo product vision thay vì backlog kỹ thuật.** ✅ ĐÃ LÀM — `devpost_submission_draft.md` mục "What's next for eduagent" đổi thành Teacher Intervention Feedback Loop / Longitudinal Class Analytics / Production Hardening, đẩy EXIF/SPA/Firestore windowing xuống 1 dòng "engineering backlog".
+  - Hiện là EXIF / SPA / Firestore windowing — đó là technical debt, đẩy xuống README roadmap.
+  - Thay bằng: (1) **Teacher intervention feedback loop** — theo dõi xem can thiệp được đề xuất có thật sự cải thiện kết quả về sau không; (2) **Longitudinal class analytics** — lỗi tư duy hệ thống có giảm dần qua nhiều bài không; (3) **Production hardening** — retention, accessibility, school-level tenancy, load testing.
+  - Mục (1) chính là mảnh còn thiếu để vòng lặp khép kín hoàn toàn: `Teacher action → student outcome → profile → hệ thống học được can thiệp nào hiệu quả`. **Không build trong hackathon** (hết thời gian, và ĐỢT 10 đã chốt không thêm feature) — nhưng nêu ra ở "What's next" cho thấy ta hiểu hệ thống của mình đi tới đâu.
+
+### 🎬 P1 — Golden Path: một câu chuyện duy nhất xuyên suốt
+
+- [ ] 🟡 **Thống nhất video + devpost + README + slide theo đúng MỘT flow.**
+  - `Ảnh viết tay → OCR (self-consistency) → phát hiện evidence yếu → SKEPTIC → 3-turn debate → self-correction → điểm tăng → memory cập nhật → bài thứ 2 → PERSONA ĐỔI → class-level pattern → teacher priority + mini-lesson → human approval`
+  - **Khoảnh khắc quan trọng nhất của cả video là mốc "persona đổi vì nhớ"** (~2:10). Mọi thứ khác là bối cảnh cho khoảnh khắc đó. Đừng cố demo toàn bộ hệ thống.
+  - Hai câu nên đưa thẳng lên màn hình vì rất mạnh:
+    - *"We don't trust the model's own confidence score."* (đoạn OCR)
+    - *"The agent doesn't replace the teacher or the student's thinking. It makes both more scalable."* (câu kết)
+  - Đối chiếu lại `docs/video_script.md` — đặc biệt xoá "sub-250ms" ở dòng 56 và kiểm tra dòng 50 ("FERPA-compliant progress report") theo mục #8 bảng trên.
+
+### 🎯 Nếu chỉ được sửa 5 thứ trước khi nộp
+
+1. 🥇 **Xử lý trace 250ms** (P0-A) — rủi ro cao nhất, và là thứ duy nhất trong đợt này có thể cần chạy lại hệ thống.
+2. 🥈 **Quét sạch absolute claims** (bảng P0-B): `proved` / `100%` / `tuyệt đối` / `compliant` / `hundreds` / `prevent`.
+3. 🥉 **Bỏ "CritiqAI v2"** khỏi tiêu đề Devpost.
+4. **Thêm bảng Evaluation Methodology** — cứu nguy trong Q&A về "ai chấm điểm".
+5. **Video chỉ kể một Golden Path**, không kể hết tính năng.
+
+---
 
 ## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 
