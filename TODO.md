@@ -751,6 +751,164 @@ graph TD
 
 ---
 
+## ĐỢT 12 — AUDIT TOÀN DIỆN: kiến trúc / chức năng / docs — bằng chứng bịa, lệch doc-code, và bug thật (2026-08-25) 🔍
+
+> **Cách làm:** đọc trực tiếp `src/` + `scripts/` + `eval/` + toàn bộ `docs/`, đối chiếu từng phát biểu trong tài liệu với code thật đang chạy. **Không dựa vào TODO.md hay lời tự đánh giá của các đợt trước.**
+> **Kết quả:** phát hiện **4 nhóm vấn đề**, trong đó nhóm 1 (bằng chứng không có thật) và nhóm 2 (bảo mật deployment) **nghiêm trọng hơn toàn bộ những gì ĐỢT 11 đã sửa** — ĐỢT 11 sửa *cách phát biểu* về bằng chứng, nhưng chưa kiểm tra *bằng chứng đó có tồn tại không*.
+>
+> ⚠️ **Nhận định thẳng:** ĐỢT 10 tuyên bố "Từ có kiến trúc sang có BẰNG CHỨNG". Thực tế 2 trong 3 trụ cột bằng chứng (Learning Outcome, Eval Layer 4) **không đo lường bất cứ thứ gì** — chúng là phép trừ trên các con số do chính tác giả gõ tay vào file Python. Trụ cột thứ 3 (Memory A/B) thì **thật và tốt**.
+
+---
+
+### 🔴 NHÓM 1 — BẰNG CHỨNG KHÔNG CÓ THẬT (P0, rủi ro cao nhất toàn dự án)
+
+- [ ] 🔴🔴🔴 **Learning Outcome Evaluation KHÔNG đo lường gì cả — toàn bộ số liệu là hằng số gõ tay.**
+  - `scripts/evaluate_learning_outcomes.py:31` định nghĩa `BENCHMARK_SCENARIOS` với `before_scores` và `after_scores` **viết cứng trong source** (vd dòng 41–42: `"before_scores": {...evidence_quality: 2...}`, `"after_scores": {...evidence_quality: 8...}`).
+  - Script chỉ làm phép trừ `after_val - before_val` (dòng 140–142). **Không gọi Gemini. Không chấm bài luận nào. Không chạy Metacognitive Self-Correction Loop. Không có học sinh nào, không có bài luận nào tồn tại trong thí nghiệm này.**
+  - Hệ quả: con số **`+5.62`** — đang xuất hiện ở `devpost_submission_draft.md:67`, `For_notebookLM.md:119`, `blog_post_draft.md:53`, `learning_outcome_eval.md`, và kịch bản video — **chỉ là trung bình cộng của 8 số do tác giả tự chọn** (verify: deltas = 6,6,5,6,6,6,5,5 → 5.625).
+  - Nghiêm trọng nhất: `docs/learning_outcome_eval.md:13` ghi dòng *"Bảo toàn tính nghiêm ngặt (Zero Grade Inflation) | **Chấm lại độc lập** | Zero Leak | **PASS**"* — **hoàn toàn sai sự thật**, không có bất kỳ hành vi chấm lại nào trong code.
+  - **Đây là thứ giám khảo kỹ thuật phát hiện trong 60 giây** khi mở file script. Và nó nằm ở đúng mục ta tự gọi là "Empirical ... Verification".
+  - **Bắt buộc chọn 1 trong 2 (KHÔNG được để nguyên):**
+    - **(A) Làm cho nó thật:** cho script gọi `score_essay()` thật trên cặp (thesis gốc → thesis đã rewrite) của 8 kịch bản, lấy delta do Gemini chấm thật. Đây là việc vừa sức vì `score_essay()` đã tồn tại và đã dùng ở `interactive.complete_debate_session`.
+    - **(B) Nếu không kịp:** đổi tên artifact thành *"Illustrative rubric of expected cognitive growth"*, xoá mọi từ "đo được / measured / empirical / verification / chấm lại độc lập", **gỡ `+5.62` khỏi Devpost + blog + video**, và nói rõ đây là bảng minh hoạ thang điểm kỳ vọng, không phải kết quả thực nghiệm.
+
+- [ ] 🔴🔴🔴 **ADK Eval Suite Layer 4 (10/10 PASS): 8/10 case KHÔNG THỂ FAIL.**
+  - `scripts/run_eval_suite.py:337-340`:
+    ```python
+    if "before" in case and "after" in case:
+        delta = case["after"] - case["before"]
+        passed = delta >= 4
+    ```
+    trong đó `before`/`after` là **literal trong `eval/evalset.py`** (vd `"before": 2, "after": 8`). Test này khẳng định `8 - 2 >= 4`. Nó pass vĩnh viễn bất kể hệ thống đúng hay sai, kể cả khi toàn bộ `src/` bị xoá.
+  - Chỉ 2/10 case (`outcome-metacognitive-growth-bonus`, `outcome-breakthrough-accumulation`) chạy code thật (`merge_reflection_into_profile`) — và cũng chỉ kiểm tra số học cộng dồn bonus, không phải learning outcome.
+  - **Sửa:** hoặc nối Layer 4 vào `score_essay()` thật (cùng hướng (A) ở trên), hoặc **hạ Layer 4 xuống và công bố lại tổng số** cho trung thực. Thà "38/38 deterministic cases passed" thật còn hơn "50/50" có 12 case rỗng.
+
+- [ ] 🔴🔴 **Persona Fidelity (4 case Layer 2) là tautology — và blog post mô tả SAI hoàn toàn về nó.**
+  - `scripts/run_eval_suite.py:154-157`:
+    ```python
+    system_instruction = f"{persona.anchor}\n\n{get_escalation_instruction(1)}"
+    anchor_injected = persona.anchor in system_instruction   # luôn True: vừa tự nối chuỗi xong
+    keyword_in_anchor = _matches_signature(persona.anchor, case["signature_keywords"])
+    ```
+    → chỉ kiểm tra "chuỗi hằng có chứa từ khoá hằng". **Không gọi Gemini, không sinh câu hỏi, không kiểm tra model có giữ persona hay không.**
+  - Nhưng `docs/blog_post_draft.md:43` viết nguyên văn: *"The persona-fidelity group **runs the real 3-turn debate against live Gemini calls**, then scores the real output against a fixed keyword lexicon"*. **Câu này sai sự thật về chính code của mình**, và nằm trong bài blog nộp Bonus Stage Three.
+  - **Sửa gấp:** hoặc viết lại test cho chạy `generate_debate_turn()` thật rồi match lexicon trên output thật (đúng như blog đã hứa), hoặc **sửa câu trong blog** thành mô tả đúng: *"verifies the persona anchor is constructed and injected into the system instruction"*.
+
+- [ ] 🟡 **Ghi nhận công bằng — Layer 1, Layer 3 và Memory A/B là THẬT, nên giữ và nhấn mạnh.**
+  - Layer 1 (answer leak, injection, tenancy) gọi `validate_debate_turn()`, `strip_injection_attempts()`, `create_access_token/verify_access_token` thật.
+  - Layer 3 (memory) gọi `merge_essay_into_profile()`, `_score_trend()`, `weakness_taxonomy_from_profile()`, `_build_prompt()` thật — assert hành vi thật, có thể fail nếu code hỏng. **Đây là lớp eval tốt nhất của dự án.**
+  - `scripts/experiment_memory_ab.py` gọi `choose_persona()` + `compute_priority()` thật với 2 `persona_history` khác nhau → **A/B test thật trên logic production**. Đây là bằng chứng mạnh và trung thực nhất đang có.
+  - **Kết luận chiến lược:** dựa câu chuyện "evidence" vào Memory A/B + Layer 1/3 (thật), đừng dựa vào Learning Outcome + Layer 4 (rỗng).
+
+---
+
+### 🔴 NHÓM 2 — BẢO MẬT DEPLOYMENT (P0, service đang LIVE công khai)
+
+- [ ] 🔴🔴🔴 **Teacher token có thể bị giả mạo trên service thật — HMAC secret là hằng số công khai trong repo.**
+  - `src/eduagent/auth.py:31`: `_SESSION_SECRET = os.getenv("EDUAGENT_SESSION_SECRET", "eduagent-demo-secret-key-2026")`.
+  - `grep EDUAGENT_SESSION_SECRET deploy.txt README.md docs/` → **không có kết quả**. Biến này chưa từng được set khi deploy Cloud Run.
+  - ⇒ Service live đang ký token bằng đúng chuỗi mặc định **đã commit công khai**. Bất kỳ ai đọc repo đều tự ký được token `role=teacher` cho **bất kỳ `class_id` nào**, rồi gọi `/api/classes/{class_id}/priority` và `/api/classes/{class_id}/students` để đọc toàn bộ PII + điểm số học sinh.
+  - **Điều này vô hiệu hoá hoàn toàn ADR-013** và mâu thuẫn trực tiếp với STRIDE table (`data_lifecycle_and_privacy.md:45`, `For_notebookLM.md:139`) đang khẳng định token HMAC là biện pháp chống Spoofing/IDOR.
+  - **Sửa:** set `EDUAGENT_SESSION_SECRET` qua Secret Manager khi deploy + ghi vào `deploy.txt`/README; cân nhắc để app **từ chối khởi động** nếu biến này còn là giá trị mặc định trong môi trường production.
+
+- [ ] 🔴🔴 **Toàn bộ endpoint phía học sinh KHÔNG có xác thực.**
+  - `src/eduagent/server.py`: `/api/debate/start` (209), `/start-with-image` (220), `/start-with-gdoc` (231), `/turn` (244), `/reflect` (256) — **không gọi `_verify_class_auth`, không kiểm tra token gì cả** (đối chiếu: mọi route `/api/classes/*` đều có).
+  - Hệ quả thật:
+    1. Bất kỳ ai cũng POST được `student_id` và `class_id` tuỳ ý → **ghi đè/bơm dữ liệu rác vào hồ sơ học sinh bất kỳ, lớp bất kỳ** trong Firestore, và kích hoạt Pub/Sub làm sai lệch bảng xếp hạng của giáo viên.
+    2. Endpoint gọi Gemini **không xác thực, không rate limit**, trên URL public → cạn ngân sách Vertex AI (cost-DoS) chỉ bằng một vòng lặp curl.
+  - Có cap kích thước input (ĐỢT 6) nhưng cap kích thước **không chặn được số lượng request**.
+  - **Sửa (tối thiểu cho hackathon):** yêu cầu student token (tái dùng `create_access_token` với `role="student"` phát khi login) cho 5 endpoint này, hoặc ít nhất gắn passcode lớp; và nêu rõ giới hạn còn lại trong README.
+
+- [ ] 🔴 **STRIDE table khẳng định có "Token bucket rate limiting" — thực tế KHÔNG tồn tại.**
+  - `docs/data_lifecycle_and_privacy.md:49` ghi biện pháp chống DoS gồm: *"Giới hạn cứng 3 lượt tranh luận (Hard Cap); **Token bucket rate limiting**; In-memory cache."*
+  - `grep -rniE "rate.?limit|token.?bucket|slowapi|throttl" src/` → **0 kết quả**. Không có bất kỳ cơ chế rate limiting nào trong toàn bộ source.
+  - **Sửa:** hoặc implement thật (một token-bucket in-process theo IP là đủ cho hackathon), hoặc **xoá claim khỏi bảng STRIDE**. Không được để nguyên — đây là bảng bảo mật, sai ở đây nặng hơn sai ở chỗ khác.
+
+---
+
+### 🟡 NHÓM 3 — LỆCH GIỮA TÀI LIỆU VÀ HỆ THỐNG THẬT (P1)
+
+- [ ] 🟡 **`For_notebookLM.md` mô tả sai loại node — nói `AgentNode`, code chỉ có `FunctionNode`.**
+  - Bảng node ở `For_notebookLM.md:77,79,81` ghi `summarizer` / `debate_loop` / `cognitive_scorer` là **"AgentNode (Gemini Flash)"**.
+  - Thực tế `src/eduagent/graph/tier1_pipeline.py:25-33`: **cả 9 node đều là `FunctionNode`**, không có một `AgentNode` nào trong toàn dự án.
+  - Đây là chi tiết kiến trúc ADK mà giám khảo Architectural Discipline sẽ mở file ra xem. Sửa bảng thành `FunctionNode (gọi Gemini Flash bên trong)` — vốn cũng chính là điểm mạnh "deterministic-first" của dự án, nói đúng còn có lợi hơn.
+
+- [ ] 🟡 **Docstring của `interactive.py` mâu thuẫn trực tiếp với ADR-015 đã implement.**
+  - `src/eduagent/interactive.py:17` vẫn viết: *"Session state lives in an in-process dict... This is **intentionally NOT a durable store (no Firestore)**"*.
+  - Nhưng chính file đó (dòng 55–57) import và gọi `_firestore_save_session` / `_firestore_get_session` / `_firestore_delete_session` ở mọi thao tác session.
+  - Giám khảo đọc file này sẽ thấy code và comment nói ngược nhau ngay trong cùng một module. **Sửa docstring cho khớp ADR-015.**
+
+- [ ] 🟡 **Ngưỡng "lỗi chung của lớp" — doc nói ≥3 học sinh, code là 2.**
+  - `src/eduagent/aggregator/priority_engine.py:22`: `MIN_STUDENTS_FOR_COMMON_FALLACY = 2`.
+  - `docs/For_notebookLM.md:161` khẳng định *"($\ge 3$ học sinh cùng mắc)"*. Kịch bản video cũng kể "3 students share the same weakness".
+  - Sửa doc về đúng 2, **hoặc** đổi hằng số thành 3 nếu 3 mới là hành vi mong muốn cho demo — nhưng phải chọn một.
+
+- [ ] 🟡 **Firestore TTL: `expire_at` được ghi nhưng CHƯA có TTL policy nào được cấu hình ⇒ session không bao giờ tự xoá.**
+  - `src/eduagent/memory/firestore_session.py:47` ghi field `expire_at` đúng chuẩn.
+  - Nhưng Firestore chỉ xoá tài liệu khi có **TTL policy** bật trên collection (`gcloud firestore fields ttls update expire_at --collection-group=debate_sessions`). Lệnh này **không có trong `README.md`, `deploy.txt`, hay `firestore.indexes.json`** (`fieldOverrides` đang rỗng).
+  - Trong khi đó `For_notebookLM.md:133` và bảng retention ở `data_lifecycle_and_privacy.md` khẳng định *"TTL 24h rồi **tự động xóa vĩnh viễn**"* — hiện chưa đúng.
+  - **Sửa:** chạy + ghi lại lệnh bật TTL policy vào README §deploy, rồi mới giữ nguyên phát biểu về retention.
+
+---
+
+### 🟠 NHÓM 4 — BUG THẬT & KHOẢNG TRỐNG KIỂM THỬ (P1/P2)
+
+- [ ] 🟠 **BUG: cache cục bộ làm mất lượt tranh biện khi Cloud Run chạy nhiều instance — đúng vấn đề mà ADR-015 định giải quyết.**
+  - `firestore_session.load_session()` (dòng 66–70) **luôn ưu tiên `_LOCAL_SESSION_CACHE` trước**, và cache này không có versioning/invalidation.
+  - Kịch bản hỏng thật: Turn 1 → instance A (cache `turns=[t1]`); Turn 2 → instance B (load từ Firestore, ghi `turns=[t1,t2]`); Turn 3 → **load balancer trả về instance A**, cache còn hạn 24h nên **hit cache cũ `turns=[t1]`** → `t2` biến mất, rồi `save_session` **ghi đè Firestore bằng state cũ**.
+  - ⇒ Trong môi trường đa instance, ADR-015 **chưa thực sự khắc phục** vấn đề nó tuyên bố khắc phục, chỉ thu hẹp cửa sổ lỗi.
+  - **Sửa:** đọc Firestore làm nguồn sự thật cho mọi `load_session` (bỏ cache, hoặc cache TTL cực ngắn ~2–5s), hoặc thêm `version`/`updated_at` và so sánh trước khi dùng cache.
+
+- [ ] 🟠 **BUG: `essay_seed` trong `choose_persona()` là tham số chết — không nơi nào truyền vào.**
+  - `persona_selector.py:52` khai báo `essay_seed: str | None = None` và dòng 71–73 dùng nó để xoay persona theo hash bài luận khi không có tín hiệu keyword.
+  - Nhưng node thật (dòng 93) gọi `choose_persona(fallacies_draft, persona_history)` — **không bao giờ truyền `essay_seed`**.
+  - ⇒ Với học sinh **lần đầu** (chưa có history) và bài luận không match keyword nào, hệ thống **luôn trả về `PERSONA_IDS[0]`** thay vì xoay vòng như thiết kế. Ý đồ "rotate deterministically instead of defaulting to the same persona every time" bị vô hiệu đúng ở trường hợp nó sinh ra để xử lý.
+  - **Sửa:** truyền `essay_seed=ctx.state.get("essay_text", "")[:200]` (hoặc `student_id`) tại dòng 93.
+
+- [ ] 🟢 **Docstring `choose_persona` mô tả sai chính logic của nó.**
+  - Comment dòng 63 nói *"Avoid immediate repetition **unless every other persona scores strictly lower**"*, nhưng code loại `last_used` khỏi `candidates` **vô điều kiện** — không hề có nhánh nào cho phép quay lại `last_used` dựa trên điểm số.
+  - Sửa comment cho khớp (hành vi hiện tại là "luôn đổi persona so với lần trước", vốn là streak-breaking có chủ đích và khớp eval Layer 3).
+
+- [ ] 🟠 **Đường ghi Firestore + Pub/Sub của luồng web KHÔNG có test nào — bị chặn bằng `PYTEST_CURRENT_TEST`.**
+  - `interactive.complete_debate_session()` bọc toàn bộ `apply_essay_result()` + `publish_essay_evaluated()` trong điều kiện `... and not os.getenv("PYTEST_CURRENT_TEST")`.
+  - `firestore_session.py` cũng có `_is_testing()` khiến **mọi nhánh Firestore return sớm khi chạy pytest**.
+  - ⇒ Tính năng mà ĐỢT 9 tuyên bố "ĐÃ SỬA XONG" (nối Interactive Debate với Firestore & Pub/Sub) và ĐỢT 10 Task 10.5 (distributed session) đều **không được bất kỳ test nào bảo vệ** — 190/190 pass không nói gì về chúng.
+  - **Sửa:** dùng fake/mock client tiêm qua tham số thay vì tắt theo biến môi trường, để test verify được là `set()`/`publish()` **được gọi đúng với payload đúng**.
+
+- [ ] 🟢 **`tests/test_firestore_session.py` chỉ test cache in-memory, và DoD của Task 10.5 chưa đạt như đã ghi.**
+  - File import `MagicMock, patch` nhưng **không dùng** (dead import) — dấu hiệu test được viết cho Firestore rồi bỏ dở.
+  - DoD Task 10.5 ghi *"Unit test mô phỏng 2 request liên tiếp đến 2 tiến trình độc lập"* — **không có test nào làm việc đó**; 3 test hiện có đều đi qua cùng một `_LOCAL_SESSION_CACHE` toàn cục trong một process.
+  - **Sửa:** viết test mô phỏng 2 "instance" bằng cách clear `_LOCAL_SESSION_CACHE` giữa 2 lượt (giả lập request rơi vào instance khác) + mock Firestore client — test này sẽ **phơi bày luôn bug cache ở trên**.
+
+- [ ] 🟢 **Eval tenancy test đi vòng qua logic thật của endpoint.**
+  - `run_eval_suite.py:119-120` **tự viết lại** phép so sánh `claims.get("class_id") == case["target_class_id"]` thay vì gọi `server._verify_class_auth()`.
+  - ⇒ Nếu `_verify_class_auth` có bug (vd quên check `role`), 4 test tenancy vẫn xanh. Test đang bảo vệ *một bản sao của logic*, không phải logic đang chạy.
+  - **Sửa:** gọi thẳng `_verify_class_auth()` trong eval case.
+
+---
+
+### 📌 Tổng kết mức độ ưu tiên
+
+| # | Vấn đề | Mức | Vì sao gấp |
+|---|---|:---:|---|
+| 1 | Learning Outcome + Layer 4 là số bịa | 🔴🔴🔴 | Là "bằng chứng" trung tâm của Innovation; lộ trong 60s khi mở file |
+| 2 | HMAC secret mặc định trên service live | 🔴🔴🔴 | Giả mạo được token giáo viên, đọc PII học sinh thật |
+| 3 | Blog mô tả sai persona-fidelity eval | 🔴🔴 | Sai sự thật trong artifact nộp Bonus Stage Three |
+| 4 | Endpoint học sinh không auth + không rate limit | 🔴🔴 | Ghi bẩn dữ liệu lớp khác + cost-DoS Vertex AI |
+| 5 | Claim "Token bucket rate limiting" không tồn tại | 🔴 | Sai trong chính bảng STRIDE |
+| 6 | Bug cache đa instance làm mất lượt debate | 🟠 | Có thể nổ ngay khi quay demo |
+| 7 | AgentNode/FunctionNode, TTL policy, ngưỡng 2-vs-3, docstring | 🟡 | Giám khảo Architecture đối chiếu được ngay |
+| 8 | Khoảng trống test (PYTEST_CURRENT_TEST, cache-only test) | 🟠 | Khiến "190/190 pass" không bảo chứng phần quan trọng nhất |
+
+### 🎯 Nếu chỉ sửa được 4 thứ
+
+1. 🥇 **Quyết định dứt điểm về Learning Outcome / Layer 4** — làm thật (gọi `score_essay()`) hoặc gỡ nhãn "empirical" + gỡ `+5.62` khỏi mọi nơi.
+2. 🥈 **Set `EDUAGENT_SESSION_SECRET` thật khi deploy** (Secret Manager) — 10 phút, chặn lỗ hổng nghiêm trọng nhất.
+3. 🥉 **Sửa câu mô tả persona-fidelity trong `blog_post_draft.md:43`** — 2 phút, tránh sai sự thật trong bài nộp bonus.
+4. **Sửa 4 điểm lệch doc-code** (AgentNode, docstring `interactive.py`, ngưỡng 2/3, TTL policy) — rẻ, và đúng nhóm mà giám khảo Architectural Discipline hay kiểm tra chéo.
+
+---
+
 ## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 
 > Video là thứ giám khảo xem nhiều nhất và chiếm phần lớn 30% Demo. Chỉ 4 phút đầu được chấm.
