@@ -110,35 +110,110 @@ python scripts/verify_firestore.py
 
 ---
 
-## E-bis. Lệnh verify nhanh 4 bằng chứng bảo mật ĐỢT 13 (chạy được, không cần Console)
+## E-bis. Lệnh verify nhanh 4 bằng chứng bảo mật ĐỢT 13/14 (chạy được, không cần Console)
 
-Bốn hạng mục mới (#7–#10) verify bằng CLI/curl nhanh hơn là chụp Console, và **giám khảo có thể tự chạy lại** — điều đó thuyết phục hơn ảnh chụp:
+Bốn hạng mục mới (#7–#10) verify bằng CLI/curl nhanh hơn là chụp Console, và **giám khảo có thể tự chạy lại** — điều đó thuyết phục hơn ảnh chụp. ✅ **Đã redeploy và verify thật trong phiên làm việc ĐỢT 16** (revision `eduagent-class-aggregator-00030-jkn`) — output mẫu dưới đây là output THẬT đo được, không phải kỳ vọng lý thuyết.
 
 ```bash
+URL=https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app
+
 # (7) Cả 3 secret tồn tại, và KHÔNG credential nào còn ở dạng plaintext
 gcloud secrets list --format='table(name.basename())' | grep eduagent
-python scripts/doctor.py   # check "No plaintext credentials on Cloud Run" phải PASS
+.venv/bin/python scripts/doctor.py   # check "No plaintext credentials on Cloud Run" phải PASS
 
 # ...hoặc xem thẳng: mỗi credential phải in ra "secretRef", không phải "PLAINTEXT"
 gcloud run services describe eduagent-class-aggregator --region asia-southeast1 --format=json \
-  | python -c 'import json,sys; [print(("PLAINTEXT " if "value" in e else "secretRef  ")+e["name"]) for e in json.load(sys.stdin)["spec"]["template"]["spec"]["containers"][0].get("env",[])]'
+  | .venv/bin/python -c 'import json,sys; [print(("PLAINTEXT " if "value" in e else "secretRef  ")+e["name"]) for e in json.load(sys.stdin)["spec"]["template"]["spec"]["containers"][0].get("env",[])]'
 
 # (8) TTL policy ACTIVE (không chỉ có field expire_at)
 gcloud firestore fields ttls list --collection-group=debate_sessions
 
-# (9) Rate limit thật: flood 15 request, phải thấy 429
-URL=https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app
+# (9) Rate limit thật: flood 15 request, phải thấy 429 xen giữa các 200
 for i in $(seq 1 15); do
   curl -s -o /dev/null -w "%{http_code} " -X POST $URL/api/debate/start \
     -H 'Content-Type: application/json' -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
 done; echo
 
-# (10) Endpoint học sinh có xác thực: không token -> 401
+# (10a) Endpoint học sinh có xác thực: không token -> 401
 curl -s -o /dev/null -w "no-token: %{http_code}\n" -X POST $URL/api/debate/start \
   -H 'Content-Type: application/json' -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
+
+# (10b) Học sinh KHÁC nộp thay -> 403 (login lấy token THẬT từ chính service live)
+TOK=$(curl -s -X POST $URL/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"role":"student","user_id":"c1_stu99","password":"eduagent2026"}' \
+  | .venv/bin/python -c "import json,sys; print(json.load(sys.stdin).get('token',''))")
+curl -s -o /dev/null -w "student nop thay hoc sinh khac: %{http_code}\n" -X POST $URL/api/debate/start \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOK" \
+  -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
+
+# (10c) Học sinh đọc dashboard giáo viên -> 403
+curl -s -o /dev/null -w "student doc route giao vien: %{http_code}\n" \
+  -X GET "$URL/api/classes/c1/priority" -H "Authorization: Bearer $TOK"
 ```
 
-⚠️ **Chỉ chạy được SAU KHI redeploy.** Trên revision hiện tại (code cũ) lệnh (10) sẽ trả `200` — tức lỗ hổng vẫn còn. Nếu bạn chụp bằng chứng trước khi redeploy, bạn đang chụp bằng chứng ngược lại điều mình muốn chứng minh.
+**Output thật đo được (ĐỢT 16, sau redeploy):**
+
+```
+(7) doctor.py -> [PASS] No plaintext credentials on Cloud Run
+    All credentials mounted as Secret Manager references (secretKeyRef):
+    ['EDUAGENT_SESSION_SECRET', 'GMAIL_COMPOSE_TOKEN_JSON', 'SHEETS_TOKEN_JSON']
+
+(10a) no-token: 401
+(10b) student nop thay hoc sinh khac: 403
+(10c) student doc route giao vien: 403
+```
+
+⚠️ **Nếu bạn thấy `200` ở (10a):** revision đang chạy là bản CHƯA redeploy — chạy `.venv/bin/python scripts/deploy_to_cloud_run.py` trước, sau đó chạy lại các lệnh trên. Nếu chụp bằng chứng trước khi redeploy, bạn đang chụp bằng chứng ngược lại điều mình muốn chứng minh.
+
+---
+
+## E-ter. Hướng dẫn chụp evidence chi tiết cho mục #9 và #10 (từng bước, có ảnh nào chụp ảnh nào)
+
+Đây là 2 mục **mạnh nhất về mặt thuyết phục** trong toàn bộ checklist, vì chúng không phải ảnh chụp Console tĩnh mà là **terminal + lệnh giám khảo tự gõ lại được**. Làm đúng cách chụp dưới đây biến nó thành 1 đoạn video ngắn dùng được trực tiếp trong demo (Scene 4, xem `video_script.md`), không chỉ là file PNG nằm trong assets.
+
+### Chuẩn bị (làm 1 lần)
+
+1. Mở Terminal, `cd` vào đúng thư mục project:
+   ```bash
+   cd "/Users/eikitomobe/Documents/3. Học tập/Lập trình/VS code/EduAgent"
+   ```
+2. **Tăng font size terminal lên to** (⌘+ nhiều lần, hoặc Terminal → Settings → Profiles → Text → cỡ chữ ≥ 18pt) — ảnh chụp/video terminal chữ nhỏ là lỗi hay gặp nhất khiến giám khảo phải zoom, đừng để họ phải làm vậy.
+3. Nếu dùng terminal có theme nền đen chữ trắng, giữ nguyên — nó thường rõ hơn nền sáng khi quay màn hình.
+4. Chạy thử 1 lần lệnh `curl` bất kỳ để chắc chắn có mạng và service đang lên (`GET $URL/health-check` → phải ra `{"status": "ok"}`).
+
+### Cách #1 — chụp ảnh tĩnh (nhanh, dùng cho mục #9/#10 trong bảng ở phần trên)
+
+1. Dán **toàn bộ khối lệnh (9)** ở mục E-bis vào terminal, Enter, đợi in hết dãy mã HTTP.
+2. Chụp màn hình **cả lệnh đã gõ VÀ output** trong cùng 1 khung (macOS: `⌘+Shift+4` rồi kéo chọn vùng, hoặc `⌘+Shift+5` → "Capture Selected Portion").
+3. Lưu file tên `09_rate_limit_429.png` vào `assets/gcp_evidence/`.
+4. Làm tương tự với khối lệnh (10a) + (10b) + (10c) — có thể chụp chung 1 ảnh nếu cả 3 lệnh còn hiện trên màn hình, lưu tên `10_student_endpoint_401.png`.
+5. **Điểm cần thấy rõ trong ảnh:** dãy số ở (9) phải có ít nhất một `429` xen giữa các `200`; ở (10) phải thấy đúng `401` rồi `403` rồi `403` — không phải toàn `200`.
+
+### Cách #2 — quay lại thành GIF/video ngắn (khuyến khích hơn, dùng trực tiếp trong Scene 4 của video demo)
+
+Terminal chạy `curl` xong gần như ngay lập tức nên một đoạn ghi 15-20 giây là đủ, không cần dựng cảnh gì thêm:
+
+1. Mở QuickTime Player → File → **New Screen Recording** (hoặc `⌘+Shift+5` → "Record Selected Portion").
+2. Chọn vùng quay là đúng khung cửa sổ Terminal.
+3. Bấm Record, rồi lần lượt: dán và chạy khối lệnh (9) → đợi in hết → dán và chạy khối (10a), (10b), (10c) → dừng quay.
+4. Lưu file `.mov`, đặt tên `09_10_rate_limit_and_auth_live.mov` trong `assets/gcp_evidence/`.
+5. **Dùng trực tiếp đoạn này trong video demo** ở beat bảo mật (`video_script.md` Scene 4, đoạn "Optional 5-second security beat") — cắt lấy đúng đoạn thấy rõ mã `401`/`403`/`429` là đủ, không cần chiếu hết 20 giây.
+
+### Cách #3 — nếu muốn có prompt hiện trong ảnh cho đẹp (không bắt buộc)
+
+Nếu terminal của bạn không hiện rõ lệnh đã gõ (một số theme ẩn prompt khi output dài), thêm `echo` trước mỗi lệnh để chính output ghi lại luôn câu lệnh đang test — hữu ích khi ảnh chỉ chụp phần cuối màn hình:
+
+```bash
+echo "--- (10a) khong token ---"; curl -s -o /dev/null -w "%{http_code}\n" -X POST $URL/api/debate/start -H 'Content-Type: application/json' -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
+echo "--- (10b) hoc sinh khac nop thay ---"; curl -s -o /dev/null -w "%{http_code}\n" -X POST $URL/api/debate/start -H "Content-Type: application/json" -H "Authorization: Bearer $TOK" -d '{"essay_text":"x","student_id":"c1_stu01","class_id":"c1"}'
+```
+
+### Việc dễ quên nhất khi chụp bằng chứng này
+
+- **Che passcode demo?** Không cần — `eduagent2026` là passcode demo công khai, đã ghi thẳng trong README, không phải secret thật. Không cần blur nó trong ảnh/video.
+- **Che project ID / service account email?** Cũng không cần — cả hai đã public trong README/PROJECT_WIKI, không phải bí mật.
+- **Cái DUY NHẤT cần đảm bảo KHÔNG lọt vào ảnh/video:** nội dung thật của `$TOK` (token JWT) nếu bạn dùng `echo $TOK` để debug — token đó tuy hết hạn sau 24h nhưng vẫn không nên phơi ra không cần thiết. Các lệnh mẫu ở trên không in `$TOK` ra màn hình, chỉ dùng nó trong header — an toàn để chụp nguyên văn.
+- **Thứ tự chụp:** làm mục #7/#8 (Secret Manager, TTL) TRƯỚC khi làm #9/#10 (auth/rate-limit) — nếu #7 chưa PASS thì #10 gần như chắc sẽ vẫn là bản cũ, chụp trước sẽ tiết kiệm 1 lần chụp lại.
 
 ---
 

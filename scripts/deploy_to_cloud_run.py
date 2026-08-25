@@ -1,10 +1,10 @@
 """Deploy script for EduAgent Class Aggregator to Cloud Run with all required environment variables."""
 
+import json
 import os
 import subprocess
 import sys
 import tempfile
-import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -103,8 +103,14 @@ def main():
         # refresh tokens in `gcloud run services describe` output.
     }
 
-    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tmp:
-        yaml.dump(env_vars, tmp)
+    # Written as JSON on purpose. `--env-vars-file` expects YAML, and JSON is a
+    # strict subset of YAML 1.2, so json.dumps() produces a valid file with
+    # correct quoting/escaping for free -- and drops the PyYAML dependency
+    # entirely. That matters here: this project's venv is created by `uv` and
+    # has no `pip`, so `import yaml` failed at deploy time. One less thing a
+    # judge has to install to reproduce the deploy.
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
+        json.dump(env_vars, tmp, ensure_ascii=False, indent=2)
         tmp_path = tmp.name
 
     try:
