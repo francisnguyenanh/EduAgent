@@ -6,12 +6,12 @@
 
 ---
 
-## 1. Bảng Ma Trận 11 Thành Phần & Cơ Chế Phục Hồi (Failure Matrix)
+## 1. Bảng Ma Trận 15 Thành Phần & Cơ Chế Phục Hồi (Failure Matrix)
 
 | # | Thành Phần Hệ Thống (Component) | Điều Kiện Lỗi (Trigger Condition) | Mức Độ (Severity) | Cơ Chế Tự Phục Hồi & Giảm Cấp (Mitigation / Degradation) | Trạng Thái Trả Về (Fallback Behavior) | Thuộc Tính Kiểm Toán (Trace Span / Log) |
 |:---:|---|---|:---:|---|---|---|
 | **1** | **Intake & Sanitizer** | Prompt injection attempt (`Ignore instructions`, `<system> tags`) | High | Regex scanning & boundary stripping | Loại bỏ 100% token độc hại, giữ nguyên văn bản bài luận | `eduagent.sanitizer.blocked_patterns` |
-| **2** | **OCR Handwriting Engine** | Ảnh mờ, viết tay không đọc được, OCR confidence thấp | Medium | Fallback rule engine cảnh báo | Trả về thông báo yêu cầu học sinh chụp lại hoặc nhập text | `eduagent.ocr.confidence_score` |
+| **2** | **OCR Handwriting Engine** | Ảnh mờ / viết tay không đọc được / OCR confidence thấp; **hoặc latency cao** | Medium | 2 lần transcribe độc lập + so `difflib` (ADR-007), confidence bị hạ xuống `low` khi 2 bản lệch nhau; timeout multimodal 60s (ADR-009) và cap 10MB base64. **Đo thật (ĐỢT 15):** ảnh 958 KB → OCR **22.5s**, cả luồng `start-with-image` **24.2s**; Cloud Run request timeout **300s** ⇒ headroom ~12x, **không** phải rủi ro 504 như một review ngoài dự đoán. Rủi ro thật là 24s chết lặng khi quay video — xử lý bằng kịch bản (`docs/video_script.md`), không phải bằng config | Bản đọc confidence thấp vẫn cho tranh biện nhưng gắn cờ `ocr.degraded` cho UI, và ở luồng batch thì park vào `pending_essays` (ADR-008) | `eduagent.ocr.confidence_score` |
 | **3** | **LLM Gateway (Gemini API)** | HTTP 429 Rate Limit / Quota Exceeded / Vertex AI Outage | Critical | Exponential backoff (3 retries) + Fallback sang Canned Persona Prompts | Sử dụng ngân hàng câu hỏi chuẩn sư phạm theo từng Persona | `eduagent.llm.status = "degraded"` |
 | **4** | **Independent Validator** | Model cố tình tiết lộ đáp án (Answer Leak) | High | Chặn lập tức, kích hoạt vòng lặp sinh lại (Regeneration Loop up to 2 retries) | Cung cấp câu hỏi Socratic canned nếu quá số lần thử | `eduagent.validator.leak_detected = true` |
 | **5** | **Persona Selector** | Học sinh bị kẹt 3 bài liên tiếp cùng 1 Persona không tiến bộ | Medium | Loại trừ Persona cũ khỏi danh sách ứng viên (Streak Breaking Algorithm) | Tự động chuyển giao sang Persona đối lập (e.g. Skeptic -> Expander) | `eduagent.persona.streak_broken = true` |
@@ -24,6 +24,7 @@
 | **12** | **API Rate Limiter** (ĐỢT 13, ADR-017) | Vòng lặp `curl` vào endpoint tranh biện public → cạn quota Vertex AI (cost-DoS) | High | Token bucket theo IP (`rate_limit.py`): burst 10 / 1 req mỗi 5s cho debate, burst 5 / 1 mỗi 10s cho login. Key lấy từ **hop đầu** của `X-Forwarded-For` (hop sau do attacker cung cấp) | HTTP `429` + header `Retry-After`; caller bị từ chối **vẫn tích luỹ token**, không bị khoá vĩnh viễn | `client_key`, `path` trong log `Rate limit exceeded` |
 | **13** | **Student Endpoint Authorization** (ĐỢT 13, ADR-018) | Người gọi bất kỳ POST `student_id` tuỳ ý → ghi bẩn hồ sơ học sinh khác, làm lệch bảng xếp hạng giáo viên | Critical | `_verify_student_auth()`: token `role=student` chỉ hành động thay chính mình; `class_id` phải khớp; `/turn` suy quyền sở hữu từ session (không từ request) và **xác thực trước khi tra session** để không thành existence oracle | `401` (thiếu/giả token) · `403` (sai học sinh / sai lớp) · `400` (`student_id` không tách được class) | `_verify_student_auth` raise HTTPException |
 | **14** | **Session Signing Key** (ĐỢT 13, ADR-016) | Deploy lên Cloud Run mà quên set `EDUAGENT_SESSION_SECRET` → ký token bằng khoá công khai trong repo | Critical | **Fail-fast, không degrade**: `_resolve_session_secret()` phát hiện `K_SERVICE` và raise `InsecureConfigurationError` → container không boot. Đây là trường hợp duy nhất trong hệ thống cố tình **KHÔNG** giảm cấp — chạy tiếp với khoá công khai tệ hơn là không chạy | Revision không nhận traffic; log nêu đúng lệnh cần chạy | `InsecureConfigurationError` tại import time |
+| **15** | **Credential Delivery** (ĐỢT 14, ADR-020) | Deploy nhồi credential vào env var thường → Cloud Run lưu **cleartext** trong revision spec, `gcloud run services describe` in ra nguyên văn refresh token | Critical | Cả 3 credential mount qua `--update-secrets` (chỉ còn con trỏ `valueFrom.secretKeyRef`). **3 lớp chặn hồi quy:** (1) `_preflight_secrets()` từ chối deploy nếu thiếu secret, in đúng lệnh cần chạy; (2) hard gate AST `tests/test_deploy_never_inlines_secrets.py`; (3) check `doctor.py` soi **revision đã deploy** và báo FAIL nếu còn credential cleartext | Deploy bị chặn trước khi chạy; hoặc doctor báo FAIL kèm hướng dẫn redeploy + rotate | `check_no_plaintext_credentials_on_cloud_run` |
 
 ---
 
@@ -42,6 +43,16 @@
   1. Văn bản trích xuất từ OCR đi qua `intake.py::strip_injection_attempts`.
   2. Toàn bộ các mẫu lệnh độc hại (`Ignore instructions`, `<system>`, role hijack) bị bóc tách và ghi nhật ký cảnh báo an ninh.
   3. Văn bản đã làm sạch được đóng gói trong thẻ phân định `<student_essay>` trước khi đưa vào prompt.
+
+---
+
+### 🔑 Kịch bản 3: Deploy thiếu secret / credential bị phơi cleartext (ĐỢT 14)
+* **Kỳ vọng:** không thể deploy ra một revision vừa chạy được vừa để lộ credential.
+* **Thực thi thực tế:**
+  1. `scripts/deploy_to_cloud_run.py::_preflight_secrets()` kiểm cả 3 secret **trước** khi gọi `gcloud run deploy`; thiếu bất kỳ cái nào → `sys.exit(1)` kèm đúng lệnh `gcloud secrets create` cần chạy.
+  2. Nếu ai đó bỏ preflight và nhồi credential vào env dict → `tests/test_deploy_never_inlines_secrets.py` (AST, không phải grep) làm **fail build**. Đã verify bằng sabotage test: tái tạo lỗi cũ → test FAIL đúng.
+  3. Nếu một revision đã deploy vẫn còn credential cleartext (ví dụ deploy bằng lệnh tay) → `scripts/doctor.py` soi revision **thật** và báo **FAIL** kèm khuyến nghị redeploy **và rotate**, vì chuyển chỗ lưu không vô hiệu hoá giá trị đã bị phơi.
+* **Ghi chú trung thực:** cả 3 lớp này được thêm *sau khi* lỗ hổng đã live và do **người ngoài** phát hiện, không phải ta. Đó chính là lý do chúng tồn tại: cùng một lớp lỗi đã lọt qua ĐỢT 12 (sửa đúng 1 secret đang bàn, để lại 2 credential khác), nên biện pháp đúng không phải "cẩn thận hơn" mà là một cái check chạy mà không cần ta nhớ.
 
 ---
 

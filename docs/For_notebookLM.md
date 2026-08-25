@@ -147,6 +147,8 @@ Chứng minh bằng thực nghiệm định lượng trên chuỗi 3 bài luận
 - **Denial of Service (DoS):** Giới hạn cứng 3 lượt tranh biện (Hard Cap), cap kích thước input, **và token-bucket rate limiting theo IP** (`src/eduagent/rate_limit.py`, trả 429 + `Retry-After`). Bucket là **per-process**, nên trần thực tế là `N_instances × capacity` — chặn lạm dụng thường và ràng buộc chi phí, không phải rate limiter phân tán (ADR-017).
 - **Elevation of Privilege (Leo thang):** `role` nằm trong payload đã ký nên không sửa được mà không có khoá; RBAC kiểm `role == "teacher"` tại tầng route.
 
+> **Trung thực (ĐỢT 14):** một review ngoài phát hiện thêm 1 lỗ hổng ở **tầng deployment** mà ĐỢT 12 bỏ sót: refresh token OAuth của Gmail/Sheets được truyền vào Cloud Run dưới dạng env var thường, và env var thường **lưu cleartext trong revision spec** → `gcloud run services describe` in ra nguyên văn cả 2 token (đã verify trên service live). Đã sửa: cả 3 credential mount từ Secret Manager (ADR-020), kèm hard gate AST + check trong `doctor.py`. Bài học: ĐỢT 12 đã chuyển **khoá ký** sang Secret Manager nhưng phạm vi sửa chỉ bó trong đúng secret đang bàn — cùng một lớp lỗi vẫn còn ở 2 credential khác.
+>
 > **Trung thực (ĐỢT 12):** hai dòng trong bảng này từng mô tả biện pháp **không có trong code** — "token bucket rate limiting" (grep ra 0 kết quả) và một khoá HMAC chưa từng được set khi deploy (service live ký token bằng chuỗi mặc định công khai trong repo, tức ai đọc repo cũng tự ký được token giáo viên cho lớp bất kỳ). Cả hai giờ đã được **implement thật** và có test bảo vệ (`tests/test_student_endpoint_auth.py`, 24 test).
 
 ### 4.3 Privacy & Regulatory Considerations (Cân nhắc Bảo mật & Pháp lý)
@@ -194,17 +196,39 @@ Không dùng mô hình LLM-as-judge (tránh rủi ro Reward Hacking). Kiểm th�
 
 ## PHẦN 7: ARCHITECTURE DECISION RECORDS (ADRs)
 
-Hệ thống tuân thủ 16 Quyết định Kiến trúc ghi nhận trực tiếp tại codebase:
+Hệ thống có **21 ADR**, ghi đầy đủ trong `README.md` mục 4 (đó là **bản chuẩn** — numbering ở đây khớp theo nó).
 
-* **ADR-001 — Gmail HITL Gate:** Chặn cứng `.send()` bằng kiểm thử cấu trúc AST.
-* **ADR-004 — Bilingual Expression Layer:** Lưu danh mục ngụy biện ở dạng tiếng Anh để persona selection không bị lỗi khớp chuỗi.
-* **ADR-006 — Eval không dùng LLM-as-judge:** Triệt tiêu rủi ro reward-hacking.
-* **ADR-007 — OCR Self-Consistency Cross-Check:** Transcribe 2 lần, so sánh bằng difflib để phát hiện ảnh mờ.
-* **ADR-011 — Endpoint /health-check:** Thay thế `/healthz` tránh Knative intercept.
-* **ADR-013 — HMAC-signed Scoped Token:** Giảm thiểu lỗ hổng IDOR xuyên lớp qua kiểm tra phân quyền phía server.
-* **ADR-014 — Pub/Sub OIDC Verification:** Xác thực token OIDC tại App Layer của Cloud Run.
-* **ADR-015 — Distributed Session via Firestore TTL:** Khắc phục container restart, lưu session tranh biện tập trung với TTL 24h.
-* **ADR-016 — 4-Layer Deterministic ADK Eval Suite:** Chuẩn hóa 50 test case đo lường mọi khía cạnh an toàn và hành vi của agent.
+> ⚠️ **Đã sửa lệch numbering (ĐỢT 14):** mục này trước đây ghi *"ADR-016 — 4-Layer Deterministic ADK Eval Suite"*, nhưng ADR-016 thật là chuyện khoá ký session, còn eval suite là **ADR-006**. Hai tài liệu đánh số khác nhau cho cùng một hệ ADR là đúng loại lỗi giám khảo Architectural Discipline đối chiếu chéo ra ngay. Danh sách dưới đây đã đồng bộ với README.
+
+**Nền tảng & tích hợp (Phase 0–6)**
+
+* **ADR-001 — Gmail HITL Gate ở tầng CODE, không phải tầng OAuth scope:** test thật chứng minh `gmail.compose` *vẫn cho phép* `send()`, nên đảm bảo least-privilege bằng cách không bao giờ gọi `.send()`, khoá bằng test AST.
+* **ADR-002 — `gemini-3.5-flash` + `gemini-3.7-flash` thay cho `gemini-3.5-pro`:** model Pro không tồn tại trong project/region này (verify bằng `models.list()`).
+* **ADR-003 — Pub/Sub `max_delivery_attempts = 5`, không phải 3:** 5 là sàn của platform, không phải quyết định thiết kế.
+* **ADR-004 — Bilingual chỉ ở tầng diễn đạt:** `fallacies_draft` luôn giữ thuật ngữ tiếng Anh vì persona selection match bằng regex tiếng Anh.
+* **ADR-005 — *(ĐÃ BỊ THAY THẾ bởi ADR-015)*** session tranh biện từng ở dict in-process.
+* **ADR-006 — Eval không dùng LLM-as-judge:** triệt tiêu đường reward-hacking qua LLM giám khảo.
+* **ADR-007 — OCR Self-Consistency Cross-Check:** transcribe 2 lần, so bằng `difflib`; không tin điểm confidence tự báo của model.
+* **ADR-008 — OCR confidence thấp → `pending_essays`:** không để bản đọc sai đi vào hồ sơ vĩnh viễn của học sinh.
+* **ADR-009 — Multimodal timeout 60s** (text-only JSON là 30s).
+* **ADR-010 — `digest_id = event_id`:** tận dụng idempotency có sẵn, redeliver ghi đè 1 document thay vì nhân bản.
+* **ADR-011 — Endpoint `/health-check`:** `/healthz` bị Knative/Istio của Cloud Run intercept trước khi tới container.
+* **ADR-012 — Sanitize + cap kích thước ngay tại biên REST API,** không chỉ trong ADK graph.
+
+**Bảo mật & tenancy (ĐỢT 6 → ĐỢT 14)**
+
+* **ADR-013 — HMAC-signed Scoped Token:** chống IDOR xuyên lớp, kiểm `token.class_id == path.class_id` phía server.
+* **ADR-014 — Pub/Sub OIDC Verification ở tầng app:** vì service deploy `--allow-unauthenticated` nên Cloud Run IAM KHÔNG bảo vệ `POST /`.
+* **ADR-016 — Từ chối khởi động nếu khoá ký còn là default:** phát hiện Cloud Run qua `K_SERVICE`; khoá default đã commit công khai nên "vẫn chạy" mới là kịch bản tệ nhất. Đây là **ngoại lệ fail-fast có chủ đích** duy nhất trong một hệ thống vốn luôn graceful-degrade.
+* **ADR-017 — Token-bucket rate limiting thật:** implement thay vì xoá claim khỏi bảng STRIDE. Bucket **per-process**, trần thật là `N_instances × capacity` — ràng buộc chi phí, không phải rate limiter phân tán.
+* **ADR-018 — Xác thực 5 endpoint học sinh:** token `role=student` chỉ hành động thay chính mình; `/turn` suy quyền sở hữu từ session và **xác thực trước khi tra session** để không thành existence oracle.
+* **ADR-020 — Mọi credential vào Cloud Run qua Secret Manager reference, không bao giờ là env var thường:** env var thường lưu **cleartext** trong revision spec, nên `gcloud run services describe` in ra nguyên văn refresh token (đã verify trên service live). Chọn `--update-secrets` thay vì gọi Secret Manager API trong code: không thêm dependency, không thêm API call ở cold start, **không đổi một dòng code** — Cloud Run inject giá trị vào đúng tên env var mà code đã đọc. Có hard gate AST + check trong `doctor.py`.
+
+**Trạng thái & kiểm chứng (ĐỢT 10 → ĐỢT 12)**
+
+* **ADR-015 — Session tranh biện lưu Firestore, cache in-process chỉ tin trong 3 giây:** bản đầu của ADR này ưu tiên cache suốt 24h TTL nên lượt 3 quay về instance cũ đọc state cũ rồi ghi đè Firestore — tức đúng bug nó tuyên bố đã sửa. Đã có regression test verify fail được với hành vi cũ.
+* **ADR-021 — `interactive.py` là kiến trúc ĐÚNG, không phải giải pháp tạm chờ ADK interrupt/resume:** Phase 1 ghi kế hoạch thay nó bằng `RequestInput` của ADK2 Workflow, nhưng **`RequestInput` không hề là primitive của `Workflow`** — `from google.adk.workflow import RequestInput` raise `ImportError`. Nó nằm ở `google.adk.events.request_input`, dùng cho **luồng LLM agent tool-calling**, mà graph toàn `FunctionNode` của ta không bao giờ đi vào. Muốn dùng phải biến debate node thành `LlmAgent` gọi tool, trao cho model quyền quyết persona anchoring / thứ tự leo thang / khi nào dừng — phá chính thuộc tính deterministic-first. Câu sai này tồn **4 phase** trong TODO mà không ai verify; cái note "sẽ sửa đúng sau" còn đắt hơn giới hạn nó mô tả, vì nó dán nhãn "technical debt" lên một thiết kế đúng.
+* **ADR-019 — Mọi eval case phải có khả năng FAIL, chứng minh bằng sabotage test:** audit tìm ra 12/50 case không thể fail (8 case trừ hằng số `8 - 2 >= 4`; nhóm persona tự nối chuỗi rồi assert chuỗi vừa nối). **Reward hacking không cần reward model** — một con người viết assertion lặp lại chính setup của nó cũng tạo ra metric vô giá trị y như vậy.
 
 ---
 

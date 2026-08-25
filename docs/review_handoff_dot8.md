@@ -2,6 +2,8 @@
 
 > Mục đích tài liệu này: tổng hợp lại các vấn đề đã tìm thấy và đã sửa trong phiên review vừa qua (ĐỢT 6→8), để một AI/reviewer khác đọc và **tự kiểm chứng độc lập**, không chỉ tin lời tài liệu này. Mọi khẳng định "đã sửa" bên dưới đều có lệnh cụ thể để tái kiểm tra — hãy chạy lại trước khi kết luận.
 
+> ⚠️ **ĐÂY LÀ ẢNH CHỤP LỊCH SỬ (ĐỢT 6→8), KHÔNG PHẢI TRẠNG THÁI HIỆN TẠI.** Giữ nguyên có chủ đích để tra cứu quá trình, nên **đừng dùng các con số trong file này làm hiện trạng**. Đã lạc hậu ít nhất: `doctor.py` giờ có **10 check** (không phải 6), test suite **245** (không phải 190), và **20 ADR** (không phải 14). Quan trọng hơn: sau file này còn 4 đợt nữa (ĐỢT 11→14) tìm ra những vấn đề mà chính phiên review này **không** phát hiện — bằng chứng bịa (`+5.62` là hằng số gõ tay), 12/50 eval case không thể FAIL, khoá ký token công khai trong repo, 5 endpoint học sinh không xác thực, và refresh token OAuth để cleartext trên service live. Trạng thái hiện tại: xem `TODO.md` (ĐỢT 12→14) và `README.md` mục 4.
+
 ## 1. Bối cảnh & tiêu chí chấm điểm
 
 - Repo: `eduagent` — hệ thống 2 tầng (ADK2 + Gemini/Vertex AI + Firestore + Pub/Sub + Cloud Run).

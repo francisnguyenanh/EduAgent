@@ -23,6 +23,20 @@ Two lines worth putting on screen as text, because they land harder read than he
 * *"We don't trust the model's own confidence score."* (during the OCR beat)
 * *"The agent doesn't replace the teacher or the student's thinking. It makes both more scalable."* (closing)
 
+**⏱️ Latency budget — measured, not estimated (ĐỢT 15).** The image path is the slowest thing in the demo. Measured on a real 958 KB handwritten photo against Vertex AI:
+
+| Step | Measured |
+|---|---|
+| `transcribe_essay_image()` — 2 Vision passes + `difflib` cross-check | **22.5s** |
+| Full `/api/debate/start-with-image` (OCR + summarizer + persona + turn 1) | **24.2s** |
+
+An external review predicted a **504 Deadline Exceeded** here. That is not the real risk: the Cloud Run request timeout is **300s** and the per-call LLM timeout is 60s, so there is ~12x headroom and a 504 needs something far worse than a slow photo. The real risk is **24 seconds of dead air in a 240-second video** — 10% of the budget on a spinner.
+
+Mitigations, in order of preference:
+1. **Talk over it.** Those 24 seconds are exactly when you explain *"we call Gemini Vision twice and compare the transcriptions, because we don't trust the model's own confidence score"* — the OCR beat has the most to say and nothing to show. Rehearse it as narration over a progress state, not as a wait.
+2. **Warm the service first** so cold start is not stacked on top: hit `/health-check` before recording.
+3. **If the timing still doesn't fit:** run the live beat with typed text (fast) and show the handwriting path in a second window that was started earlier. Do NOT cut the recording to hide the wait — "unedited live execution" is a scoring requirement.
+
 **Numbers discipline for the whole recording:** never say a number that is not visible on screen at that moment. Every headline figure in this project is reproducible from a script (`run_eval_suite.py`, `evaluate_learning_outcomes.py`, `experiment_memory_ab.py`) — run it live or screenshot it beforehand, and read what it shows.
 
 ---
@@ -76,7 +90,8 @@ timeline
 
 ### 🎬 Scene 4: Architectural Discipline & Empirical Evaluation (2:45 - 3:30)
 * **Visual 1 (2:45 - 3:05):** Architecture Diagram & Google Cloud Trace.
-  - Show live Google Cloud Run deployment (`asia-southeast1`), Firestore Memory, Pub/Sub Event Ingestion, and W3C Trace context propagation across nodes. (Do NOT say "sub-250ms" on camera — that number is from a `time.sleep()` simulation script, not measured Gemini latency; see `docs/trace_evidence.md` caveat. If a real Cloud Trace screenshot is captured before recording, use the real number instead — otherwise just show the span hierarchy/order, no latency claim.)
+  - Show live Google Cloud Run deployment (`asia-southeast1`), Firestore Memory, Pub/Sub Event Ingestion, and W3C Trace context propagation across nodes.
+  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the 10-check report land on screen. It is a single command that shows the deployed revision is healthy, the Firestore TTL policy is ACTIVE, and no credential is stored in cleartext. If you'd rather say one sentence than show a table: *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."* ⚠️ Only show this **after** redeploying — on the current revision that check reports FAIL, which is the opposite of the point. (Do NOT say "sub-250ms" on camera — that number is from a `time.sleep()` simulation script, not measured Gemini latency; see `docs/trace_evidence.md` caveat. If a real Cloud Trace screenshot is captured before recording, use the real number instead — otherwise just show the span hierarchy/order, no latency claim.)
 * **Visual 2 (3:05 - 3:20):** **4-Layer Deterministic ADK Eval Suite — 50/50 deterministic test cases passed**.
   - Show terminal output of `scripts/run_eval_suite.py --strict`:
     1. Safety & Security (15/15)

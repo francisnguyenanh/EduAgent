@@ -6,8 +6,11 @@
 ---
 
 ## 1. Quay video Demo (dùng `docs/video_script.md`)
-- [ ] Chạy `python scripts/doctor.py` ngay trước khi quay. Hiện có **9 check** (ĐỢT 13 thêm `Session signing secret` và `Firestore TTL policy`). Kỳ vọng: **0 FAIL**. Check `Session signing secret` báo **WARN khi chạy local là ĐÚNG** (local dùng khoá default có chủ đích) — nó chỉ phải PASS trên revision Cloud Run đã deploy.
-- [ ] 🔴 **Trước khi quay: đã REDEPLOY Cloud Run chưa?** Toàn bộ bản sửa bảo mật ĐỢT 13 (ADR-016/017/018) chỉ có hiệu lực sau redeploy. Nếu chưa, service live vẫn ký token bằng khoá công khai trong repo và 5 endpoint học sinh vẫn không có xác thực — đúng thứ giám khảo có thể tự thử. Chạy `python scripts/deploy_to_cloud_run.py` (đã có preflight kiểm tra secret) hoặc `deploy.txt` STEP 1 → STEP 3 → STEP 4.
+- [ ] Chạy `python scripts/doctor.py` ngay trước khi quay. Hiện có **10 check** (ĐỢT 13 thêm `Session signing secret` + `Firestore TTL policy`; ĐỢT 14 thêm `No plaintext credentials on Cloud Run`). Kỳ vọng: **0 FAIL**. Check `Session signing secret` báo **WARN khi chạy local là ĐÚNG** (local dùng khoá default có chủ đích) — nó chỉ phải PASS trên revision Cloud Run đã deploy.
+- [ ] 🔴 **Trước khi quay: đã REDEPLOY Cloud Run chưa?** Toàn bộ bản sửa bảo mật ĐỢT 13 (ADR-016/017/018) chỉ có hiệu lực sau redeploy. Nếu chưa, service live vẫn ký token bằng khoá công khai trong repo và 5 endpoint học sinh vẫn không có xác thực — đúng thứ giám khảo có thể tự thử. Chạy `python scripts/deploy_to_cloud_run.py` (đã có preflight kiểm tra **cả 3** secret) hoặc `deploy.txt` STEP 1 → STEP 3 → STEP 4.
+- [ ] 🔴 **Sau redeploy, verify không còn credential cleartext:** `python scripts/doctor.py` → check *"No plaintext credentials on Cloud Run"* phải **PASS**. Hiện đang **FAIL** vì revision live vẫn để `GMAIL_COMPOSE_TOKEN_JSON` và `SHEETS_TOKEN_JSON` ở dạng plaintext (ĐỢT 14 / ADR-020).
+- [ ] 🟡 **ROTATE 2 token OAuth** (Gmail + Sheets) vì chúng đã từng bị phơi dưới dạng env var cleartext — chuyển sang Secret Manager là cần nhưng chưa đủ, giá trị cũ vẫn nên bị vô hiệu. Xem hướng dẫn rotate ở cuối `deploy.txt` STEP 1.
+- [ ] 🟢 **Demo: set `EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0`** trước khi quay (mặc định 120s sẽ coalesce digest → Gmail draft **không xuất hiện** đúng lúc cần show). Lệnh cụ thể ở README §3.10(c). Nhớ đặt lại 120 sau khi quay.
 - [ ] Diễn tập toàn bộ kịch bản **ít nhất 2 lần** trước khi quay thật (kiểm soát timing ≤ 4:00, tránh lỗi phát sinh).
 - [ ] Quay **live, không cắt ghép**, bảo đảm video thể hiện rõ:
   - Vấn đề & Giá trị giải pháp.

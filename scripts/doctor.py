@@ -235,9 +235,60 @@ def check_firestore_ttl_policy() -> tuple[str, str]:
     )
 
 
+_CREDENTIAL_ENV_VARS = ("EDUAGENT_SESSION_SECRET", "GMAIL_COMPOSE_TOKEN_JSON", "SHEETS_TOKEN_JSON")
+
+
+def check_no_plaintext_credentials_on_cloud_run() -> tuple[str, str]:
+    """ĐỢT 14 / ADR-020: verify no credential is stored as a plain env var on the
+    deployed revision.
+
+    Cloud Run keeps plain env vars in the revision spec in cleartext, so anyone
+    with `run.services.get` can read them. This check exists because that was a
+    real, live exposure: the deployed service was serving both the Gmail and the
+    Sheets OAuth refresh tokens in full via `gcloud run services describe`. It
+    was found by an external reviewer, not by us -- so now it is automated.
+    """
+    import json
+    import subprocess
+
+    probe = subprocess.run(
+        [
+            "gcloud", "run", "services", "describe", "eduagent-class-aggregator",
+            "--region", "asia-southeast1", "--format=json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0:
+        return WARN, "Could not describe the Cloud Run service (not deployed, or gcloud not authorized) -- skipped."
+
+    try:
+        env = json.loads(probe.stdout)["spec"]["template"]["spec"]["containers"][0].get("env", [])
+    except (ValueError, KeyError, IndexError):
+        return WARN, "Cloud Run service description had an unexpected shape -- could not inspect env vars."
+
+    plaintext = [e["name"] for e in env if "value" in e and e["name"] in _CREDENTIAL_ENV_VARS]
+    secret_refs = [e["name"] for e in env if "value" not in e]
+    missing = [name for name in _CREDENTIAL_ENV_VARS if name not in {e["name"] for e in env}]
+
+    if plaintext:
+        return FAIL, (
+            f"CREDENTIALS IN CLEARTEXT on the live revision: {plaintext}. Readable by anyone with "
+            "run.services.get. Redeploy with Secret Manager (`python scripts/deploy_to_cloud_run.py`, "
+            "or deploy.txt STEP 1 + STEP 3), then ROTATE those credentials since they were exposed."
+        )
+    if missing:
+        return WARN, (
+            f"Credential env var(s) absent from the live revision: {missing} -- the dependent feature "
+            f"is disabled there. Mounted as secrets: {secret_refs or 'none'}."
+        )
+    return PASS, f"All credentials mounted as Secret Manager references (secretKeyRef): {secret_refs}."
+
+
 CHECKS = [
     ("GCP credentials (ADC)", check_gcp_credentials),
     ("Session signing secret", check_session_secret),
+    ("No plaintext credentials on Cloud Run", check_no_plaintext_credentials_on_cloud_run),
     ("Firestore connectivity", check_firestore_connectivity),
     ("Firestore TTL policy (debate_sessions)", check_firestore_ttl_policy),
     ("Pub/Sub topic/DLQ/subscription", check_pubsub_topology),

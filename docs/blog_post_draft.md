@@ -54,6 +54,23 @@ The lesson generalizes past evals: **reward hacking doesn't require a reward mod
 
 Deploying to Cloud Run, we named our health-check endpoint `/healthz` — the conventional name from Kubernetes and many other platforms. It consistently returned a generic Google-branded 404, *before* the request ever reached our container or even the IAM authorization check, while every other path (including `/healthz/` with a trailing slash) worked correctly. Cloud Run's underlying Knative/Istio serving stack apparently reserves that exact literal path. Renaming to `/health-check` fixed it immediately. The lesson: verify a "well-known convention" against the actual deployed platform, not just against general documentation from a different ecosystem.
 
+## Finding #5: the blast radius of a fix is usually smaller than the blast radius of the bug
+
+Late in the project we audited our own repo against its own documentation and found that the deployed service was signing teacher session tokens with a key committed to the public repository — the environment variable overriding it had never been set. Anyone who read the repo could mint a `role=teacher` token for any class and read that class's student records. We fixed it properly: the key moved to Secret Manager, and the process now refuses to boot on Cloud Run while the committed default is still in effect, because a missing environment variable is a silent failure and a container that won't start is a loud one.
+
+We considered secrets handled after that. They weren't.
+
+An outside reviewer looked at our deploy script and pointed at two lines passing the Gmail and Sheets OAuth tokens through `--env-vars-file`. Cloud Run stores plain environment variables in the revision spec in cleartext, so `gcloud run services describe` printed both **refresh tokens in full** — exposed to anyone with `run.services.get`, a read permission granted much more freely than `secretmanager.versions.access`. We ran the command against the live service before touching anything, and there they were.
+
+The same shape had already bitten us once. When we added authentication, we secured every `/api/classes/*` route and left all five student-facing debate endpoints completely open, so any caller could write into any student's profile. Both times: we fixed the instance in front of us and never asked what else belonged to the same class of problem. Both times, the second half was found by someone else.
+
+The uncomfortable part is that "be more thorough" is not a fix. What actually works is converting the question into something that runs without us:
+
+- An AST-based test fails the build if any credential is ever inlined as a plain environment variable again. We verified it by reintroducing the bug on purpose and watching it go red.
+- `doctor.py`, our preflight command, now inspects the *deployed* revision and reports any credential still stored in cleartext. It correctly reported FAIL on our live service until we redeployed — which is exactly the moment such a check earns its keep.
+
+Worth noting what the good fix cost: nothing. Mounting the secrets via `--update-secrets` required **zero application code changes**, because Cloud Run injects the value into the same environment variable the integrations already read. We deliberately skipped the more elaborate option of calling the Secret Manager API from inside the app — it would have added a dependency, a cold-start API call, and code to maintain, in exchange for no additional protection.
+
 ## Designing for Measurable Pedagogical Outcomes (Empirical Proof)
 
 To stand out in the *Collaborative Partner* track, we had to prove that our memory-driven adaptation actually improves student outcomes:

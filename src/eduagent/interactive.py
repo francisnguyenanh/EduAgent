@@ -1,17 +1,35 @@
 """Interactive Debate Step Helper -- one Socratic turn per call, without
 re-running the whole Tier 1 ADK2 graph from intake onward.
 
-PHASE 1 noted a real limitation: the graph runs as a single batch call per
-essay because `Workflow.node_input` only accepts the essay text once, and
-true interrupt/resume (`RequestInput`) needs a Web UI/API to pause on. This
-module is the pragmatic bridge until that lands: intake -> sanitizer ->
-summarizer -> persona_selector still run ONCE (via `start_debate_session`,
-normally called right after persona_selector in a caller's own code, or
-directly against already-computed essay/summary/persona), then each human
-reply calls `step_debate_turn()` -- which reuses debate.py's
-`generate_debate_turn()` (the exact same validated-question logic the batch
-graph node uses) -- instead of redoing OCR/sanitizing/summarizing/persona
-selection for every single turn.
+WHY THIS MODULE EXISTS, AND WHY IT IS NOT A STOPGAP (ADR-021).
+
+The Tier 1 graph runs as a single batch call per essay: `Workflow.node_input`
+accepts the essay text once, so there is no way to inject the student's reply
+between turns from inside the graph. PHASE 1 recorded this as a limitation to
+be removed later "using ADK2 Workflow's interrupt/resume (`RequestInput`)".
+
+That plan was based on a factual error, corrected in ĐỢT 15: **`RequestInput`
+is not a `Workflow` primitive at all.** In the installed ADK
+(`google-adk` 2.3.0) `google.adk.workflow` exports only BaseNode, Edge,
+FunctionNode, JoinNode, Node, NodeTimeoutError, RetryConfig, START and
+Workflow -- `from google.adk.workflow import RequestInput` raises ImportError.
+The real `RequestInput` lives in `google.adk.events.request_input`, wired up by
+`google.adk.tools._request_input_tool` as a `LongRunningFunctionTool` for the
+LLM **agent tool-calling flow** (`google.adk.flows.llm_flows`). Our graph is
+built entirely from `FunctionNode`s, which never enter that flow, so the
+mechanism is not reachable from it.
+
+Using it would mean converting the debate node into an `LlmAgent` that calls
+tools -- handing the model control over persona anchoring, escalation order and
+when to stop, i.e. discarding the deterministic-first property that the rest of
+this codebase is organised around. That is a strictly worse trade.
+
+So this module is the intended architecture, not a bridge awaiting a better
+one: intake -> sanitizer -> summarizer -> persona_selector run ONCE (via
+`start_debate_session`), then each human reply calls `step_debate_turn()`,
+which reuses debate.py's `generate_debate_turn()` -- the exact same validated
+question logic the batch graph node uses, not a second implementation --
+instead of redoing OCR/sanitizing/summarizing/persona selection every turn.
 
 SESSION STORAGE (ADR-015, superseding this module's original design).
 

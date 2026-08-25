@@ -28,6 +28,32 @@ You can experience the fully deployed system immediately without any local setup
 > The system uses a stateless mock login based on your selected portal (Student vs Teacher). You can choose **Student Portal** and enter **any arbitrary ID** following the `<class_id>_<name>` format (e.g., `c1_judge_mark`) with passcode `eduagent2026` to log in. 
 > Firestore will dynamically spin up an isolated student profile for that custom ID. Once you complete a Socratic debate under this ID, the new student record will immediately propagate to the **Teacher Portal**'s priority matrix and class roster!
 
+### ⏱️ Judge Quickstart — three paths, by how much time you have
+
+Section 3 below is the full, reproduce-from-scratch guide. It is deliberately thorough, which also makes it long — so here is the short version first.
+
+**(a) 60 seconds — verify nothing, install nothing.** Open the live URL above, sign in to the Student Portal as `c1_stu01` / `eduagent2026`, paste any weakly-argued paragraph, and debate it. Then sign in to the Teacher Portal as `c1_teacher` to see that student appear in the deterministic priority ranking. This is the deployed Cloud Run service, not a local mock.
+
+**(b) 5 minutes — run it locally.** Three commands, assuming Python 3.11+ and a GCP project with the APIs from §3.1:
+
+```bash
+pip install -r requirements.txt && cp .env.example .env   # then set GCP_PROJECT_ID
+gcloud auth application-default login                     # no service-account key needed
+python scripts/doctor.py                                  # 9 preflight checks, tells you exactly what is missing
+```
+
+`doctor.py` is the fastest way to find out whether an environment is usable: it verifies ADC, Firestore read/write, the Pub/Sub topic + DLQ + dead-letter policy, the Firestore TTL policy, Gmail/Sheets tokens, Vertex AI model availability, and the live Cloud Run revision — each independently, so one missing optional feature reports WARN instead of blocking the rest. Then:
+
+```bash
+python -m pytest tests/ -q -m "not e2e"     # 243 tests, ~16s, zero cloud calls
+python scripts/run_eval_suite.py --strict   # 50/50 deterministic eval cases
+python scripts/demo_tier1_run.py            # real end-to-end: 3 essays, one student, live Gemini + Firestore
+```
+
+**(c) Deploying your own copy.** `python scripts/deploy_to_cloud_run.py` — it preflights the three required Secret Manager secrets and refuses to deploy until they exist, printing the exact `gcloud` commands. Full walkthrough and rationale in §3.10.
+
+**What to look at if you only look at one thing:** run `python scripts/demo_tier1_run.py` and watch the persona change between essay 1 and essay 2 for the same student. That persona rotation is driven by history read back out of Firestore, and it is the project's answer to this track's question about mutating rather than merely reading data.
+
 
 ---
 
@@ -207,6 +233,20 @@ gcloud firestore fields ttls update expire_at --collection-group=debate_sessions
 gcloud firestore fields ttls list --collection-group=debate_sessions   # expect state: ACTIVE
 ```
 
+**(c) Demo-only: make the teacher digest fire immediately.**
+
+The Class Aggregator debounces digests per class (`DIGEST_DEBOUNCE.window_seconds`, default **120s**) so a whole class submitting at once does not spam the teacher's inbox. That default is right for real use and wrong for a 4-minute demo: an essay submitted inside the window coalesces, and the Gmail draft does not appear while the camera is rolling. For a demo or recording session, set the window to zero:
+
+```bash
+gcloud run services update eduagent-class-aggregator --region asia-southeast1 \
+  --update-env-vars EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0
+# ...and put it back afterwards:
+gcloud run services update eduagent-class-aggregator --region asia-southeast1 \
+  --update-env-vars EDUAGENT_DIGEST_DEBOUNCE_SECONDS=120
+```
+
+Nothing is lost either way: a coalesced event still has its Tier 1 `student_profiles` write committed, and the next event for that class re-reads every profile fresh — the debounce only skips regenerating the digest.
+
 **Then deploy:**
 
 ```bash
@@ -277,7 +317,7 @@ Before leaving this project running unattended for any length of time:
 | ADR-002 | Use `gemini-3.5-flash` (default) and `gemini-3.7-flash` (`heavy_model`) instead of `gemini-3.5-pro`. | `gemini-3.5-pro` does not exist as a publisher model in this project/region (verified via `client.models.list()`) — only the Flash lineage (3.5/3.6/3.7) is available. `heavy_model` still satisfies "Gemini 3.5 or newer" since 3.7 > 3.5. | Blocking on a Pro-tier model that isn't actually available in this environment. |
 | ADR-003 | Pub/Sub `max_delivery_attempts = 5` (not 3). | Google Pub/Sub enforces a platform floor of 5 for dead-letter policies — a subscription create with 3 was rejected outright. This is a platform constraint, not a design choice. | Sticking to the original plan's "3 tries then DLQ" framing, which isn't achievable on this platform. |
 | ADR-004 | Bilingual (VI/EN) output applies only to the **expression layer** (debate questions, `student_feedback`), never to `summarizer.fallacies_draft`. | `persona_selector` matches personas to weaknesses via English-keyword regex on `fallacies_draft`. Translating fallacy labels to Vietnamese would silently break persona selection (wrong persona chosen, no exception raised) — a bug that would be very hard to notice by eyeballing a demo. | Translating every LLM output field uniformly "for consistency." |
-| ADR-005 | `interactive.py`'s turn-by-turn debate session state lives in an **in-process dict**, not Firestore. | Matches the Session-vs-Memory boundary established in Phase 2: an in-flight debate turn is Session state (fine to lose on a process restart); the finished transcript is what gets persisted, via the existing `profile_mutator` → Firestore path. | Persisting every in-flight turn to Firestore "to be safe" — unnecessary writes for state that's legitimately ephemeral. **Known follow-up**: if this ever runs behind multiple Cloud Run instances, this store needs to move to Redis or Firestore-with-TTL before a session can survive routing to a different instance. |
+| ADR-005 | ~~`interactive.py`'s turn-by-turn debate session state lives in an **in-process dict**, not Firestore.~~ **SUPERSEDED BY ADR-015.** | The condition this ADR banked on ("fine to lose on a process restart") stopped holding once the service ran multiple Cloud Run instances: a 3-turn debate is 3+ HTTP requests, so turn 2 landing on a different instance lost the debate mid-conversation. Session state now lives in Firestore `debate_sessions/{session_id}` with the in-process dict demoted to a 3-second read cache. Kept here rather than deleted because the *reasoning* still matters: this is Session state, not Memory — it carries a 24h TTL and is torn down on completion, whereas `student_profiles` remains the only long-term store. | Assuming "single process" was a stable property of the deployment. It was true when this was written and false by the time it was deployed behind an autoscaler. |
 | ADR-006 | The ADK Eval Suite (`eval/evalset.py` + `scripts/run_eval_suite.py`) uses hand-written deterministic scoring, not `google.adk.evaluation`'s LLM-as-judge framework. | Grading this system's own LLM output with another LLM call is exactly the reward-hacking risk the hackathon's own guidance warns about. Answer-leak/prompt-injection cases re-run the real production validator/sanitizer directly; persona-fidelity cases score real model output against a fixed keyword lexicon via plain string matching — no LLM ever judges another LLM's output here. | Using `rubric_based_evaluator`/`llm_as_judge` out of the box for a faster-to-write suite. |
 | ADR-007 | Multimodal OCR runs Gemini Vision **twice** per image and cross-checks the two transcriptions with `difflib`, downgrading confidence to `low` on disagreement regardless of what either call self-reports. | A real blurred test image caused Gemini Vision to self-report `confidence: "high"` while transcribing **completely unrelated, fabricated content** in 2 of 4 manual trials — prompt-only anti-hallucination instructions were not sufficient alone. The cross-check caught the failure 3/3 times after being added. | Trusting the model's single self-reported `confidence` field, or hand-tuning an image-blur heuristic threshold (rejected: no real photo dataset to calibrate a threshold against, high overfitting risk). |
 | ADR-008 | Low-confidence OCR output is routed to `pending_essays` (reusing the Phase 4 mechanism for `scores_degraded`), never written into `student_profiles`. | Content Gemini itself is not confident about should never silently become part of a student's permanent, teacher-visible record — same principle as never writing a fabricated score on an LLM outage. | Writing the essay through with a visible-but-ignored confidence flag — too easy for a Web UI/teacher review step to miss. |
@@ -294,7 +334,11 @@ Before leaving this project running unattended for any length of time:
 | ADR-018 | Require a Bearer token on all five student-facing debate endpoints, with a `student` token authorized only for its own `user_id` (`server.py::_verify_student_auth`). | `/api/debate/{start,start-with-image,start-with-gdoc,turn,reflect}` accepted an arbitrary caller-supplied `student_id` with no token check at all, while every `/api/classes/*` route was properly gated — on a service deployed `--allow-unauthenticated`. Anyone could write junk into any student's Firestore profile and publish a Pub/Sub event skewing the teacher's ranking. `/api/debate/turn` carries only a `session_id`, so ownership is resolved from the session's own stored `student_id`/`class_id`, and the token is verified **before** the session lookup — otherwise the route was an oracle distinguishing real session ids (403) from fake ones (404), a bug a test caught during this work. A same-class `teacher` token is accepted, since reproducing a student's debate is legitimate. | Assuming the input-size caps from ADR-012 were sufficient protection. A size cap bounds one request; it does not bound who may write to whose record, nor how many requests arrive. |
 | ADR-019 | Every eval case must be falsifiable, verified by a sabotage test: break the production code on purpose and confirm the case goes red. | The ĐỢT 12 audit found 12 of 50 eval cases could not fail. Layer 4's eight "cognitive growth" cases subtracted integer literals declared in the fixture file (`8 - 2 >= 4`) and would have passed with `src/` deleted; the persona-fidelity cases rebuilt the system instruction inside the test and then asserted the anchor was in the string they had just concatenated. Both now drive production code (`nodes/debate.py::build_system_instruction`, `merge_reflection_into_profile`, and a measured artifact from a live scorer run). Verified: removing persona anchoring fails 4/4 cases, deleting the measurement artifact fails 4/4 Layer 4 cases. | Treating a green suite as evidence without asking whether any case was *capable* of being red. Reward hacking does not require a reward model — a human writing an assertion that restates its own setup produces the same worthless metric. |
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the "Cải tiến Đợt 2" and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/ĐỢT 6; ADR-014 was added during ĐỢT 8; ADR-015 during ĐỢT 10 and **corrected** in ĐỢT 12; ADR-016 through ADR-019 came out of the ĐỢT 12 full audit — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence behind each one.)
+| ADR-020 | Every credential reaches Cloud Run as a Secret Manager reference (`--update-secrets`), never as a plain environment variable — and an AST test fails the build if one is ever inlined again. | An external review flagged the OAuth tokens being passed via `--env-vars-file`, and checking the live service confirmed it: `gcloud run services describe` printed both the Gmail and Sheets **refresh tokens in full**. Cloud Run stores plain env vars in the revision spec in cleartext, so they were readable by anyone with `run.services.get` — a *read* permission granted far more widely than `secretmanager.versions.access`. Mounted secrets appear in the same output as `valueFrom.secretKeyRef`. Chosen over calling the Secret Manager API from application code (the reviewer's suggestion): it needs no new dependency, no cold-start API call, and no code change at all, since Cloud Run injects the value into the same env var the integrations already read. | Treating ADR-016 as "the secrets problem is handled". It moved the *signing key* to Secret Manager and left two OAuth tokens inline — same class of exposure, missed because the fix was scoped to the one secret being discussed. |
+
+| ADR-021 | The turn-by-turn debate bridge in `interactive.py` is the **intended architecture** for this graph, not a stopgap pending ADK interrupt/resume. | Phase 1 recorded a plan to replace it "using ADK2 Workflow's interrupt/resume (`RequestInput`)", and that plan rested on a factual error carried for four phases: `RequestInput` is **not** a `Workflow` primitive. In `google-adk` 2.3.0, `google.adk.workflow` exports only BaseNode/Edge/FunctionNode/JoinNode/Node/NodeTimeoutError/RetryConfig/START/Workflow — the import raises `ImportError`. The real `RequestInput` lives in `google.adk.events.request_input`, wired by `google.adk.tools._request_input_tool` as a `LongRunningFunctionTool` for the **LLM agent tool-calling flow**; a graph made entirely of `FunctionNode`s never enters that flow. Reaching it would mean turning the debate node into an `LlmAgent`, handing the model control over persona anchoring, escalation order and termination — discarding the deterministic-first property the whole codebase is organised around. | Carrying a "we'll fix this properly later" note for four phases without ever checking that the mechanism it named existed. The note was more expensive than the limitation: it framed a correct design as technical debt. |
+
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the "Cải tiến Đợt 2" and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/ĐỢT 6; ADR-014 was added during ĐỢT 8; ADR-015 during ĐỢT 10 and **corrected** in ĐỢT 12; ADR-016 through ADR-019 came out of the ĐỢT 12 full audit; ADR-020 from an external review in ĐỢT 14; ADR-021 from a second external review in ĐỢT 15 — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence behind each one.)
 
 ---
 
@@ -313,6 +357,7 @@ Before leaving this project running unattended for any length of time:
 - **Input Boundaries & Cost-DoS Protection**: Strict upper bounds are enforced on all ingress vectors (max 20,000 chars for essays, max 4,000 chars for debate replies, max 10MB for base64 handwriting images, max 100KB for Google Doc fetches).
 - **XSS & Output Hygiene**: The Web UI uses contextual HTML escaping (`esc()`), strict `textContent` DOM node population, and event delegation to prevent stored XSS attacks across student submissions and teacher dashboards.
 - **Validator independence**: `nodes/validator.py` never imports `eduagent.llm` — verified by reading the module, not just by convention — so the same LLM call that generates a debate question can never also be the one judging it.
+- **Credentials at deploy time (ADR-020)**: all three secrets — the session signing key, the Gmail OAuth token and the Sheets OAuth token — are mounted from **Secret Manager** via `--update-secrets`, so the revision spec holds only `valueFrom.secretKeyRef` pointers. `scripts/deploy_to_cloud_run.py` preflights that all three exist and refuses to deploy otherwise, and `tests/test_deploy_never_inlines_secrets.py` is an AST-based hard gate against re-inlining one. Verify on a live revision with `gcloud run services describe ... --format='value(spec.template.spec.containers[0].env)'` — no credential value should be printed.
 - **Secrets**: `.env`, `secrets/`, `*-key.json`, `*service-account*.json`, `client_secret_*.json` are all gitignored; `git log --all` was scanned for API-key/private-key patterns and old-repo filenames before every phase checkpoint (see `TODO.md` Phase 0/7) — clean.
 
 ---

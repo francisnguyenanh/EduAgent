@@ -130,7 +130,7 @@
 - [x] **Summarizer Agent (Gemini 3.5 Flash).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/summarizer.py`, structured JSON output thật qua Vertex AI (không free text). Verify bằng `scripts/demo_tier1_run.py`: với essay nguỵ biện thật, model trích đúng `hasty generalization`, `anecdotal evidence`, `appeal to popularity`.
 - [x] **Persona library (4 persona, viết mới hoàn toàn).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/skills/personas.py`. Mỗi persona có `anchor` text riêng để tái khẳng định mỗi turn (Skeptic/Devil's Advocate/Nitpicker/Expander), map với 1 trục rubric tương ứng.
 - [x] **Debate Loop (Agent Node, leo thang, persona anchoring mỗi turn).** ✅ ĐÃ LÀM MỘT PHẦN — `src/eduagent/nodes/debate.py` + `src/eduagent/skills/debate_escalation.py` (escalation tách riêng module, đúng yêu cầu). Verify: Turn 1 sinh câu hỏi Socratic đúng persona, đúng 1 câu hỏi, không leak đáp án.
-  - ⚠️ **Giới hạn đã phát hiện, cần làm tiếp:** graph hiện chạy 1 lượt (batch) — `node_input` của Workflow chỉ nhận essay ban đầu, chưa có đường dẫn để bơm câu trả lời thật của học sinh giữa các turn. Muốn tranh biện 3-turn tương tác thật (học sinh trả lời → agent leo thang dựa trên câu trả lời đó) cần dùng cơ chế **interrupt/resume** của ADK2 Workflow (`RequestInput`, đã thấy trong `google.adk.workflow`) để graph dừng chờ input thật sau mỗi turn — việc này cần làm cùng lúc với Web UI (Phase 3), ghi vào việc còn lại của Phase 1 thay vì giả lập vội.
+  - ⚠️ **Giới hạn đã phát hiện, cần làm tiếp:** graph hiện chạy 1 lượt (batch) — `node_input` của Workflow chỉ nhận essay ban đầu, chưa có đường dẫn để bơm câu trả lời thật của học sinh giữa các turn. ~~Muốn tranh biện 3-turn tương tác thật cần dùng cơ chế **interrupt/resume** của ADK2 Workflow (`RequestInput`, đã thấy trong `google.adk.workflow`)~~ ⚠️ **CÂU NÀY SAI SỰ THẬT — đã sửa ở ĐỢT 15 (ADR-021).** `RequestInput` **không hề tồn tại** trong `google.adk.workflow`: module này chỉ export `BaseNode, DEFAULT_ROUTE, Edge, FunctionNode, JoinNode, Node, NodeTimeoutError, RetryConfig, START, Workflow` — `from google.adk.workflow import RequestInput` raise `ImportError`. `RequestInput` thật nằm ở `google.adk.events.request_input`, được `google.adk.tools._request_input_tool` bọc thành `LongRunningFunctionTool` cho **luồng LLM agent tool-calling** (`google.adk.flows.llm_flows`). Graph của ta toàn bộ là `FunctionNode` nên không bao giờ đi vào luồng đó ⇒ **cơ chế này không với tới được từ graph hiện tại.** Muốn dùng phải biến debate node thành `LlmAgent` gọi tool, tức trao cho model quyền quyết định persona anchoring / thứ tự leo thang / khi nào dừng — đánh đổi tệ hơn hẳn. ⇒ `interactive.py` **không phải giải pháp tạm**, nó là kiến trúc đúng cho một graph FunctionNode. Món "nợ kỹ thuật" tồn từ Phase 1 tới giờ thực chất **không phải nợ**.
 - [x] 🔴 **Challenge Validator (Function Node, ZERO LLM, độc lập 100%).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/validator.py`, không import `eduagent.llm` (verify bằng đọc code, không có LLM call nào). Test thật: chặn đúng answer-leak, chặn câu hỏi kép, chặn quá ngắn/quá dài. Dùng lại (không gọi chồng LLM) cả trong vòng regenerate của Debate Loop lẫn làm node cuối kiểm tra toàn bộ transcript.
 - [x] **Cognitive Scorer (Agent Node).** ✅ ĐÃ LÀM + ĐÃ REVIEW + PASS — `src/eduagent/nodes/scorer.py`. Verify: essay nguỵ biện thật bị chấm điểm thấp hợp lý (2/1/0/2 trên thang 10) ở cả 4 trục.
 - [x] **Profile Mutator (Function Node — Data Mutation).** ✅ ĐÃ LÀM MỘT PHẦN — `src/eduagent/nodes/mutator.py` tính đúng delta (`persona_used`, `new_weaknesses`, `scores`, `validator_passed`) từ 1 essay. Đây mới là delta cho MỘT bài; hợp nhất `persona_streak`/`score_trend` xuyên nhiều bài (cần đọc lịch sử cũ trước khi mutate) dời sang **Phase 2** cùng với ghi Firestore thật — làm ở đây sẽ phải giả lập lịch sử giả, không có giá trị.
@@ -1004,6 +1004,64 @@ graph TD
 
 ---
 
+## ĐỢT 14 — ĐÁNH GIÁ BẢN REVIEW NGOÀI ("Roadmap to 6.0/6.0") + thực hiện phần đúng (2026-08-25) ✅ HOÀN THÀNH (3/3 mục nhận, 3 mục đã có sẵn, 2 mục từ chối)
+
+> **Nguồn:** một AI khác review tổng thể dự án, cho scorecard 4.68/5.0 và đề xuất checklist P0→P3.
+> **Cách xử lý:** đối chiếu TỪNG nhận xét với code thật trước khi đưa vào việc. Kết quả: **3 mục đúng và đáng làm**, **3 mục đã làm xong từ trước** (reviewer không thấy), **2 mục từ chối có lý do**, và **5 lỗi dữ kiện** trong chính bản review — trong đó 2 lỗi nếu tin theo sẽ **làm mất điểm**.
+
+### ⚠️ 5 lỗi dữ kiện trong bản review (KHÔNG được copy vào việc)
+
+| # | Bản review nói | Thực tế trong repo | Hệ quả nếu tin theo |
+|---|---|---|---|
+| 1 | Framework là *"Google GenAI SDK kết hợp Agentic Orchestration"* | Dự án dùng **ADK2 thật**: `google.adk.workflow.{Workflow, FunctionNode, START}` + `google.adk.agents.context.Context` ở 9 node (`grep -rn "from google.adk" src/` → 9 file) | 🔴 **Mất điểm Stage 1.** Yêu cầu bắt buộc là "Google Agent Framework (ADK)". ADK là bằng chứng MẠNH NHẤT ta có cho tiêu chí này; mô tả lại thành "GenAI SDK" là tự hạ mình xuống mức chỉ-gọi-API — đúng thứ Rules nói *"we are evaluating your engineering decisions, not just your ability to call an API"* |
+| 2 | Dẫn chứng `src/eduagent/prompts/` cho phần English support | **Thư mục này không tồn tại** (`ls` → No such file or directory). Prompt nằm inline trong từng node (`_SYSTEM_INSTRUCTION` ở `summarizer.py`/`scorer.py`, `personas.py`, `debate_escalation.py`) | Reviewer đánh giá "Pass" dựa trên bằng chứng không tồn tại → không thể dùng làm bảo đảm. (Đã tự verify lại: `demo_page.py` có **0** ký tự có dấu tiếng Việt hardcode → UI thật sự là tiếng Anh, kết luận đúng nhưng vì lý do khác) |
+| 3 | Bottleneck #1: *"Cross-Session Memory chưa thể hiện rõ... nếu học sinh quay lại ngày hôm sau, agent có nhớ lỗi hôm trước không?"* | **Đã có từ Phase 2 + ĐỢT 2.** `persona_selector` đọc `get_profile()` → `weakness_taxonomy_from_profile()` → `ctx.state["prior_weakness_taxonomy"]` → `debate.py:84-94` tiêm vào prompt turn 1: *"This student has previously struggled with: ..."*. Đo được ở `docs/experiment_memory_ab.md:13` (**2/3 bài** có tiêm ngữ cảnh vs 0/3 ở nhánh stateless), và eval Layer 3 có **2 case riêng** khoá hành vi này | Làm lại từ đầu một thứ đã chạy, tốn thời gian sát deadline |
+| 4 | Code snippet đề xuất dùng `from eduagent.config import paths` → `paths.secrets_dir`, và biến `SCOPES` | `config.py` **không có** object `paths`; scope thật tên là `COMPOSE_ONLY_SCOPES` / `SHEETS_SCOPES`. Snippet cũng bỏ luôn nhánh refresh token đã có | Copy nguyên snippet sẽ **crash ngay** (`ImportError`) và làm mất cơ chế refresh |
+| 5 | *"+0.2 cho Google AI Integration"*, tổng mục tiêu *"6.0/6.0"* | Rules (`PROJECT_WIKI.md` mục 4, Stage Three) chỉ định lượng **2** hạng mục: blog **+0.2**, social **+0.2** → tổng **+0.4**. "Tích hợp thêm Google AI model khác (Gemma, Veo, Lyria)" nằm ở *Optional Developer Contributions*, **không kèm số điểm** | Kỳ vọng điểm sai → quyết định cắt/thêm việc sai. (Cũng đã sửa `docs/submission_checklist.md` vốn tự cộng thành "+0.6đ", và bỏ claim +0.2 cho việc dùng 2 biến thể **cùng họ Gemini** — đó không phải "mô hình khác") |
+
+### 🧭 Nhận định về độ tin cậy của scorecard
+
+Bản review cho **Architectural Discipline 4.7/5.0** và **Demo & Production Readiness 4.5/5.0**, nhưng **không phát hiện bất kỳ mục nào** trong ĐỢT 12: service live đang ký token giáo viên bằng khoá công khai trong repo, 5 endpoint học sinh không có xác thực, `+5.62` là hằng số gõ tay, 12/50 eval case không thể FAIL, bảng STRIDE claim rate limiting không tồn tại. Một hệ thống đang có lỗ hổng cho phép giả mạo token giáo viên **không thể** là 4.7/5.0 về kỷ luật kiến trúc.
+
+→ **Kết luận:** dùng bản review này như một **checklist ý tưởng**, không dùng như một thang đo. Không chạy theo con số 4.68 hay 6.0. Giá trị thật của nó nằm ở **đúng 1 phát hiện mà ĐỢT 12 bỏ sót** (mục P0-2 bên dưới) — và phát hiện đó thì đáng giá.
+
+---
+
+### [P0-2] 🔴 Secret Manager cho OAuth token — **ĐÚNG, và là phát hiện ĐỢT 12 đã bỏ sót**
+
+- [x] ✅ **Chuyển `GMAIL_COMPOSE_TOKEN_JSON` / `SHEETS_TOKEN_JSON` từ env var sang Secret Manager.** ĐÃ LÀM (ĐỢT 14, ADR-020)
+  - **Verify lỗ hổng là THẬT và ĐANG LIVE trước khi sửa:** `gcloud run services describe` trên service thật in ra **nguyên văn cả 2 refresh token** (`GMAIL_COMPOSE_TOKEN_JSON = {"token": "ya29.a0AdMD6Ei..."`, `SHEETS_TOKEN_JSON = {"token": "ya29.a0AdMD6Eh..."`). Đây không phải lỗi lý thuyết.
+  - **KHÔNG dùng cách reviewer đề xuất** (gọi Secret Manager API trong code). Lý do: venv của dự án tạo bằng `uv`, **không có `pip`** — thêm `google-cloud-secret-manager` là phải sửa lockfile + image, cộng thêm 1 API call ở cold start. Dùng `--update-secrets` của Cloud Run đạt **đúng mục tiêu bảo mật** mà **không đổi một dòng code nào**: Cloud Run inject giá trị secret vào đúng tên env var mà code đã đọc. Revision spec chỉ còn con trỏ `valueFrom.secretKeyRef`.
+  - Đã tạo thật 3 secret + cấp `roles/secretmanager.secretAccessor` **theo từng secret** (không cấp project-wide): `eduagent-session-secret`, `eduagent-gmail-token`, `eduagent-sheets-token`.
+  - `scripts/deploy_to_cloud_run.py`: bỏ 2 token khỏi `--env-vars-file`, thêm `SECRET_ENV_VARS` + `--update-secrets` dựng từ mapping (thêm credential mới chỉ cần thêm vào dict), và `_preflight_secrets()` kiểm **cả 3** secret trước khi deploy, fail sớm kèm đúng lệnh cần chạy.
+  - **Hard gate AST** `tests/test_deploy_never_inlines_secrets.py` (4 test) — cùng kiểu `test_gmail_mcp_never_sends.py`, dùng AST không phải grep để chính comment giải thích không gây false-positive. **Sabotage test:** nhồi lại token vào env dict → test FAIL đúng.
+  - **Check mới trong `doctor.py`** ("No plaintext credentials on Cloud Run") → hiện báo **FAIL** đúng trên revision live, sẽ PASS sau redeploy. Lỗ hổng này do review ngoài tìm ra, không phải ta — nên giờ đã tự động hoá việc phát hiện.
+  - ⚠️ **Cần ROTATE 2 token OAuth** (không chỉ chuyển chỗ lưu): chúng đã từng nằm ở nơi đọc được, nên giá trị cũ nên bị vô hiệu. Hướng dẫn ở cuối `deploy.txt` STEP 1.
+  - 📌 **Bài học ghi lại:** ĐỢT 12 đã chuyển **khoá ký** sang Secret Manager nhưng phạm vi sửa bó đúng trong secret đang bàn, để lọt 2 credential cùng lớp lỗi. Sửa một lỗ hổng thì phải quét **cả họ** lỗ hổng đó, không chỉ instance đang nói tới.
+  - **Vì sao đúng:** `scripts/deploy_to_cloud_run.py` nhồi cả 2 refresh token vào `--env-vars-file`. Nội dung env var **hiện nguyên văn** trong `gcloud run services describe` và trong Cloud Console UI, tức bất kỳ ai có quyền `run.services.get` (một quyền *đọc*, rộng hơn nhiều so với quyền đọc secret) đều lấy được refresh token Gmail của giáo viên. ĐỢT 13 đã đưa `EDUAGENT_SESSION_SECRET` vào Secret Manager nhưng **để lọt đúng 2 token này** — cùng một lớp lỗi, phát hiện muộn hơn.
+  - **KHÔNG dùng snippet của reviewer** (lỗi #4 ở trên). Viết lại đúng API thật của repo, giữ nguyên thứ tự fallback đã có và cơ chế refresh.
+
+### [P0-1] 🟡 Spin-up guide cho giám khảo tự chấm
+
+- [x] ✅ **Thêm mục "Judge Quickstart" ~5 phút lên đầu README.** ĐÃ LÀM (ĐỢT 14) — khối "⏱️ Judge Quickstart — three paths, by how much time you have" đặt ngay sau phần Live Demo: **(a) 60 giây** không cài gì (URL live + passcode), **(b) 5 phút** chạy local đúng 3 lệnh rồi `doctor.py` (nêu rõ đây là cách nhanh nhất biết môi trường thiếu gì), **(c)** deploy bằng `deploy_to_cloud_run.py` có preflight. Kết thúc bằng "nếu chỉ xem một thứ": chạy `demo_tier1_run.py` và xem persona đổi giữa bài 1 và bài 2 — đúng câu trả lời cho câu hỏi chấm điểm của track. **Không viết lại §3** (vẫn là hướng dẫn tái lập đầy đủ), chỉ thêm đường ngắn ở đầu. Số test trong README đã verify bằng cách chạy thật (243 fast / 245 tổng) sau khi phát hiện tôi ghi sai 245 fast. README hiện rất đầy đủ (§3.1→§3.10) nhưng **dài** — reviewer nói đúng ở điểm này. Không viết lại §3, chỉ thêm 1 khối ngắn ở đầu: đường nhanh nhất là *không cài gì cả* (mở URL live + passcode), sau đó 3 bước chạy local, rồi trỏ tới §3.10 để deploy.
+
+### [P1-2] 🟢 Debounce cho lúc demo
+
+- [x] ✅ **Ghi rõ cách set `EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0` khi demo.** ĐÃ LÀM (ĐỢT 14) — README §3.10(c) có 2 lệnh `gcloud run services update` (đặt 0 để quay, đặt lại 120 sau khi quay), kèm giải thích **không mất dữ liệu** khi debounce: event bị coalesce vẫn đã ghi `student_profiles` ở Tầng 1, và event kế tiếp của lớp đó đọc lại toàn bộ profile nên digest sau vẫn phản ánh đủ. Đã thêm vào `docs/submission_checklist.md` như một bước bắt buộc trước khi quay. Config đã tồn tại (`config.py:105`, mặc định 120s). Rủi ro thật: quay video mà digest bị coalesce thì Gmail draft **không xuất hiện** trong 2 phút — đúng lúc cần show. Chỉ cần tài liệu hoá, không cần code.
+
+### ✅ 3 mục reviewer đề xuất nhưng ĐÃ LÀM XONG TỪ TRƯỚC (không làm lại)
+
+- [x] **P1-1 Cross-Session Adaptive Memory Bank** — xem lỗi dữ kiện #3. Đã chạy từ Phase 2, có test khoá hành vi (eval Layer 3, 2 case), có số đo A/B. Việc cần làm là **show nó rõ hơn trong video**, không phải build lại — và ĐỢT 13 đã đặt đúng khoảnh khắc này làm cao trào của Golden Path (~2:10).
+- [x] **P2 Architecture Diagram (Mermaid trong README)** — đã có từ trước, và ĐỢT 13 vừa sửa 3 nhãn `Agent Node` → `Function Node` cho khớp code thật.
+- [x] **P3 Technical Blog + Social Post** — đã soạn đầy đủ (`docs/blog_post_draft.md`, `docs/social_post_draft.md`, có hashtag). Chỉ còn thao tác đăng (Phase 8).
+
+### ❌ 2 mục TỪ CHỐI (ghi lý do để không phải quyết lại)
+
+- **P3 "Chèn Imagen 3 / Veo sinh ảnh phần thưởng".** Từ chối: (a) rules **không định lượng điểm** cho hạng mục này (lỗi dữ kiện #5); (b) là feature mới hoàn toàn, trái quyết định "không thêm feature" đã chốt từ ĐỢT 10; (c) thêm một dependency nữa vào đúng luồng demo 4 phút đang là rủi ro lớn nhất; (d) không phục vụ 2 câu hỏi chấm điểm của track (*synthesize/mutate data* và *messy unstructured input*). Đổi ảnh phần thưởng lấy rủi ro flaky demo là một cuộc đổi tệ.
+- **P2 Viết lại kịch bản video theo timeline của reviewer.** Từ chối: timeline đó (`0:45-1:30` show Cloud Run dashboard + logs) đẩy hạ tầng lên trước, và **bỏ mất khoảnh khắc mạnh nhất của dự án** — "persona đổi vì nó nhớ" — trong khi đó chính là câu trả lời trực tiếp cho track Collaborative Partner. ĐỢT 13 vừa thống nhất Golden Path (một flow duy nhất, ~2:10 là cao trào). **Giữ nguyên.** Tiếp thu đúng **1 ý tốt**: cho thấy Pub/Sub trigger → Gmail draft xuất hiện **live liền mạch** (đã bổ sung vào script, xem P1-2 về debounce=0).
+
+---
+
 ## PHASE 8 — Video Demo, Submission & Bonus 🔴 (ĐANG LÀM — mọi văn bản/kịch bản đã soạn sẵn, còn lại là thao tác thật của bạn)
 
 > Video là thứ giám khảo xem nhiều nhất và chiếm phần lớn 30% Demo. Chỉ 4 phút đầu được chấm.
@@ -1048,3 +1106,144 @@ graph TD
 
 - [ ] Chờ phản hồi `cloudhackathons@google.com` về eligibility tái sử dụng ý tưởng CritiqAI → cập nhật `PROJECT_WIKI.md` mục 6 và điều chỉnh file này nếu cần.
 - [x] Cập nhật `PROJECT_WIKI.md` mục 12 mỗi khi có quyết định kiến trúc mới. ✅ ĐÃ CẬP NHẬT (ĐỢT 13) — thêm block "Quyết định kiến trúc mới phát sinh khi làm ĐỢT 12" (ADR-016/017/018/019 + 4 quyết định phụ về learning outcome, `--live-persona`, ngưỡng 2-vs-3, và việc bỏ `PYTEST_CURRENT_TEST`), đồng thời **gạch 2 phát biểu đã lỗi thời** trong mục này (`interactive.py` không dùng Firestore; `api.py` không chạm scorer/mutator) kèm ghi rõ đã bị ADR nào thay thế.
+
+
+
+## ĐỢT 15 — ĐÁNH GIÁ BẢN REVIEW NGOÀI LẦN 2 (scorecard 4.94/5.0) + thực hiện phần đúng (2026-08-25) ✅ HOÀN THÀNH
+
+> **Nguồn:** bản review thứ hai (đã dán nguyên văn ở cuối file này). Khác lần 1: lần này **nhận đúng ADK2** và bỏ hết các lỗi dữ kiện lớn của lần trước.
+> **Kết quả đối chiếu với code thật:** **1 phát hiện rất giá trị** (Bottleneck #1 — dẫn tới ADR-021), **1 phát hiện đúng vấn đề nhưng sai nguyên nhân** (Bottleneck #2), **1 credit sai phải từ chối** (circuit breaker), **1 mục đã làm xong** (Bottleneck #3), và **1 snippet không chứa thay đổi nào**.
+
+### 🏆 Giá trị lớn nhất của bản review này: nó làm lộ một lỗi dữ kiện TỒN 4 PHASE trong TODO của chính ta
+
+Review nêu Bottleneck #1: *"Multi-turn debate phụ thuộc vào Interrupt/Resume của ADK2 (`RequestInput`)"*, và đề xuất P1 *"tích hợp hoàn chỉnh cơ chế `RequestInput` trong graph"*. Đi verify thì phát hiện:
+
+- [x] ✅ **`RequestInput` KHÔNG TỒN TẠI trong `google.adk.workflow`** — module này chỉ export `BaseNode, DEFAULT_ROUTE, Edge, FunctionNode, JoinNode, Node, NodeTimeoutError, RetryConfig, START, Workflow`. `from google.adk.workflow import RequestInput` → **`ImportError`**.
+  - `RequestInput` thật nằm ở `google.adk.events.request_input`, được `google.adk.tools._request_input_tool` bọc thành `LongRunningFunctionTool` cho **luồng LLM agent tool-calling** (`google.adk.flows.llm_flows`). Graph của ta 100% là `FunctionNode` nên **không bao giờ đi vào luồng đó** ⇒ cơ chế này không với tới được.
+  - ⇒ **Đề xuất P1 của review là KHÔNG THỰC HIỆN ĐƯỢC như phát biểu.** Muốn dùng phải biến debate node thành `LlmAgent` gọi tool, tức trao cho model quyền quyết định persona anchoring, thứ tự leo thang và khi nào dừng — phá đúng thuộc tính deterministic-first mà chính review cho **5.0/5.0** ở mục Architectural Discipline. Đánh đổi tệ hơn hẳn.
+  - ⇒ **Nhưng chính ta đã viết câu sai đó trước.** `TODO.md:133` (Phase 1) ghi *"cần dùng cơ chế interrupt/resume của ADK2 Workflow (`RequestInput`, **đã thấy trong `google.adk.workflow`**)"* — không đúng, và không ai verify trong suốt 4 phase. `interactive.py:6` cũng lặp lại giả định đó.
+  - **Đã sửa (ADR-021):** đính chính ở `TODO.md:133`, viết lại docstring `interactive.py`, thêm ADR-021 vào README. Kết luận đảo chiều: `interactive.py` **không phải giải pháp tạm**, nó là kiến trúc đúng cho một graph FunctionNode. **Món "nợ kỹ thuật" tồn từ Phase 1 thực chất không phải nợ** — và cái note đó còn đắt hơn cả giới hạn nó mô tả, vì nó gắn nhãn "technical debt" lên một thiết kế đúng.
+
+### 🟡 Bottleneck #2 — đúng chỗ đau, sai nguyên nhân. Đã thay phỏng đoán bằng số đo thật
+
+Review dự đoán *"Gemini Vision OCR có thể dẫn đến **504 Deadline Exceeded** trên Cloud Run"*. Đo thật (ảnh viết tay 958 KB, Vertex AI thật):
+
+| Bước | Đo được |
+|---|---|
+| `transcribe_essay_image()` (2 lượt Vision + `difflib`) | **22.5s** |
+| Cả luồng `/api/debate/start-with-image` (OCR + summarizer + persona + turn 1) | **24.2s** |
+| Cloud Run request timeout hiện tại | **300s** |
+
+- [x] ✅ **Kết luận: rủi ro 504 KHÔNG có thật** — headroom ~12x (24.2s so với 300s), và timeout LLM mỗi call là 60s. Muốn 504 phải có sự cố nặng hơn nhiều một tấm ảnh chậm.
+- [x] ✅ **Rủi ro THẬT là 24 giây chết lặng trong video 240 giây** (10% ngân sách thời gian dành cho cái spinner). Đây là vấn đề **kịch bản**, không phải vấn đề config — nên sửa bằng cách quay, không bằng cách tăng timeout.
+  - Đã thêm mục **"⏱️ Latency budget — measured, not estimated"** vào `docs/video_script.md` với bảng số đo + 3 phương án theo thứ tự ưu tiên: (1) **nói lấp vào đúng 24s đó** — chính là lúc giải thích *"chúng tôi gọi Vision 2 lần và so sánh, vì không tin điểm confidence model tự báo"*, beat có nhiều thứ để nói nhất và không có gì để xem; (2) warm service trước để không cộng cold start; (3) nếu vẫn không vừa thì quay beat live bằng text và để luồng ảnh ở cửa sổ thứ hai đã khởi động trước — **không cắt ghép để che thời gian chờ**, vì "unedited live execution" là yêu cầu chấm điểm.
+  - Đã cập nhật dòng OCR trong `docs/failure_matrix.md` bằng số đo thật thay vì mô tả định tính.
+
+### ❌ Credit SAI phải từ chối — review ghi ta có "circuit breaker"
+
+- [x] ✅ **`grep -rniE "circuit.?breaker" src/` → 0 kết quả. Dự án KHÔNG có circuit breaker.**
+  - Review viết: *"Có rate limiter, exponential backoff, **circuit breaker** và idempotency claim"* trong phần cho điểm **5.0/5.0** Architectural Discipline. Ba thứ kia có thật; circuit breaker thì không.
+  - **Quyết định: KHÔNG implement, và KHÔNG để câu này lọt vào bất kỳ tài liệu nào.** Đây đúng bằng lớp lỗi mà ĐỢT 12 phải đi sửa cả đợt — mô tả một biện pháp không tồn tại trong tài liệu kiến trúc/bảo mật. Lần này nguy hiểm hơn vì nó đến dưới dạng **lời khen**: điểm cao kèm một feature ta không có thì rất dễ được copy vào README mà không ai kiểm.
+  - Ghi lại làm nguyên tắc: **review nói ta CÓ một thứ cũng phải verify như review nói ta THIẾU một thứ.** Credit sai làm bẩn tài liệu y như chỉ trích sai làm hỏng kế hoạch.
+
+### ✅ Đã làm xong từ trước (không làm lại)
+
+- [x] **Bottleneck #3 / P2 — `EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0` khi quay.** Đã xử lý ở **ĐỢT 14**: README §3.10(c) có 2 lệnh (đặt 0 để quay, đặt lại 120 sau), giải thích không mất dữ liệu, và `docs/submission_checklist.md` đã có bước bắt buộc trước khi quay. Review nêu lại là đúng mức độ quan trọng, nhưng việc đã có.
+- [x] **P0 (GCP/SDK binding, resilience/DLQ), P1 (mutation engine, cross-session memory), P2 (diagram, spin-up guide)** — review tự đánh `[x]`, khớp thực tế.
+
+### ❌ Từ chối (nhất quán với ĐỢT 14)
+
+- **P3 "Google AI Integration (+0.2 - +0.6)" / thêm node Gemma2 re-rank fallacy offline.** Từ chối: (a) khoảng điểm "+0.2 - +0.6" **không có trong rules** — `PROJECT_WIKI.md` mục 4 xếp "tích hợp thêm Google AI model khác" vào *Optional Developer Contributions* **không kèm số điểm** (đây là lần thứ hai một review tự gán điểm cho hạng mục này); (b) feature mới, trái quyết định "không thêm feature" từ ĐỢT 10; (c) re-rank fallacy bằng LLM sẽ **phá** chính thuộc tính zero-LLM của ranking mà review vừa cho 5.0/5.0.
+- **P2 timeline video của review.** Từ chối, cùng lý do ĐỢT 14: timeline đó không có khoảnh khắc "persona đổi vì nó nhớ" — cao trào đã chốt của Golden Path và là câu trả lời trực tiếp cho câu hỏi chấm điểm của track. Giữ nguyên Golden Path.
+
+### 📎 Mục 5 "Code Refactoring Snips" — không chứa thay đổi nào
+
+- [x] Snippet đề xuất cho `/api/debate/turn` **giống nguyên xi code hiện có** (đã viết ở ĐỢT 13/14: rate limit → `_require_token` → `get_debate_session` → `_verify_student_auth` → `submit_debate_turn`), chỉ thêm dòng `# NOTE: Implement logic ... using ADK2's context resumption mechanisms`. Mà "context resumption" chính là thứ **không tồn tại** cho FunctionNode graph (xem ADR-021). Không có gì để apply.
+
+### 🧭 Nhận định về scorecard 4.94/5.0
+
+Đáng tin hơn bản lần 1 nhiều (nhận đúng ADK2, nhận đúng deterministic-first, nhận đúng rủi ro debounce). Nhưng vẫn **đo repo, không đo deployment**: nó cho *"Demo & Production Readiness 4.8/5.0"* và *"Least-privilege và Auth được enforce mạnh"* trong khi `scripts/doctor.py` lúc đó đang báo **FAIL** vì revision live vẫn để refresh token OAuth ở dạng cleartext (lỗ hổng do chính review **lần 1** tìm ra, và tại thời điểm review lần 2 vẫn chưa redeploy). Bài học giữ nguyên từ ĐỢT 14: **dùng review làm checklist ý tưởng, đừng dùng làm thang đo** — và một điểm số cao không có nghĩa là không còn gì đang cháy.
+
+---
+
+# 📋 PROJECT AUDIT & ROADMAP TO 6.0/6.0 - COLLABORATIVE PARTNER TRACK
+
+## 1. Compliance & Viability Check (Stage 1 Pass/Fail)
+| Tiêu chí bắt buộc | Trạng thái (Pass/Risk/Fail) | Chi tiết phân tích & Bằng chứng từ Code |
+|---|---|---|
+| Gemini API / Vertex AI (3.5+) | **Pass** | Hệ thống sử dụng `gemini-3.5-flash` và `gemini-3.7-flash` qua `google-genai` (Vertex AI) cho các Agent Node (Summarizer, Scorer, Digest Synthesizer, OCR). Tích hợp ổn định và an toàn trong `src/eduagent/llm.py`. |
+| Google Agent Framework (ADK/GenKit/SDK) | **Pass** | Sử dụng Google ADK2 (`google-adk>=2.3.0`) tạo `Workflow` graph bài bản trong `src/eduagent/graph/tier1_pipeline.py`. Chạy qua `InMemoryRunner` với state threading chuẩn. |
+| Google Cloud Infrastructure (Cloud Run/Firestore/...) | **Pass** | Hạ tầng Cloud-Native xuất sắc: Firestore làm Memory Bank (long-term memory/sessions), Pub/Sub làm event-bus (kèm DLQ), Cloud Run làm push-subscriber (`server.py`). Cloud Trace OpenTelemetry cũng được tích hợp. |
+| Spin-up Reproducibility (README) | **Pass** | Hướng dẫn setup trong `README.md` cực kỳ chi tiết. Có `scripts/doctor.py` để preflight check toàn bộ GCP resources, ADC và secrets trước khi chạy. Có `scripts/deploy_to_cloud_run.py` bảo vệ deploy. |
+| English Support & IP Compliance | **Pass** | Toàn bộ prompt, node logic, và `summarizer.fallacies_draft` sử dụng chuẩn tiếng Anh. Có `language.py` hỗ trợ bilingual mượt mà. Disclosure rõ ràng trong `README.md` và `PROJECT_WIKI.md`. |
+
+## 2. Scorecard Đánh Giá Chuyên Môn (Stage 2: Thang điểm 1.0 - 5.0)
+- **Innovation & Operational Utility (40%)**: **[5.0/5.0]**
+  * Nhận xét: Hệ thống xuất sắc vượt qua bài toán "chỉ đọc". Khả năng mutate data thể hiện rõ qua cơ chế tái cấu trúc `weakness_taxonomy`, `score_trend`, và `persona_streak`. Node OCR với Gemini Vision tiếp nhận messy data tay viết cực tốt. Logic Persona đổi qua từng session (Skeptic -> Nitpicker) cho thấy Proactive Stepping sâu sắc.
+- **Architectural Discipline & Tech Stack (30%)**: **[5.0/5.0]**
+  * Nhận xét: Thiết kế deterministic-first rất chặt chẽ (Zero-LLM cho ranking và challenge validator). Cơ chế Memory Bank trên Firestore tách biệt rõ Session State và Long-term Memory. Có rate limiter, exponential backoff, circuit breaker và idempotency claim qua Pub/Sub PUSH tới Cloud Run. Đạt chuẩn production.
+- **Demo & Production Readiness (30%)**: **[4.8/5.0]**
+  * Nhận xét: Kiến trúc hệ thống tách bạch (Tier 1 & Tier 2). Diagram Mermaid rõ ràng. Vấn đề duy nhất là cần đảm bảo video demo 4 phút mượt mà khi xử lý OCR vì image input latency cao. Least-privilege và Auth được enforce mạnh ở `server.py` và `gmail_mcp.py`.
+- **Dự phóng Điểm Stage 2 (Weighted Average)**: **[4.94/5.0]**
+
+## 3. Phân Tích Điểm Nghẽn Chí Mạng (Critical Bottlenecks & Gaps)
+- **Bottleneck #1 (Logic & Agentic Flow)**: Multi-turn debate phụ thuộc vào Web UI / Interrupt/Resume của ADK2 (`RequestInput`). Hiện tại luồng graph CLI đang chạy một lèo, có thể khiến demo tương tác khó thể hiện toàn vẹn trên terminal.
+- **Bottleneck #2 (Hạ tầng & State Management)**: Độ trễ (latency) của Gemini Vision khi OCR ảnh viết tay có thể dẫn đến 504 Deadline Exceeded trên Cloud Run nếu không config cẩn thận hoặc ảnh quá nặng. Dù timeout đã nâng lên 60s (ADR-009), lúc demo quay live rủi ro vẫn hiện hữu.
+- **Bottleneck #3 (Rủi ro Demo 4 phút)**: Thời gian `DIGEST_DEBOUNCE_SECONDS` mặc định 120s (2 phút) sẽ ngốn tới nửa thời gian video. Phải cấu hình thành 0s như đã ghi chú khi quay video, nếu quên sẽ fail demo.
+
+## 4. Kế Hoạch Cải Tiến Chi Tiết (Actionable TODO Checklist)
+
+### [P0] Bắt Buộc Hoàn Thiện để Đạt Stage 1 Pass & Khắc Phục Lỗi Chí Mạng
+- [x] **GCP & SDK Binding**: Đã hoàn thành hoàn hảo (ADK2 + Firestore + Cloud Run + PubSub).
+- [x] **State & Error Handling**: `resilience.py` đã cover toàn bộ retry/backoff. DLQ đã hoạt động.
+
+### [P1] Tối Ưu Track "Collaborative Partner" Để Chạm Mốc 5.0/5.0
+- [x] **Messy Data Mutation Engine**: Node `mutator.py` và `priority_engine.py` đã làm xuất sắc việc này.
+- [ ] **Proactive Stepping & Clarifying Loop**: Tích hợp hoàn chỉnh cơ chế `RequestInput` trong graph để tạm dừng chờ học sinh trả lời thay vì chỉ chạy batch 1 turn rồi thoát. Đảm bảo UI Web gọi `/api/debate/turn` nối vào đúng session state.
+- [x] **Live Note-Taking & Dynamic State Sync**: Tự động tính toán delta điểm và lỗi sau mỗi turn qua Mutator.
+- [x] **Cross-Session Adaptive Memory Bank**: Đã lưu trữ qua Firestore transaction.
+
+### [P2] Hoàn Thiện Hồ Sơ Nộp Bài & Minh Chứng Video (Demo & Repo Assets)
+- [x] **Architecture Diagram**: Đã có sơ đồ Mermaid chi tiết.
+- [x] **Spin-up Guide**: Đã hoàn chỉnh `README.md` và `deploy.txt`.
+- [ ] **4-Minute Demo Script**: Bắt buộc setup `EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0` trước khi quay. Kịch bản: (0:00-0:45) Trình bày problem, show ảnh chụp essay tay -> (0:45-1:30) Upload ảnh, OCR và debate 1 turn live -> (1:30-2:30) Quay sang teacher dashboard (GCP/Web) thấy priority rank update tức thì -> (2:30-3:30) Check Gmail ra draft Teacher Digest -> (3:30-4:00) Kết luận.
+
+### [P3] Tối Đa Hóa Điểm Thưởng (Bonus Points Strategy -> Target 6.0/6.0)
+- [ ] **Google AI Integration (+0.2 - +0.6)**: Hiện đang dùng Gemini qua Vertex AI. Có thể cân nhắc thêm node dịch vụ Gemma2 chạy qua inference endpoint để đánh giá hoặc re-rank fallacy offline. 
+- [ ] **Technical Blog Post (+0.2)**: Nhanh chóng publish bản thảo `docs/blog_post_draft.md` lên Dev.to/Medium.
+- [ ] **Social Media Release (+0.2)**: Publish `docs/social_post_draft.md` lên X/LinkedIn với hashtag `#AllThingsAgenticHackathon`.
+
+## 5. Code Refactoring Snips (Mã Nguồn Thay Thế / Bổ Sung Trực Tiếp)
+
+**Giải quyết Bottleneck #1: Interactive Web API Handler (Cải tiến `/api/debate/turn`)**
+Đảm bảo `api_debate_turn` trong `server.py` kết nối mượt mà vào logic resume debate session, tải lịch sử từ Firestore và tiếp tục ADK Graph.
+
+```python
+# Trong src/eduagent/server.py
+@app.post("/api/debate/turn")
+async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    _require_token(request.headers.get("authorization"))
+    
+    try:
+        session = get_debate_session(payload.session_id)
+    except UnknownSessionError:
+        raise HTTPException(status_code=404, detail=f"Unknown session_id: {payload.session_id!r}")
+        
+    _verify_student_auth(
+        student_id=session.get("student_id", ""),
+        class_id=session.get("class_id", ""),
+        authorization=request.headers.get("authorization"),
+    )
+    
+    try:
+        # NOTE: Implement logic in submit_debate_turn to resume ADK graph execution 
+        # based on session_id using ADK2's context resumption mechanisms.
+        return submit_debate_turn(payload)
+    except UnknownSessionError:
+        raise HTTPException(status_code=404, detail=f"Unknown session_id: {payload.session_id!r}")
+    except DebateSessionComplete as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+```
