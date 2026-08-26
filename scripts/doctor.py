@@ -97,9 +97,30 @@ def check_pubsub_topology() -> tuple[str, str]:
             f"Dead-letter max_delivery_attempts={subscription.dead_letter_policy.max_delivery_attempts}, "
             f"expected {PUBSUB.max_delivery_attempts} (config.py PUBSUB.max_delivery_attempts)."
         )
+    # ĐỢT 16 #7: the single worst regression this project has had (ĐỢT 8) was
+    # the subscription sitting in PULL mode while every document described a
+    # push pipeline -- "event-driven" only because a human was running a pull
+    # script beside the demo. Doctor checked topic/DLQ/subscription existence
+    # and would have reported PASS through all of it. Check the actual delivery
+    # mode, not just that the objects exist.
+    push = subscription.push_config
+    if not push or not push.push_endpoint:
+        return FAIL, (
+            f"Subscription '{PUBSUB.class_aggregator_subscription}' is in PULL mode -- nothing is "
+            "event-driven; a human has to run a pull script for events to be processed at all. "
+            "Recreate it as a push subscription (see ADR-014 / README architecture section)."
+        )
+    if not push.oidc_token or not push.oidc_token.service_account_email:
+        return FAIL, (
+            f"Push subscription '{PUBSUB.class_aggregator_subscription}' carries no OIDC token, so "
+            "server.py::_verify_pubsub_push_auth will reject every delivery with 401 (ADR-014). "
+            "Re-create it with --push-auth-service-account."
+        )
+
     return PASS, (
         f"Topic '{PUBSUB.essay_evaluated_topic}', DLQ '{PUBSUB.dead_letter_topic}', "
-        f"subscription '{PUBSUB.class_aggregator_subscription}' all exist with dead-letter-policy wired correctly."
+        f"subscription '{PUBSUB.class_aggregator_subscription}' all exist with dead-letter-policy wired correctly; "
+        f"delivery is PUSH -> {push.push_endpoint} with OIDC as {push.oidc_token.service_account_email}."
     )
 
 
@@ -196,8 +217,29 @@ def check_session_secret() -> tuple[str, str]:
         return FAIL, "Running on Cloud Run with the PUBLIC default signing key -- anyone can forge a teacher token."
     return WARN, (
         "Using the committed default signing key. Fine for local development; "
-        "MUST be set via Secret Manager before deploying (see deploy.txt STEP 1). "
+        "MUST be set via Secret Manager before deploying (see README section 3.4, step 1). "
         "The container refuses to start on Cloud Run without it."
+    )
+
+
+def check_teacher_password_separation() -> tuple[str, str]:
+    """ĐỢT 16 #6 / ADR-025: is a teacher token still obtainable with the public
+    demo passcode?
+
+    ADR-016 closed token *forgery*; this reports on token *issuance*, which is
+    the other half of the same exposure and stayed open. Reported rather than
+    enforced: for judging, one shared passcode is a deliberate, documented
+    tradeoff -- what must not happen is the state being invisible.
+    """
+    from eduagent.auth import teacher_password_is_shared_with_students
+
+    if not teacher_password_is_shared_with_students():
+        return PASS, "EDUAGENT_TEACHER_PASSWORD is set separately -- a teacher token cannot be minted with the README's student passcode."
+    return WARN, (
+        "Teacher login accepts the same public demo passcode as students, so anyone who reads the "
+        "README can mint a role=teacher token for any class_id and read that class's roster/PII. "
+        "This is the documented hackathon-judging tradeoff (ADR-025); set EDUAGENT_TEACHER_PASSWORD "
+        "from Secret Manager to close it."
     )
 
 
@@ -231,7 +273,7 @@ def check_firestore_ttl_policy() -> tuple[str, str]:
         "No TTL policy on debate_sessions.expire_at. `expire_at` is being written but nothing deletes "
         "the documents, so the 24h-retention claim is not true. Fix: "
         "`gcloud firestore fields ttls update expire_at --collection-group=debate_sessions --enable-ttl` "
-        "(deploy.txt STEP 2)."
+        "(README section 3.4, step 2)."
     )
 
 
@@ -299,7 +341,7 @@ def check_no_plaintext_credentials_on_cloud_run() -> tuple[str, str]:
         return FAIL, (
             f"CREDENTIALS IN CLEARTEXT on the live revision: {plaintext}. Readable by anyone with "
             "run.services.get. Redeploy with Secret Manager (`python scripts/deploy_to_cloud_run.py`, "
-            "or deploy.txt STEP 1 + STEP 3), then ROTATE those credentials since they were exposed."
+            "or README section 3.4 steps 1 + 3), then ROTATE those credentials since they were exposed."
         )
     if missing:
         return WARN, (
@@ -312,6 +354,7 @@ def check_no_plaintext_credentials_on_cloud_run() -> tuple[str, str]:
 CHECKS = [
     ("GCP credentials (ADC)", check_gcp_credentials),
     ("Session signing secret", check_session_secret),
+    ("Teacher password separation", check_teacher_password_separation),
     ("No plaintext credentials on Cloud Run", check_no_plaintext_credentials_on_cloud_run),
     ("Firestore connectivity", check_firestore_connectivity),
     ("Firestore TTL policy (debate_sessions)", check_firestore_ttl_policy),

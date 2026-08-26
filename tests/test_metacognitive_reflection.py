@@ -196,7 +196,14 @@ def test_submit_reflection_sanitizes_injection_in_the_revised_claim():
     assert "Ignore all previous instructions" not in mock_persist.call_args.kwargs["reflection_text"]
 
 
-def test_submit_reflection_degrades_gracefully_on_llm_failure():
+def test_submit_reflection_on_llm_failure_records_but_does_not_mint_a_breakthrough():
+    """ĐỢT 16 #1: an outage must not fabricate cognitive growth.
+
+    The previous version of this test asserted `resolved is True` and a 0.5
+    bonus on an outage, which locked in exactly the behaviour ADR-008 forbids:
+    a number nothing earned, written into a permanent teacher-visible record.
+    The attempt is still persisted (audit trail), but as unevaluated.
+    """
     from eduagent.llm import LLMGenerationError
 
     sid = _completed_session("sess-degraded")
@@ -206,10 +213,68 @@ def test_submit_reflection_degrades_gracefully_on_llm_failure():
     ):
         result = submit_reflection(DebateReflectionRequest(session_id=sid, revised_claim="Valid revised claim."))
 
-    assert result["resolved"] is True
-    assert result["growth_bonus"] == 0.5
-    assert "recorded" in result["feedback"]
+    assert result["resolved"] is False
+    assert result["growth_bonus"] == 0.0
+    assert result["degraded"] is True
+
+    # Recorded for audit, but flagged as unevaluated so the profile merge does
+    # not count it as a breakthrough.
     mock_persist.assert_called_once()
+    assert mock_persist.call_args.kwargs["resolved"] is False
+    assert mock_persist.call_args.kwargs["growth_bonus"] == 0.0
+
+
+def test_llm_failure_gives_the_reflection_attempt_back_so_the_student_can_retry():
+    """ĐỢT 16 #1: claim_reflection() spends the claim before the LLM call to
+    close the double-click window. An outage must not therefore burn the
+    student's only attempt on a request that was never evaluated."""
+    from eduagent.llm import LLMGenerationError
+
+    sid = _completed_session("sess-retry-after-outage")
+    with (
+        patch("eduagent.llm.generate_json", side_effect=LLMGenerationError("Model down")),
+        patch("eduagent.memory.firestore_memory.apply_reflection_result"),
+    ):
+        submit_reflection(DebateReflectionRequest(session_id=sid, revised_claim="First try."))
+
+    session = interactive.get_debate_session(sid)
+    assert session.get("has_reflected") is False, "outage burned the student's only reflection"
+
+    # ...and the retry, once the evaluator is healthy again, works normally.
+    with (
+        patch("eduagent.llm.generate_json", return_value={"resolved": True, "growth_bonus": 0.5, "feedback": "Nice."}),
+        patch("eduagent.memory.firestore_memory.apply_reflection_result") as mock_persist,
+    ):
+        retry = submit_reflection(DebateReflectionRequest(session_id=sid, revised_claim="Second try."))
+
+    assert retry["resolved"] is True
+    assert retry["degraded"] is False
+    assert mock_persist.call_args.kwargs["resolved"] is True
+
+
+def test_growth_bonus_from_the_model_is_clamped_to_its_declared_range():
+    """ĐỢT 16 #2: `growth_bonus` is added to a permanent cumulative counter and
+    rendered straight into the UI. The 0.0-1.0 range was documented only in the
+    schema's prose, which Vertex does not enforce."""
+    sid = _completed_session("sess-clamp-high")
+    with (
+        patch("eduagent.llm.generate_json", return_value={"resolved": True, "growth_bonus": 99.0, "feedback": "x"}),
+        patch("eduagent.memory.firestore_memory.apply_reflection_result") as mock_persist,
+    ):
+        result = submit_reflection(DebateReflectionRequest(session_id=sid, revised_claim="Revised."))
+
+    assert result["growth_bonus"] == 1.0
+    assert mock_persist.call_args.kwargs["growth_bonus"] == 1.0
+
+    sid2 = _completed_session("sess-clamp-negative")
+    with (
+        patch("eduagent.llm.generate_json", return_value={"resolved": True, "growth_bonus": -7.5, "feedback": "x"}),
+        patch("eduagent.memory.firestore_memory.apply_reflection_result") as mock_persist2,
+    ):
+        result2 = submit_reflection(DebateReflectionRequest(session_id=sid2, revised_claim="Revised."))
+
+    assert result2["growth_bonus"] == 0.0
+    assert mock_persist2.call_args.kwargs["growth_bonus"] == 0.0
 
 
 def test_submit_reflection_rejects_oversized_claim():

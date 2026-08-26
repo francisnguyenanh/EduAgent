@@ -42,6 +42,7 @@ from eduagent.interactive import (
     end_debate_session,
     get_debate_session,
     record_student_reply,
+    release_reflection_claim,
     start_debate_session,
     step_debate_turn,
 )
@@ -62,6 +63,15 @@ _logger = logging.getLogger(__name__)
 MAX_ESSAY_CHARS = 20_000
 MAX_IMAGE_B64_CHARS = 14_000_000  # ~10MB binary equivalent
 MAX_STUDENT_REPLY_CHARS = 4_000
+
+# ĐỢT 16 #2: the response schema only *describes* the 0.0-1.0 range in prose;
+# Vertex does not enforce it, and this number is added to a permanent,
+# teacher-visible counter. A model that returns 99.0 must not be able to write
+# 99.0 into a student's record, so the bound is enforced here rather than
+# trusted from the model -- same discipline as ADR-007 refusing to trust the
+# model's self-reported OCR `confidence`.
+GROWTH_BONUS_MIN = 0.0
+GROWTH_BONUS_MAX = 1.0
 
 
 class DebateStartRequest(BaseModel):
@@ -476,6 +486,24 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
     the LLM call, so a slow Gemini response cannot be double-submitted into two
     growth bonuses; the session is torn down after the profile write, which is
     the real end of the debate flow.
+
+    ĐỢT 16 #1/#2: two ways this could write a number into a permanent,
+    teacher-visible record that nothing had actually earned, both now closed:
+
+      1. A Vertex AI outage used to set `resolved=True, growth_bonus=0.5` and
+         persist it, so an outage minted a "Cognitive Breakthrough" out of any
+         string at all -- the exact thing ADR-008 exists to forbid. It now
+         records the attempt with `resolved=False`, which is what stops
+         `merge_reflection_into_profile()` incrementing `breakthrough_count`,
+         and hands the reflection claim back so the student can retry once the
+         evaluator recovers.
+      2. `growth_bonus` came straight from the model with no bound, while the
+         0.0-1.0 range lived only in the schema's prose `description`. It is
+         clamped here (GROWTH_BONUS_MIN/MAX).
+
+    The returned dict always carries `degraded`, so a caller can never mistake
+    an unevaluated submission for a real breakthrough -- the failure mode that
+    made this dangerous was that both looked identical on screen.
     """
     if len(payload.revised_claim) > MAX_STUDENT_REPLY_CHARS:
         raise ValueError(f"Revised claim too long (max {MAX_STUDENT_REPLY_CHARS} chars)")
@@ -523,18 +551,36 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
             prompt=prompt,
             response_schema=_REFLECTION_SCHEMA,
         )
-        resolved = bool(result.get("resolved", True))
-        growth_bonus = float(result.get("growth_bonus", 0.5)) if resolved else 0.0
+        resolved = bool(result.get("resolved", False))
+        raw_bonus = float(result.get("growth_bonus", 0.5)) if resolved else 0.0
+        growth_bonus = min(GROWTH_BONUS_MAX, max(GROWTH_BONUS_MIN, raw_bonus))
+        if raw_bonus != growth_bonus:
+            _logger.warning(
+                "Model returned an out-of-range growth_bonus; clamped",
+                extra={"raw": raw_bonus, "clamped": growth_bonus, "session_id": payload.session_id},
+            )
+        degraded = False
         fallback_msg = "Luận điểm chỉnh sửa thể hiện sự tiến bộ tư duy." if lang == "vi" else "Good effort in revising your claim."
         feedback = str(result.get("feedback", fallback_msg))
     except LLMGenerationError:
-        _logger.warning("LLM evaluation of reflection failed, degrading gracefully")
-        resolved = True
-        growth_bonus = 0.5
+        # ĐỢT 16 #1: an outage must NOT mint a breakthrough. ADR-008's rule --
+        # content the model was never confident about (here: never evaluated at
+        # all) may not silently become part of a student's permanent,
+        # teacher-visible record -- applies to `breakthrough_count` exactly as
+        # it applies to a score. The attempt is still recorded for the audit
+        # trail, but with resolved=False, which is what keeps
+        # merge_reflection_into_profile() from incrementing the counter or the
+        # cumulative bonus.
+        _logger.warning("LLM evaluation of reflection failed -- recording as unevaluated, not as a breakthrough")
+        resolved = False
+        growth_bonus = 0.0
+        degraded = True
         feedback = (
-            "Câu luận điểm chỉnh sửa của em đã được ghi nhận và thể hiện sự tiến bộ tư duy rõ rệt."
+            "Đã ghi nhận luận điểm chỉnh sửa của em. Hệ thống chấm đang tạm thời bận, "
+            "nên phần này chưa được đánh giá -- em thử gửi lại sau ít phút nhé."
             if lang == "vi"
-            else "Your revised claim has been recorded and reflects thoughtful growth."
+            else "Your revised claim was recorded, but the evaluator is temporarily "
+            "unavailable, so it has not been assessed yet -- please try again shortly."
         )
 
     # Record into student profile transactional memory
@@ -553,13 +599,20 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
     except Exception:
         _logger.exception("Failed to persist student reflection for student_id=%s", student_id)
 
-    end_debate_session(payload.session_id)
+    if degraded:
+        # Give the attempt back rather than tearing the session down: the
+        # student never got an evaluation, so spending their one reflection on
+        # it would make an outage permanent (see release_reflection_claim).
+        release_reflection_claim(payload.session_id)
+    else:
+        end_debate_session(payload.session_id)
 
     return {
         "student_id": student_id,
         "resolved": resolved,
         "growth_bonus": growth_bonus,
         "feedback": feedback,
+        "degraded": degraded,
     }
 
 

@@ -116,6 +116,7 @@ class ReflectionAlreadySubmitted(ValueError):
 
 from eduagent.memory.firestore_session import delete_session as _firestore_delete_session
 from eduagent.memory.firestore_session import load_session as _firestore_get_session
+from eduagent.memory.firestore_session import claim_reflection_atomically as _firestore_claim_reflection
 from eduagent.memory.firestore_session import save_session as _firestore_save_session
 
 
@@ -242,6 +243,26 @@ def claim_reflection(session_id: str) -> dict:
     a double-clicked "Submit Revised Claim" must not be able to bank two growth
     bonuses while the first request is still waiting on Gemini.
     """
+    # ĐỢT 16 #4: prefer a real Firestore transaction so the check and the write
+    # cannot be split by a concurrent request on another instance. Falls back to
+    # the read-modify-write below only when there is no Firestore client at all
+    # (local dev, pytest), where there is exactly one process and therefore no
+    # race to lose.
+    status, data = _firestore_claim_reflection(session_id)
+    if status == "claimed":
+        # claim_reflection_atomically() already refreshed the local read cache
+        # with the post-claim document, so there is nothing to write here.
+        return data
+    if status == "not_complete":
+        raise DebateNotComplete(
+            f"Session {session_id!r} has {len((data or {}).get('turns', []))} turn(s) and is not finished -- "
+            "a reflection is only meaningful after the debate it reflects on."
+        )
+    if status == "already":
+        raise ReflectionAlreadySubmitted(f"Session {session_id!r} has already recorded its reflection.")
+    if status == "missing":
+        raise UnknownSessionError(f"Unknown debate session {session_id!r}.")
+
     session = get_debate_session(session_id)
     if not session.get("completed"):
         raise DebateNotComplete(
@@ -253,6 +274,29 @@ def claim_reflection(session_id: str) -> dict:
     session["has_reflected"] = True
     _firestore_save_session(session_id, session)
     return session
+
+
+def release_reflection_claim(session_id: str) -> None:
+    """Gives back the one reflection a session is entitled to.
+
+    ĐỢT 16 #1: `claim_reflection()` deliberately spends the claim BEFORE the
+    LLM call, so a double-click cannot bank two growth bonuses. The cost of
+    that ordering is that a Vertex AI outage would otherwise burn the
+    student's only attempt on a request that never got evaluated. Releasing
+    the claim on a degraded evaluation keeps both properties: the double-click
+    window stays closed (the claim was held for the whole in-flight call), and
+    an outage becomes retryable instead of permanent.
+
+    Deliberately a no-op on an already-torn-down session -- releasing a claim
+    is a best-effort cleanup and must never turn a degraded evaluation into a
+    500 on top of it.
+    """
+    try:
+        session = get_debate_session(session_id)
+    except UnknownSessionError:
+        return
+    session["has_reflected"] = False
+    _firestore_save_session(session_id, session)
 
 
 def record_student_reply(session_id: str, student_reply: str) -> None:

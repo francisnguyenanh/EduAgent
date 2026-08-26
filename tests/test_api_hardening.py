@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from eduagent.auth import create_access_token
@@ -120,3 +122,68 @@ def test_protected_class_routes_reject_idor_cross_class_access():
     response = client.get("/api/classes/c2/priority", headers={"Authorization": f"Bearer {c1_token}"})
     assert response.status_code == 403
     assert "Forbidden" in response.text
+
+
+# ---------------------------------------------------------------------------
+# ĐỢT 16 #5 / #6
+# ---------------------------------------------------------------------------
+
+
+def test_parent_note_is_rate_limited(monkeypatch):
+    """ĐỢT 16 #5: /api/parent-note was the only Gemini-invoking route with no
+    token bucket, which defeated the stated purpose of ADR-017 ("bound Vertex
+    AI spend"). It also scans every profile in the class before the LLM call."""
+    from fastapi.testclient import TestClient
+
+    from eduagent.auth import create_access_token
+    from eduagent.server import app
+
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {create_access_token('c1_teacher', 'teacher', 'c1')}"}
+
+    # Never let a real Gemini/Firestore call happen -- we only care about the 429.
+    monkeypatch.setattr("eduagent.server.parent_note", lambda payload: {"note": "x", "degraded": False, "priority": {}})
+
+    statuses = []
+    for _ in range(25):
+        r = client.post("/api/parent-note", json={"class_id": "c1", "student_id": "c1_stu01"}, headers=headers)
+        statuses.append(r.status_code)
+        if r.status_code == 429:
+            assert "Retry-After" in r.headers
+            break
+
+    assert 429 in statuses, f"no rate limit on /api/parent-note: {sorted(set(statuses))}"
+
+
+def test_teacher_login_can_require_its_own_password(monkeypatch):
+    """ĐỢT 16 #6: ADR-016 closed token forgery but not token issuance -- the
+    README publishes the demo passcode, so anyone could mint a role=teacher
+    token for any class_id. Teacher login now honours a separate secret."""
+    import importlib
+
+    monkeypatch.setenv("EDUAGENT_TEACHER_PASSWORD", "a-private-teacher-password")
+    import eduagent.auth as auth
+
+    auth = importlib.reload(auth)
+    try:
+        assert auth.teacher_password_is_shared_with_students() is False
+
+        # The student passcode no longer buys a teacher token...
+        with pytest.raises(auth.LoginError):
+            auth.login(auth.LoginRequest(role="teacher", user_id="c1_teacher", password="eduagent2026"))
+
+        # ...but students are unaffected, and the real teacher password works.
+        assert auth.login(auth.LoginRequest(role="student", user_id="c1_stu01", password="eduagent2026")).role == "student"
+        assert auth.login(
+            auth.LoginRequest(role="teacher", user_id="c1_teacher", password="a-private-teacher-password")
+        ).role == "teacher"
+    finally:
+        monkeypatch.delenv("EDUAGENT_TEACHER_PASSWORD", raising=False)
+        importlib.reload(auth)
+
+
+def test_teacher_password_defaults_to_shared_passcode_for_local_demo():
+    """The separation must be opt-in: a laptop demo and pytest need no setup."""
+    from eduagent.auth import teacher_password_is_shared_with_students
+
+    assert teacher_password_is_shared_with_students() is True

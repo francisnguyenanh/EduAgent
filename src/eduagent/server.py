@@ -275,7 +275,13 @@ async def api_test_sheets(class_id: str, payload: TestSheetsRequest | None = Non
 
 
 @app.post("/api/parent-note")
-async def api_parent_note(payload: ParentNoteRequest, authorization: str | None = Header(None)) -> dict:
+async def api_parent_note(request: Request, payload: ParentNoteRequest, authorization: str | None = Header(None)) -> dict:
+    # ĐỢT 16 #5: this was the one Gemini-invoking route with no bucket. ADR-017
+    # exists because "each call fans out into Gemini requests on a public URL,
+    # so a curl loop was an unmetered spend channel" -- that reasoning applies
+    # here verbatim: draft_parent_note() calls generate_text(), and the route
+    # also scans every profile in the class first (load_class_profiles).
+    _enforce_rate_limit(request, debate_limiter)
     _verify_class_auth(payload.class_id, authorization, required_role="teacher")
     try:
         return parent_note(payload)

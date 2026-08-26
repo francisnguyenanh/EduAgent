@@ -852,6 +852,24 @@ async function submitReflection() {
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
+    // ĐỢT 16 #1: a degraded (unevaluated) submission must not look like a real
+    // breakthrough. Before this, a Vertex AI outage rendered the identical
+    // green "Cognitive Breakthrough Achieved!" panel, so nobody watching the
+    // screen -- including during a demo recording -- could tell the difference.
+    if (data.degraded) {
+      feedbackEl.innerHTML = `
+        <div style="font-weight:600; color:var(--warn); margin-bottom:0.25rem;">
+          ⏳ Not evaluated yet
+          <span class="badge" style="margin-left:0.4rem;">evaluator unavailable</span>
+        </div>
+        <div style="margin-bottom:0.75rem;">${esc(data.feedback)}</div>
+      `;
+      feedbackEl.classList.remove('hidden');
+      statusEl.textContent = 'Recorded, but not scored — you can submit again.';
+      btn.disabled = false;
+      btn.textContent = 'Try Again';
+      return;
+    }
     feedbackEl.innerHTML = `
       <div style="font-weight:600; color:var(--ok); margin-bottom:0.25rem;">
         🌟 ${data.resolved ? 'Cognitive Breakthrough Achieved!' : 'Growth Effort Acknowledged!'} 

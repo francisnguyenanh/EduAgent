@@ -12,6 +12,7 @@ the actual persistence payload assertable.
 from __future__ import annotations
 
 import copy
+import threading
 import time
 
 import pytest
@@ -240,3 +241,109 @@ def test_default_client_is_none_under_pytest():
     """Guards the offline-by-default property: a test that forgets to inject a
     client must not reach real Firestore."""
     assert firestore_session._default_client() is None
+
+
+# ---------------------------------------------------------------------------
+# ĐỢT 16 #4: transactional reflection claim
+# ---------------------------------------------------------------------------
+
+
+class _TxnDoc(FakeDoc):
+    """FakeDoc plus the two methods a Firestore transaction needs."""
+
+    def get(self, transaction=None) -> "_TxnDoc":  # noqa: ARG002 -- signature parity
+        return self
+
+    def update(self, changes: dict) -> None:
+        current = self._store.get(self._id)
+        if current is None:
+            raise KeyError(self._id)
+        merged = copy.deepcopy(current)
+        merged.update(copy.deepcopy(changes))
+        self._store[self._id] = merged
+
+
+class _TxnCollection(FakeCollection):
+    def document(self, doc_id: str) -> _TxnDoc:
+        return _TxnDoc(self._store, doc_id)
+
+
+class TxnFirestore(FakeFirestore):
+    """Fake whose `transactional` decorator serializes the whole closure, which
+    is the guarantee a real Firestore transaction gives us: the read, the
+    decision and the write cannot be split by another request."""
+
+    def __init__(self):
+        super().__init__()
+        self.lock = threading.Lock()
+
+    def collection(self, name: str) -> _TxnCollection:
+        assert name == "debate_sessions"
+        return _TxnCollection(self.store)
+
+    def transaction(self):
+        return self
+
+    # Real firestore.Transaction.update() takes (document_reference, field_updates).
+    def update(self, doc_ref, changes: dict) -> None:
+        doc_ref.update(changes)
+
+
+@pytest.fixture
+def txn_db(monkeypatch):
+    db = TxnFirestore()
+
+    def _transactional(fn):
+        def _wrapped(transaction):
+            with db.lock:
+                return fn(transaction)
+
+        return _wrapped
+
+    monkeypatch.setattr("google.cloud.firestore.transactional", _transactional)
+    return db
+
+
+def test_concurrent_reflection_claims_yield_exactly_one_winner(txn_db):
+    """ĐỢT 16 #4 -- ADR-022 / README claimed the reflection flag "prevents
+    double-click race condition exploits". It did not: the claim was a
+    read-then-write, so two POSTs on two Cloud Run instances both read
+    `has_reflected=False`, both proceeded, and both banked a growth bonus.
+
+    Two threads race for the same finished session; exactly one may win.
+    """
+    txn_db.store["sess-race"] = {"completed": True, "student_id": "c1_stu01", "turns": [1, 2, 3]}
+
+    results: list[str] = []
+    barrier = threading.Barrier(2)
+
+    def worker():
+        barrier.wait()  # maximise the overlap
+        status, _ = firestore_session.claim_reflection_atomically("sess-race", client=txn_db)
+        results.append(status)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert sorted(results) == ["already", "claimed"], f"both requests claimed the reflection: {results}"
+    assert txn_db.store["sess-race"]["has_reflected"] is True
+
+
+def test_reflection_claim_rejects_an_unfinished_debate_inside_the_transaction(txn_db):
+    """The `completed` check must live INSIDE the transaction; checking it
+    outside would re-open the same split-decision window the claim closes."""
+    txn_db.store["sess-open"] = {"completed": False, "turns": [1]}
+
+    status, _ = firestore_session.claim_reflection_atomically("sess-open", client=txn_db)
+
+    assert status == "not_complete"
+    assert "has_reflected" not in txn_db.store["sess-open"]
+
+
+def test_reflection_claim_reports_a_missing_session(txn_db):
+    status, data = firestore_session.claim_reflection_atomically("sess-nope", client=txn_db)
+    assert status == "missing"
+    assert data is None

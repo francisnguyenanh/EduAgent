@@ -7,7 +7,7 @@
 
 ## 1. Record Demo Video (using `docs/video_script.md`)
 - [ ] Run `python scripts/doctor.py` immediately prior to recording. Expect **0 FAIL**. (Note: `Session signing secret` reporting **WARN when running locally is normal and expected** because local dev uses the fallback default; it must PASS on the deployed Cloud Run revision).
-- [ ] 🔴 **Verify Cloud Run Deployment:** Confirm that the latest security updates (Audit Waves 13 & 14, ADR-016/017/018/020) are live. Run `python scripts/deploy_to_cloud_run.py` (which preflights all 3 secrets in Secret Manager) or follow `deploy.txt`.
+- [ ] 🔴 **Verify Cloud Run Deployment:** Confirm that the latest security updates (Audit Waves 13 & 14, ADR-016/017/018/020) are live. Run `python scripts/deploy_to_cloud_run.py` (which preflights all 3 secrets in Secret Manager) or follow README section 3.4.
 - [x] ✅ **Redeployed & Verified:** `doctor.py` → 9 PASS / 1 WARN / 0 FAIL; 3/3 credentials mounted via `secretRef`; live probes return 401 (unauthenticated) and 403 (unauthorized/IDOR attempts).
 - [x] ✅ **Rotate OAuth Tokens:** Both Gmail and Sheets tokens are stored in Secret Manager `:latest`.
 - [ ] 🟢 **Demo Setup: set `EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0`** prior to recording (default 120s debouncing coalesces digests; set to 0 so the Gmail draft creates immediately during the demo). See README §3.10(c). Remember to revert to 120 afterwards.

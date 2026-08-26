@@ -103,7 +103,7 @@ def save_session(session_id: str, data: dict, ttl_seconds: int = _DEFAULT_SESSIO
         payload = dict(data)
         payload["_session_id"] = session_id
         payload["_updated_at"] = now_dt.isoformat()
-        payload["expire_at"] = expire_dt  # consumed by the Firestore TTL policy (deploy.txt STEP 2)
+        payload["expire_at"] = expire_dt  # consumed by the Firestore TTL policy (README section 3.4, step 2)
 
         db.collection("debate_sessions").document(session_id).set(payload)
     except Exception as exc:
@@ -146,6 +146,72 @@ def load_session(session_id: str, *, client=None) -> dict | None:
     except Exception as exc:
         _logger.warning(f"Could not load session {session_id} from Firestore: {exc}")
         return cached.get("data") if cache_is_live else None
+
+
+_META_FIELDS = ("_session_id", "_updated_at", "expire_at")
+
+
+def claim_reflection_atomically(session_id: str, *, client=None) -> tuple[str, dict | None]:
+    """Compare-and-set the `has_reflected` flag inside a Firestore transaction.
+
+    ĐỢT 16 #4: `interactive.claim_reflection()` used to read the session, check
+    the flag, then write it back -- three separate operations. ADR-022 and the
+    README claimed that "prevents double-click race condition exploits", but two
+    POSTs landing on two Cloud Run instances (maxScale is 5) both read
+    `has_reflected=False` and both proceeded, banking two growth bonuses. That
+    is the same class of bug as ADR-015: adding a durable store does not make a
+    read-modify-write atomic. The module docstring above already recorded this
+    limitation for debate *turns*, where it is unreachable because the UI cannot
+    send turn N+1 before turn N answers -- but a scripted double-POST to
+    `/reflect` is exactly the adversarial case that exemption does not cover.
+
+    Returns `(status, session_data)` where status is one of:
+      "claimed"      -- the flag went False -> True in this transaction; caller owns it
+      "already"      -- another request had already claimed it
+      "not_complete" -- the debate behind this session has not finished
+      "missing"      -- no such session document
+      "unavailable"  -- no Firestore client (local dev / pytest); caller falls back
+
+    The `completed` and `has_reflected` checks both happen INSIDE the
+    transaction, so the decision and the write cannot be separated by another
+    request.
+    """
+    db = client or _default_client()
+    if db is None:
+        return ("unavailable", None)
+
+    try:
+        from google.cloud import firestore
+
+        doc_ref = db.collection("debate_sessions").document(session_id)
+
+        @firestore.transactional
+        def _txn(transaction) -> tuple[str, dict | None]:
+            snapshot = doc_ref.get(transaction=transaction)
+            if not snapshot.exists:
+                return ("missing", None)
+            data = snapshot.to_dict() or {}
+            for meta_field in _META_FIELDS:
+                data.pop(meta_field, None)
+            if not data.get("completed"):
+                return ("not_complete", data)
+            if data.get("has_reflected"):
+                return ("already", data)
+            transaction.update(doc_ref, {"has_reflected": True})
+            data["has_reflected"] = True
+            return ("claimed", data)
+
+        status, data = _txn(db.transaction())
+        if data is not None:
+            _cache_put(session_id, data)
+        elif status == "missing":
+            _LOCAL_SESSION_CACHE.pop(session_id, None)
+        return (status, data)
+    except Exception as exc:
+        # Same discipline as save_session(): an infrastructure blip degrades to
+        # the non-transactional path rather than failing the student outright.
+        _logger.warning(f"Transactional reflection claim failed for {session_id}: {exc}")
+        return ("unavailable", None)
 
 
 def delete_session(session_id: str, *, client=None) -> None:

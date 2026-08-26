@@ -60,7 +60,7 @@ gcloud auth application-default login
 python scripts/doctor.py
 
 # 4. Run test & evaluation suites
-pytest tests/ -q -m "not e2e"               # 240+ unit tests (~15s, zero cloud cost)
+pytest tests/ -q -m "not e2e"               # 260 unit tests (~15s, zero cloud cost)
 python scripts/run_eval_suite.py --strict   # 50/50 deterministic eval benchmarks
 python scripts/demo_tier1_run.py            # Live end-to-end run: 3 essays, Gemini + Firestore
 ```
@@ -131,7 +131,7 @@ src/eduagent/
   rate_limit.py   Per-IP token-bucket rate limiter
 eval/             ADK Eval Suite (evalset.py, results/) + eval/test_images/ (handwritten test assets)
 scripts/          Diagnostic tools (doctor.py), demos (demo_tier1_run.py), and deployment automation
-tests/            Pytest test suite (>240 tests, unit + integration)
+tests/            Pytest test suite (260 tests, unit + integration)
 ```
 
 ---

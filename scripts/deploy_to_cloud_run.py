@@ -77,7 +77,7 @@ def _preflight_secrets() -> None:
     for env_var, secret_name in missing:
         print(f"  - {secret_name}  (for {env_var})")
     print(
-        "\nCreate them once (see deploy.txt STEP 1):\n\n"
+        "\nCreate them once (see README section 3.4, step 1):\n\n"
         "  # signing key -- random, never a reused password\n"
         "  printf '%s' \"$(openssl rand -base64 48)\" | \\\n"
         "    gcloud secrets create eduagent-session-secret --data-file=- --replication-policy=automatic\n\n"
