@@ -37,7 +37,7 @@
 - [ ] Double-check key eligibility items:
   - **Mandatory Disclosure:** Retain originality disclosure text.
   - **Category / Track:** Select **Collaborative Partner**.
-- [ ] Fill in Hosted URL (`https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`), demo credentials (`eduagent2026`), Google SDK list, Cloud Services, and attach the architecture diagram image.
+- [ ] Fill in Hosted URL (`https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`), demo credentials (student `eduagent2026`, teacher `eduagent-teacher-2026`), Google SDK list, Cloud Services, and attach the architecture diagram image.
 - [ ] **Teammates:** Confirm all team members have accepted invitations on Devpost before final submission.
 
 ## 5. Bonus Criteria Verification (Bonus Stage Three — **+0.4 Points**)

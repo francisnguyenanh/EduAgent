@@ -210,11 +210,34 @@ def test_rejected_caller_still_accrues_tokens_and_is_not_locked_out():
     limiter.check("ip-a", now=1.5)
 
 
-def test_client_key_prefers_first_forwarded_hop():
-    """Cloud Run's proxy APPENDS to X-Forwarded-For, so later entries are
-    attacker-supplied; keying on the last one would let a caller pick its own
-    bucket and bypass the limit entirely."""
-    assert client_key(x_forwarded_for="1.2.3.4, 10.0.0.1", peer_host="10.0.0.1") == "1.2.3.4"
+def test_client_key_uses_the_last_forwarded_hop_not_the_client_supplied_one():
+    """ĐỢT 17 #1 -- this test used to assert the opposite, and its docstring
+    had the direction of X-Forwarded-For exactly backwards.
+
+    Cloud Run APPENDS the real client address, so the header reads
+    `<whatever the caller invented>, <real IP>`. Keying on the FIRST entry --
+    which is what the code and this test both did -- let anyone mint a fresh
+    bucket per request by varying a header. Verified against the live service:
+    with the real bucket drained, 8/8 requests carrying random spoofed values
+    were served, then the drained bucket returned 429 again the moment the
+    spoof stopped. Only the last entry is vouched for by the infrastructure.
+    """
+    # The caller invented "1.2.3.4"; Cloud Run appended the real "10.0.0.1".
+    assert client_key(x_forwarded_for="1.2.3.4, 10.0.0.1", peer_host="10.0.0.1") == "10.0.0.1"
+
+    # Varying the forgeable part must NOT change the bucket.
+    keys = {
+        client_key(x_forwarded_for=f"172.16.0.{i}, 203.0.113.7", peer_host="10.0.0.1")
+        for i in range(1, 20)
+    }
+    assert keys == {"203.0.113.7"}, f"spoofed hops leaked into the rate-limit key: {keys}"
+
+    # Multiple forged hops are all still ignored.
+    assert client_key(x_forwarded_for="1.1.1.1, 2.2.2.2, 3.3.3.3, 198.51.100.4", peer_host=None) == "198.51.100.4"
+
+    # Trailing/edge whitespace and empty segments must not resurrect a forged hop.
+    assert client_key(x_forwarded_for="1.2.3.4, 10.0.0.1, ", peer_host=None) == "10.0.0.1"
+
     assert client_key(x_forwarded_for=None, peer_host="10.0.0.1") == "10.0.0.1"
     assert client_key(x_forwarded_for="", peer_host=None) == "unknown"
 

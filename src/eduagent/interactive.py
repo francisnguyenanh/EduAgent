@@ -33,10 +33,17 @@ instead of redoing OCR/sanitizing/summarizing/persona selection every turn.
 
 SESSION STORAGE (ADR-015, superseding this module's original design).
 
-Session state is held in a two-tier store: an in-process dict (`_sessions`)
-in front of a Firestore `debate_sessions/{session_id}` document, via
-memory/firestore_session.py. Reads prefer the local tier and fall back to
-Firestore; writes go to both.
+Session state is held in a two-tier store: a Firestore
+`debate_sessions/{session_id}` document (via memory/firestore_session.py) with
+an in-process dict (`_sessions`) behind it. **Reads prefer Firestore**; the
+dict is a fallback for when no durable store is configured at all (local runs,
+pytest). Writes go to both.
+
+ĐỢT 17 #2 corrected this paragraph together with the code under it: it used to
+say "Reads prefer the local tier and fall back to Firestore", which was both
+what the code did and the exact failure ADR-015 exists to prevent -- see
+get_debate_session() for why preferring the local tier loses turns across
+Cloud Run instances.
 
 The original docstring here said the opposite -- "intentionally NOT a durable
 store (no Firestore)" -- and that stayed in the file after ADR-015 added the
@@ -116,6 +123,7 @@ class ReflectionAlreadySubmitted(ValueError):
 
 from eduagent.memory.firestore_session import delete_session as _firestore_delete_session
 from eduagent.memory.firestore_session import load_session as _firestore_get_session
+from eduagent.memory.firestore_session import store_is_authoritative as _firestore_is_authoritative
 from eduagent.memory.firestore_session import claim_reflection_atomically as _firestore_claim_reflection
 from eduagent.memory.firestore_session import save_session as _firestore_save_session
 
@@ -171,12 +179,42 @@ def evict_stale_sessions(ttl_seconds: float = _SESSION_TTL_SECONDS, *, now: floa
 
 
 def get_debate_session(session_id: str) -> dict:
+    """Reads prefer Firestore; the in-process dict is a failure fallback only.
+
+    ĐỢT 17 #2 -- this used to be `_sessions.get()` first, consulting Firestore
+    only when the dict held nothing. That is precisely the bug ADR-015 says it
+    fixed, reintroduced one layer up: there are TWO caches here, and the outer
+    one had no freshness bound at all (only `evict_stale_sessions`, a 24h
+    sweep), so it shadowed the 3-second bound that `firestore_session` applies.
+    README described "a 3-second bounded in-memory read cache"; that bound was
+    unreachable on the path every request actually takes. Verified by
+    simulating two instances at THIS layer: instance A served a stale copy and
+    lost the turn instance B had written.
+
+    The existing multi-instance regression test did not catch it because it
+    exercises `firestore_session.load_session()` directly -- the inner tier,
+    which was never the broken one.
+
+    `load_session()` already owns the 3s freshness bound, its own cache, and
+    the degrade-to-stale-copy behaviour when Firestore is unreachable, so
+    preferring it here is what makes ADR-015 true rather than aspirational.
+    """
+    fs_session = _firestore_get_session(session_id)
+    if fs_session is not None:
+        _sessions[session_id] = fs_session
+        return fs_session
+
+    if _firestore_is_authoritative():
+        # A durable store exists and reports no such document -- e.g.
+        # end_debate_session() ran on another instance. Trusting this
+        # instance's dict here would resurrect a session that ADR-022
+        # deliberately tore down, so drop the local copy instead.
+        _sessions.pop(session_id, None)
+        raise UnknownSessionError(f"Unknown session_id: {session_id!r}")
+
+    # No durable store configured (local run / pytest): the dict IS the store.
     session = _sessions.get(session_id)
     if session is None:
-        fs_session = _firestore_get_session(session_id)
-        if fs_session is not None:
-            _sessions[session_id] = fs_session
-            return fs_session
         raise UnknownSessionError(f"Unknown session_id: {session_id!r}")
     return session
 

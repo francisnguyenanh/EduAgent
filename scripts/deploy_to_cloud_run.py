@@ -33,6 +33,54 @@ SECRET_ENV_VARS = {
     "SHEETS_TOKEN_JSON": "eduagent-sheets-token",
 }
 
+# ĐỢT 17 #3: mounted only when the secret already exists, and never a reason to
+# fail a deploy.
+#
+# ADR-025 added EDUAGENT_TEACHER_PASSWORD so teacher login can stop accepting
+# the demo passcode that this repo's README publishes. It had no deploy path at
+# all -- this script builds its env from a hardcoded dict, so the variable could
+# be set locally and would silently never reach Cloud Run. An ADR that describes
+# a capability production cannot reach is the same failure mode as ADR-016
+# before ĐỢT 12: documented, believed, and not actually in effect.
+#
+# It stays OPTIONAL rather than joining SECRET_ENV_VARS above because the
+# shared-passcode fallback is the deliberate judging default; making it required
+# would block every deploy until someone creates a secret they may not want.
+# `scripts/doctor.py::check_teacher_password_separation()` reports which mode is
+# live, so the state is visible either way.
+OPTIONAL_SECRET_ENV_VARS = {
+    "EDUAGENT_TEACHER_PASSWORD": "eduagent-teacher-password",
+}
+
+
+def _available_optional_secrets() -> dict[str, str]:
+    """Optional secrets that actually exist, so they can be mounted."""
+    available = {}
+    for env_var, secret_name in OPTIONAL_SECRET_ENV_VARS.items():
+        probe = subprocess.run(
+            [_gcloud(), "secrets", "describe", secret_name, f"--project={PROJECT_ID}"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode == 0:
+            available[env_var] = secret_name
+    return available
+
+
+def _report_optional_secrets() -> None:
+    available = _available_optional_secrets()
+    for env_var, secret_name in OPTIONAL_SECRET_ENV_VARS.items():
+        if env_var in available:
+            print(f"[OK] optional secret '{secret_name}' exists -> will be mounted as {env_var}")
+        else:
+            print(
+                f"[--] optional secret '{secret_name}' not found -> {env_var} will be left unset. "
+                "Teacher login will keep accepting the shared demo passcode (ADR-025); "
+                "doctor.py reports this as a WARN. Create it with:\n"
+                f"       printf '%s' \"$(openssl rand -base64 32)\" | \\\n"
+                f"         gcloud secrets create {secret_name} --data-file=- --replication-policy=automatic"
+            )
+
 
 def _gcloud() -> str:
     """Absolute path to the gcloud launcher. Same ĐỢT 15 #5 Windows fix as
@@ -71,6 +119,7 @@ def _preflight_secrets() -> None:
             missing.append((env_var, secret_name))
 
     if not missing:
+        _report_optional_secrets()
         return
 
     print(f"\n[FAIL] {len(missing)} required secret(s) missing in project {PROJECT_ID}:\n")
@@ -139,7 +188,8 @@ def main():
             # Every credential arrives as a secret reference, never a plain env
             # var -- see SECRET_ENV_VARS for why (verified live exposure).
             "--update-secrets=" + ",".join(
-                f"{env_var}={secret}:latest" for env_var, secret in SECRET_ENV_VARS.items()
+                f"{env_var}={secret}:latest"
+                for env_var, secret in {**SECRET_ENV_VARS, **_available_optional_secrets()}.items()
             ),
         ]
         print("Running gcloud run deploy...")

@@ -14,13 +14,33 @@ project's Vertex AI quota (a cost-DoS), with no per-caller ceiling anywhere in
 the stack.
 
 HONEST SCOPE -- read this before citing it as a mitigation:
-  - The bucket state is **per process**. Cloud Run runs N instances, so the
-    effective ceiling is N x `capacity`, not `capacity`. This raises the cost
-    of an attack and stops casual abuse; it is not a distributed rate limiter.
-    A real deployment puts Cloud Armor / API Gateway in front instead.
-  - Keying is by client IP, taken from `X-Forwarded-For` (Cloud Run's proxy
-    sets it) with a fallback to the socket peer. A determined attacker with
-    many source addresses is not stopped by this.
+  - The bucket state is **per process**, and this service is deployed with
+    `--max-instances 5`. So the honest service-wide ceiling is not `capacity`
+    but 5 x `capacity`. Stated as the arithmetic rather than as a vague
+    weakness, for the debate policy that is:
+
+        burst      5 instances x 10 tokens          =  50 requests
+        sustained  5 instances x 0.2 tokens/second  =   1 request/second
+
+    One request per second of sustained Gemini-backed traffic is a real,
+    bounded cost ceiling -- roughly 86k requests/day worst case rather than
+    "as fast as curl can loop". It is 5x weaker than the per-instance numbers
+    suggest, which is exactly why the multiplier is written out here.
+
+    ĐỢT 17 review note: an external reviewer argued this makes the limiter
+    "meaningless under autoscaling, and you chose --max-instances 5 yourself".
+    Half right, and worth recording both halves. The contradiction is real --
+    we opted into the horizontal scaling that weakens this control. But a 5x
+    multiplier on a bounded ceiling is still a bounded ceiling; "meaningless"
+    describes no ceiling at all, which is what existed before ADR-017. The
+    correct production answer remains Cloud Armor / API Gateway in front, and
+    is deliberately out of scope here (see README, Architectural Limitations).
+  - Keying is by client IP, taken from the **last** entry of `X-Forwarded-For`
+    (Cloud Run appends the real client address, so earlier entries are
+    caller-supplied and forgeable -- see `client_key()`), with a fallback to
+    the socket peer. What this stops is a flood from one source. A determined
+    attacker with many genuine source addresses (a botnet) is not stopped by
+    this, and neither is one spread across enough instances.
   - State is bounded (`_MAX_TRACKED_KEYS`) so the limiter cannot itself become
     a memory-exhaustion vector when hit from many distinct addresses.
 
@@ -129,16 +149,35 @@ login_limiter = TokenBucketLimiter(LOGIN_POLICY)
 def client_key(*, x_forwarded_for: str | None, peer_host: str | None) -> str:
     """Derives the rate-limit key from a request.
 
-    Cloud Run terminates TLS at its proxy, so the socket peer is the proxy, not
-    the caller -- the real client address is the FIRST entry of
-    X-Forwarded-For (the proxy appends, so later entries are attacker-supplied
-    and must not be trusted). Falls back to the socket peer for local runs
-    where no proxy is involved.
+    ĐỢT 17 #1 -- this function previously took the FIRST entry of
+    X-Forwarded-For, with a docstring asserting that the proxy appends and so
+    "later entries are attacker-supplied". That was backwards, and it made the
+    whole limiter bypassable with one header.
+
+    Cloud Run terminates TLS at its proxy and **appends** the real client
+    address to whatever X-Forwarded-For the caller sent. So the header is
+    `<anything the client made up>, ..., <real client IP>`: the LAST entry is
+    the only one the infrastructure vouches for, and every earlier entry is
+    fully attacker-controlled. Keying on the first entry meant an attacker
+    sending a different random `X-Forwarded-For` per request got a brand-new
+    full bucket every time -- verified against the live service, where 8/8
+    requests with random spoofed values passed while the real bucket was
+    drained (see TODO.md ĐỢT 17).
+
+    Falls back to the socket peer when there is no proxy (local runs).
+
+    NOTE ON SCOPE: taking the last entry is correct for exactly one trusted
+    proxy in front of the app, which is what Cloud Run is. If this service is
+    ever placed behind an additional proxy (Cloud Armor, an external LB, a
+    CDN), the trusted entry moves and this function must move with it --
+    counting from the right by a known hop count, never from the left.
     """
     if x_forwarded_for:
-        first = x_forwarded_for.split(",")[0].strip()
-        if first:
-            return first
+        # Right-most non-empty entry: the hop Cloud Run itself recorded.
+        for candidate in reversed(x_forwarded_for.split(",")):
+            candidate = candidate.strip()
+            if candidate:
+                return candidate
     return peer_host or "unknown"
 
 

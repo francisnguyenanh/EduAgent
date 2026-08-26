@@ -29,9 +29,13 @@
 Experience the live deployed system on Google Cloud without local installation:
 
 * **Live Web Application:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
-* **Demo Passcode:** `eduagent2026` (Shared for both Student & Teacher logins)
+* **Demo Passcodes — the two roles use different passcodes (ADR-025):**
   * **Student Portal:** ID: `c1_stu01` (or custom ID e.g. `c1_judge01`) | Passcode: `eduagent2026`
-  * **Teacher Portal:** ID: `c1_teacher` | Passcode: `eduagent2026`
+  * **Teacher Portal:** ID: `c1_teacher` | Passcode: `eduagent-teacher-2026`
+  * *Why two:* a student who knows the passcode handed out in class must not be able to log in as
+    the teacher and read the whole class's names, scores and weakness history. The teacher passcode
+    is mounted from Secret Manager (`eduagent-teacher-password`) and is published here only so a
+    judge can open both portals without a GCP identity — see the *Stated scope* note in §5.
 
 > [!NOTE]
 > **Mock Multi-Tenant Sandbox Mode:**
@@ -42,11 +46,13 @@ Experience the live deployed system on Google Cloud without local installation:
 ### ⏱️ Judge Verification Paths
 
 #### Path A: 60 Seconds (Zero Install, Live Cloud Run)
+
 1. Open the [Live Web Application](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/).
 2. Sign in to the **Student Portal** (`c1_stu01` / `eduagent2026`), select a sample preset or upload an essay, and complete a 3-turn Socratic debate.
-3. Sign in to the **Teacher Portal** (`c1_teacher` / `eduagent2026`) to observe that student updated in the class priority ranking and systemic fallacy cluster.
+3. Sign in to the **Teacher Portal** (`c1_teacher` / `eduagent-teacher-2026`) to observe that student updated in the class priority ranking and systemic fallacy cluster.
 
 #### Path B: 5 Minutes (Local Quickstart with GCP ADC)
+
 Run locally against Python 3.11+:
 
 ```bash
@@ -60,7 +66,7 @@ gcloud auth application-default login
 python scripts/doctor.py
 
 # 4. Run test & evaluation suites
-pytest tests/ -q -m "not e2e"               # 260 unit tests (~15s, zero cloud cost)
+pytest tests/ -q -m "not e2e"               # 240+ unit tests (~15s, zero cloud cost)
 python scripts/run_eval_suite.py --strict   # 50/50 deterministic eval benchmarks
 python scripts/demo_tier1_run.py            # Live end-to-end run: 3 essays, Gemini + Firestore
 ```
@@ -68,6 +74,7 @@ python scripts/demo_tier1_run.py            # Live end-to-end run: 3 essays, Gem
 > **Key Demonstration:** Running `python scripts/demo_tier1_run.py` demonstrates the persona dynamically rotating between Essay 1 and Essay 2 as it reads prior student history out of Firestore—proving persistent adaptation over stateless interactions.
 
 #### Path C: Deploy Your Own Copy to Cloud Run
+
 Run `python scripts/deploy_to_cloud_run.py` — preflights all Secret Manager secrets and validates required IAM roles before provisioning.
 
 ---
@@ -131,7 +138,7 @@ src/eduagent/
   rate_limit.py   Per-IP token-bucket rate limiter
 eval/             ADK Eval Suite (evalset.py, results/) + eval/test_images/ (handwritten test assets)
 scripts/          Diagnostic tools (doctor.py), demos (demo_tier1_run.py), and deployment automation
-tests/            Pytest test suite (260 tests, unit + integration)
+tests/            Pytest test suite (>240 tests, unit + integration)
 ```
 
 ---
@@ -139,6 +146,7 @@ tests/            Pytest test suite (260 tests, unit + integration)
 ## 3. Spin-Up & Reproduction Guide
 
 ### 3.1 Prerequisites
+
 * Python 3.11+
 * Google Cloud Platform project with enabled APIs: `aiplatform`, `firestore`, `run`, `pubsub`, `cloudtrace`, `logging`, `secretmanager`, `gmail.googleapis.com`
 * Firestore Database (Native mode)
@@ -176,15 +184,20 @@ python scripts/run_eval_suite.py --strict
 ### 3.4 Deploying to Cloud Run
 
 1. **Create Session Secret & Mount Credentials (Secret Manager):**
+
    ```bash
    printf '%s' "$(openssl rand -base64 48)" | \
      gcloud secrets create eduagent-session-secret --data-file=- --replication-policy=automatic
    ```
+
 2. **Enable Firestore TTL Policy on Sessions:**
+
    ```bash
    gcloud firestore fields ttls update expire_at --collection-group=debate_sessions --enable-ttl
    ```
+
 3. **Deploy Container:**
+
    ```bash
    python scripts/deploy_to_cloud_run.py
    ```
@@ -193,10 +206,10 @@ python scripts/run_eval_suite.py --strict
 
 ## 4. Architecture Decision Records (ADRs)
 
-The table below summarizes our 25 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
+The table below summarizes our 27 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
 
 | ID | Title | Category | Core Decision & Impact |
-|:---:|---|---|---|
+| :---: | --- | --- | --- |
 | **ADR-001** | Code-Level Gmail Gate | Security | Least-privilege enforced via AST test banning `.send()`; OAuth scope alone does not block send. |
 | **ADR-002** | Gemini Model Lineup | LLM | Uses `gemini-3.5-flash` & `gemini-3.7-flash` based on regional Vertex AI model availability. |
 | **ADR-003** | Pub/Sub Delivery Floor | Infrastructure | Sets `max_delivery_attempts = 5` to satisfy GCP dead-letter platform constraints. |
@@ -211,9 +224,9 @@ The table below summarizes our 25 architectural decisions. Expand any section fo
 | **ADR-012** | API Gateway Sanitization | Security | Enforces regex sanitization and payload bounds directly at FastAPI REST boundaries. |
 | **ADR-013** | HMAC Scoped Tokens | Security | Issues stateless HMAC-signed access tokens to enforce multi-tenant class boundary isolation. |
 | **ADR-014** | Push Webhook OIDC Verify | Security | Implements application-layer Google OIDC signature verification for Pub/Sub push endpoints. |
-| **ADR-015** | Firestore Durable Sessions | State | Backs active debates with Firestore documents and a 3-second bounded in-memory read cache. |
+| **ADR-015** | Firestore Durable Sessions | State | Backs active debates with Firestore documents; reads prefer Firestore, the in-process dict is a no-durable-store fallback only. |
 | **ADR-016** | Fail-Fast Session Secret | Security | Container aborts boot on Cloud Run if default repo signing secret is detected. |
-| **ADR-017** | Token-Bucket Rate Limiter | Security | In-process token-bucket rate limiting on every Gemini-invoking route (debate endpoints + parent-note) and login, to mitigate cost-DoS. |
+| **ADR-017** | Token-Bucket Rate Limiter | Security | Token-bucket limiting on every Gemini-invoking route (debate endpoints + parent-note) and login, keyed on the last trusted proxy hop. |
 | **ADR-018** | Student Route Authorization | Security | Requires Bearer token on all student debate routes; derives ownership from session state. |
 | **ADR-019** | Falsifiable Sabotage Evals | Evaluation | Enforces that every eval benchmark is verified capable of failing via code sabotage tests. |
 | **ADR-020** | Secret Manager Mounting | Security | Mounts all credentials via `--update-secrets` (`secretKeyRef`), banning cleartext env vars. |
@@ -222,68 +235,131 @@ The table below summarizes our 25 architectural decisions. Expand any section fo
 | **ADR-023** | Least-Squares Trend Volatility | Analytics | Introduces linear OLS regression for score trends; flags 'volatile' trajectory as priority signal. |
 | **ADR-024** | Outage Cannot Mint Growth | Data Integrity | An unevaluated reflection records as `resolved=false`; `growth_bonus` clamped; the claim is transactional. |
 | **ADR-025** | Teacher Token Issuance Gate | Security | Separates teacher login from the public demo passcode, closing the issuance half of ADR-016. |
+| **ADR-026** | Trust Only the Proxy's Hop | Security | Rate-limit key comes from the **last** `X-Forwarded-For` entry; earlier hops are caller-supplied and forgeable. |
+| **ADR-027** | One Cache, Not Two | State | Session reads go to Firestore first; a second unbounded in-process cache had shadowed ADR-015's 3s bound. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-025)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-027)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
+
 * **Context:** Google's `gmail.compose` OAuth scope officially permits message transmission (`messages.send()`).
 * **Decision:** Code never calls `.send()`. A strict AST-based unit test (`tests/test_gmail_mcp_never_sends.py`) fails the CI build if `.send()` is ever introduced. The human teacher clicking Send in their email client is the sole gate.
 * **Rejected Alternative:** Relying solely on OAuth scope boundaries.
 
 ### ADR-006: Deterministic Evaluation Harness (Zero LLM-as-Judge)
+
 * **Context:** Using an LLM to evaluate another LLM creates reward-hacking vulnerabilities.
 * **Decision:** Evaluation benchmarks use deterministic regex, AST parsers, and string matching against production validators.
 * **Rejected Alternative:** `google.adk.evaluation` LLM-as-judge scoring.
 
 ### ADR-007: Dual-Pass OCR Self-Consistency Cross-Check
+
 * **Context:** Vision models can self-report "high" confidence while hallucinating text on blurred images.
 * **Decision:** Run Gemini Vision twice independently and compare outputs with `difflib.SequenceMatcher`. If similarity drops below threshold, downgrade confidence to `low`.
 * **Rejected Alternative:** Trusting model self-reported confidence scores.
 
 ### ADR-015: Durable Firestore Sessions with Bounded Read Cache
+
 * **Context:** Cloud Run multi-instance autoscaling caused in-memory debate turns to drop across instances.
 * **Decision:** Session state persists in Firestore `debate_sessions/{id}` with a 24h TTL policy. In-memory caching is capped at a strict 3-second freshness window.
 * **Rejected Alternative:** Pure in-memory session dictionaries.
 
 ### ADR-016: Fail-Fast Protection on Default Signing Secret
+
 * **Context:** Running production with public repository secret keys enables unauthorized token minting.
 * **Decision:** `auth.py::_resolve_session_secret()` inspects `K_SERVICE` and terminates startup (`InsecureConfigurationError`) if the secret is missing or set to the default.
 * **Rejected Alternative:** Allowing fallback execution with a warning log.
 
 ### ADR-019: Falsifiable Benchmarks via Sabotage Verification
+
 * **Context:** Audits revealed that 12 legacy eval cases passed unconditionally regardless of code changes.
 * **Decision:** Every evaluation benchmark must be tested against intentional code sabotage (e.g. stripping persona anchors or deleting artifacts) to verify test failure.
 * **Rejected Alternative:** Assuming green test suites indicate validity without failure testing.
 
 ### ADR-020: Secret Manager Credential Delivery
+
 * **Context:** Cloud Run environment variables appear as cleartext in revision specs.
 * **Decision:** Mount all credentials (`EDUAGENT_SESSION_SECRET`, `GMAIL_COMPOSE_TOKEN_JSON`, `SHEETS_TOKEN_JSON`) via Secret Manager references (`--update-secrets`). Enforced via AST build tests and preflight checks.
 * **Rejected Alternative:** Inlining JSON strings into environment files.
 
 ### ADR-022: Metacognitive Reflection Session Boundary
+
 * **Context:** Metacognitive reflection must be bound to a completed Socratic debate. Previously, client bodies passed raw identifiers, allowing infinite score farming loops.
 * **Decision:** `/api/debate/reflect` receives only `session_id` + `revised_claim`. Session state is resolved server-side. Once reflected, the session is marked completed and cannot be claimed again.
 * **Rejected Alternative:** Deleting the session immediately upon turn 3, which loses audit logs and forces client trust.
 
 ### ADR-023: Linear Least-Squares Regression and Volatility Verdict
+
 * **Context:** Score trends previously used telescoping averages, reading only the first and last essays. Volatile dip patterns like `[10, 0, 10]` were labeled stagnant (adding 0 to teacher priority index).
 * **Decision:** Implement Least-Squares Linear Regression for slope analysis. Introduce the `volatile` trend category when slope is flat but variance exceeds threshold, adding `1.5` to teacher priority weights.
 * **Rejected Alternative:** Labeling dips as 'declining' which misreports trajectory details to teachers and parents.
 
 ### ADR-024: A Model Outage May Not Mint Cognitive Growth
-* **Context:** `/api/debate/reflect` handled `LLMGenerationError` by setting `resolved=True, growth_bonus=0.5` and persisting it. A Vertex AI outage therefore wrote a permanent, teacher-visible "Cognitive Breakthrough" into `student_profiles` for any string at all, and the UI rendered the identical green panel, so nothing on screen distinguished it from a real evaluation. This is precisely what ADR-008 exists to forbid ("never write a fabricated score on an LLM outage") — the rule had simply never been applied to `breakthrough_count`. A test asserted the wrong behaviour, which is why a green suite did not catch it.
-* **Decision:** Three parts. (1) A degraded evaluation records the attempt with `resolved=false`, which is what stops `merge_reflection_into_profile()` incrementing `breakthrough_count` or `total_growth_bonus`; the response always carries `degraded`, and the UI renders an amber "Not evaluated yet" panel. (2) `growth_bonus` is clamped to `GROWTH_BONUS_MIN/MAX` rather than trusted from the model, whose 0.0–1.0 range lived only in the schema's prose `description` — the same discipline as ADR-007 refusing the model's self-reported OCR `confidence`. (3) Since ADR-022 spends the claim *before* the LLM call, a degraded run hands it back (`release_reflection_claim()`) so an outage is retryable instead of permanent.
-* **Rejected Alternative:** Returning 503 and persisting nothing — loses the audit trail that the student did submit a revision, which the teacher-facing record should keep.
+* **Context:** `/api/debate/reflect` handled `LLMGenerationError` by setting `resolved=True, growth_bonus=0.5` and persisting it, so a Vertex AI outage wrote a permanent, teacher-visible "Cognitive Breakthrough" into `student_profiles` for any string at all — and the UI rendered the identical green panel, so nothing on screen distinguished it from a real evaluation. This is what ADR-008 exists to forbid ("never write a fabricated score on an LLM outage"); the rule had simply never been applied to `breakthrough_count`. A test asserted the wrong behaviour, which is why a green suite did not catch it.
+* **Decision:** A degraded evaluation records the attempt with `resolved=false` (which stops `merge_reflection_into_profile()` incrementing `breakthrough_count` or `total_growth_bonus`), always returns `degraded` so the UI can render an amber "Not evaluated yet" panel, clamps `growth_bonus` to 0.0–1.0 instead of trusting the model, and hands the reflection claim back so an outage is retryable rather than permanent.
+* **Rejected Alternative:** Returning 503 and persisting nothing — loses the audit trail that the student did submit a revision.
 
 ### ADR-025: Teacher Token Issuance, Not Just Forgery
-* **Context:** ADR-016 described the exposure it closed as "anyone who reads the repo can mint a `role=teacher` token for any `class_id` and read that class's student PII". It closed the **forgery** route by moving the signing key to Secret Manager. It left the **issuance** route wide open: `POST /api/auth/login` returns a teacher token for any `class_id` to anyone presenting the shared demo passcode, and that passcode is published in this README. One `curl` reproduced the exact outcome ADR-016 claimed to have prevented.
-* **Decision:** Teacher login honours its own `EDUAGENT_TEACHER_PASSWORD` when configured, falling back to the shared passcode so a laptop demo and `pytest` need no setup. Because the fallback is the judging default, `scripts/doctor.py` reports a WARN naming the exposure whenever teacher login still accepts the student passcode — the state is visible before a demo rather than discovered by a judge. Password comparison also moved to `hmac.compare_digest`.
-* **Rejected Alternative:** Adding a real IdP (out of scope for judging), or silently leaving the claim as-is — a security table that overstates its coverage costs more credibility than the gap itself.
+* **Context:** ADR-016 described the exposure it closed as "anyone who reads the repo can mint a `role=teacher` token for any `class_id`". It closed the **forgery** route (the signing key) and left the **issuance** route open: `POST /api/auth/login` returns a teacher token for any `class_id` to anyone presenting the shared demo passcode, which this README publishes. One `curl` reproduced the exact outcome ADR-016 claimed to prevent.
+* **Decision:** Teacher login honours its own `EDUAGENT_TEACHER_PASSWORD` when configured, falling back to the shared passcode so a laptop demo and `pytest` need no setup. Because that fallback is the judging default, `scripts/doctor.py` reports a WARN naming the exposure whenever it is in effect, and `scripts/deploy_to_cloud_run.py` mounts the secret when it exists — an ADR that production cannot reach is the ADR-016 failure mode all over again.
+* **Rejected Alternative:** Adding a real IdP (out of scope), or leaving the claim as-is — a security table that overstates its coverage costs more credibility than the gap.
+
+### ADR-026: A Rate-Limit Key May Only Come From the Hop the Proxy Vouches For
+* **Context:** `client_key()` took the **first** entry of `X-Forwarded-For`, with a docstring asserting that Cloud Run appends and therefore *later* entries are attacker-supplied. That is backwards: Cloud Run appends the *real* client address, so the first entry is fully caller-controlled. Measured against the live service — with one key's bucket drained to `429`, eight consecutive requests carrying random spoofed `X-Forwarded-For` values were all served (each got a fresh bucket), and the drained bucket returned `429` again the instant spoofing stopped, ruling out refill. Cloud Logging showed `client_key = 9.9.9.9` (the forged value) while `httpRequest.remoteIp` held the true address throughout. ADR-017's cost-DoS mitigation was bypassable with one header.
+* **Decision:** Key on the right-most non-empty `X-Forwarded-For` entry, falling back to the socket peer. Correct for exactly one trusted proxy, which is what Cloud Run is; if this service is ever placed behind Cloud Armor or an external LB the trusted hop moves, and the function must then count from the right by a known hop count. A regression test asserts that varying the forgeable prefix cannot change the key, verified to fail when reverted to the first hop.
+* **Rejected Alternative:** Swapping the limiter for Cloud Armor before the deadline — the right production answer, but it adds infrastructure and cost without fixing the actual defect, which was a wrong assumption about header direction.
+
+### ADR-027: Two Caches Is One Cache Too Many
+* **Context:** ADR-015 moved session state to Firestore and demoted the in-process dict to a **3-second** read cache. That bound lives in `firestore_session.load_session()` — but `interactive.get_debate_session()`, the function every request actually calls, read its own `_sessions` dict first and consulted Firestore only when that dict was *empty*. `_sessions` had no freshness bound at all, only a 24h eviction sweep, so the outer tier shadowed the inner one and the "3-second bounded read cache" the README advertised was unreachable on the live read path. Simulating two instances at the `interactive` layer reproduced the original ADR-015 failure exactly: instance A served a stale copy and lost the turn instance B had written. The existing multi-instance test missed it because it drives `firestore_session.load_session()` directly — the inner tier, which was never broken.
+* **Decision:** Reads go to Firestore first; `_sessions` is a fallback for when no durable store is configured at all (local runs, pytest), distinguished by `store_is_authoritative()`. That distinction cuts both ways: when Firestore authoritatively reports no such document, the local copy is *dropped* rather than trusted, so a session another instance tore down after a reflection (ADR-022) cannot be resurrected. Three tests now cover the outer layer, verified to fail when cache-first is restored.
+* **Rejected Alternative:** Adding a freshness timestamp to `_sessions` — a second bounded cache in front of a bounded cache, which is the shape that caused this. Preferring the durable store removes the class of bug instead of re-tuning it.
 
 </details>
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review (2026-08-26) — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26) — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+
+---
+
+## 4b. Architectural Limitations (deliberate, and what we would change with more time)
+
+Every item here is a trade-off we made knowingly for a hackathon deadline, not something we
+discovered by accident. Each states the *actual* blast radius rather than the worst-sounding one,
+because a limitations section that overstates its own risks is as untrustworthy as one that hides them.
+
+**One Cloud Run service handles both the interactive Web/API traffic (synchronous) and the Pub/Sub
+push consumer (asynchronous).** The ideal shape is a separate worker service for the consumer.
+What this actually costs us:
+
+* They share an instance pool (`--max-instances 5`, `--concurrency 80`, 512Mi, 1 vCPU). A batch
+  digest synthesis — a `gemini-3.7-flash` call over a whole class — competes for CPU and memory with
+  a student's debate turn landing on the same instance, so the visible symptom is *latency*, not
+  breakage.
+* Memory is the sharper edge: `/api/debate/start-with-image` accepts up to ~10MB of base64 (ADR-012)
+  on a 512Mi instance with concurrency 80. Enough large uploads in flight on one instance will OOM
+  it. Cloud Run restarts that instance and other instances keep serving, so this degrades rather
+  than takes the service down — and the per-IP rate limiter (ADR-017/026) is what bounds how fast a
+  single caller can get there.
+* A **poison-pill Pub/Sub message does not take the Web UI down**, which is worth stating precisely
+  because it is the failure people expect from a shared service. A message the consumer cannot
+  process returns an error, Pub/Sub retries, and after `max_delivery_attempts = 5` (ADR-003) it is
+  routed to the `essay-evaluated-dlq` dead-letter topic. The container is never crashed by message
+  content.
+
+**Why we did not split it before the deadline:** a second service means another Dockerfile, service
+account binding, push endpoint URL, and a full re-run of the deployment evidence chain (ADR-014's
+OIDC verification, `scripts/doctor.py`, `docs/gcp_evidence_checklist.md`). That is real risk added in
+the last week for an architecture change no judging criterion asks for. Splitting is the first thing
+we would do with a sixth day.
+
+**Rate limiting is in-process, not distributed.** The service-wide ceiling is `5 instances x capacity`
+— 50 burst, 1 request/second sustained for the debate policy — not the per-instance numbers. This is
+a bounded cost ceiling, but a genuinely distributed attacker is not stopped by it. Production belongs
+behind Cloud Armor or API Gateway; see the arithmetic written out in `src/eduagent/rate_limit.py`.
+
+**Authentication is a shared demo passcode, not an identity provider.** See ADR-013 / ADR-025 and the
+*Stated scope* note in the Security section below — token *scoping* is enforced, token *issuance* is
+deliberately open so a judge can open the portals without a GCP identity or an OAuth flow.
 
 ---
 
@@ -295,9 +371,9 @@ The table below summarizes our 25 architectural decisions. Expand any section fo
 * **Webhook OIDC Authentication:** FastAPI `/` push subscriber verifies Google's Pub/Sub OIDC signature (`google.oauth2.id_token.verify_oauth2_token`) against Google public keys, rejecting unauthenticated web requests.
 * **HMAC Scoped Tokens (ADR-013 / ADR-025):** Role-based tokens prevent cross-class leakage between authenticated sessions (IDOR mitigation): every `/api/classes/*` route verifies `token.class_id == target.class_id`. **Stated scope:** token *scoping* is not token *issuance*. Unless `EDUAGENT_TEACHER_PASSWORD` is set, teacher login accepts the same demo passcode published in this README, so anyone reading it can obtain a teacher token for any class. That is a deliberate judging convenience, reported as a WARN by `scripts/doctor.py`, not a property this system claims to have.
 * **Fail-Fast Secret Management (ADR-016):** Signing secret must reside in Secret Manager; container refuses to boot on Cloud Run if the default public secret is detected.
-* **Reflection Validation (ADR-022 / ADR-024):** Reflection submissions read original fields directly from server-side Firestore records rather than client payloads. The `has_reflected` claim is a **Firestore transaction** (`claim_reflection_atomically()`), so the check and the write cannot be split by a concurrent request on another instance — the earlier read-then-write version of this claim did not actually prevent the concurrent double-submit it was documented as preventing. A degraded (unevaluated) reflection never increments `breakthrough_count`, and the model's `growth_bonus` is clamped to 0.0–1.0.
+* **Reflection Validation (ADR-022 / ADR-024):** Reflection submissions read original fields from server-side Firestore records rather than client payloads. The `has_reflected` claim is a **Firestore transaction** (`claim_reflection_atomically()`), so the check and the write cannot be split by a concurrent request on another instance — the earlier read-then-write version did not actually prevent the concurrent double-submit it was documented as preventing. A degraded (unevaluated) reflection never increments `breakthrough_count`, and the model's `growth_bonus` is clamped to 0.0–1.0.
 * **Student-Facing Authorization (ADR-018):** All debate routes enforce Bearer authentication; student tokens are scoped to their own IDs, and `/turn` resolves metadata from the session before looking it up, avoiding timing/existence oracle vulnerabilities.
-* **Token-Bucket Rate Limiting (ADR-017):** IP-bucket limiters throttle login (5 burst, 1/10s sustained) and every Gemini-invoking route — the five debate endpoints and `/api/parent-note` (10 burst, 1/5s sustained) — to bound Vertex AI cost exposures. Buckets are per-process, so the real ceiling is `N_instances x capacity`; this stops casual abuse and is not a distributed limiter.
+* **Token-Bucket Rate Limiting (ADR-017 / ADR-026):** IP-bucket limiters throttle login (5 burst, 1/10s sustained) and every Gemini-invoking route — the five debate endpoints and `/api/parent-note` (10 burst, 1/5s sustained). The key is the **last** `X-Forwarded-For` hop, the only entry Cloud Run vouches for; keying on the first entry made the limiter bypassable with a single forged header, confirmed against the live service before it was fixed. **Stated scope:** buckets are per-process, so the real ceiling is `N_instances x capacity`. This stops a flood from one source, not a distributed botnet; production belongs behind Cloud Armor / API Gateway.
 * **Active Firestore TTL Policy:** Debate sessions write an explicit `expire_at` field and enforce an ACTIVE GCP TTL policy on that field to automatically delete documents after 24 hours.
 * **Layered Prompt-Injection Sanitization:** Regex filters execute at both the HTTP boundary and the ADK graph node layer, stripping tags (`<system>`, `Ignore instructions`, role hijacking) from typed texts, OCR, and replies.
 * **Input Boundaries & Payload Constraints:** Upper limits gate all inputs: max 20k characters for essays, 4k for replies, 10MB for base64 handwriting images, and 100KB for Google Doc fetches.
@@ -315,7 +391,7 @@ The table below summarizes our 25 architectural decisions. Expand any section fo
 The evaluation suite executes **50 deterministic test cases** with **zero LLM-as-judge dependency** (`scripts/run_eval_suite.py --strict`):
 
 | Layer | Benchmark Group | Passed | Total | Verification Target |
-|---|---|:---:|:---:|---|
+| --- | --- | :---: | :---: | --- |
 | **1. Safety & Security** | `answer_leak` | 6 | 6 | Production `validate_debate_turn()` regex interceptor |
 | **1. Safety & Security** | `prompt_injection` | 5 | 5 | Production `strip_injection_attempts()` sanitization |
 | **1. Safety & Security** | `tenancy_isolation` | 4 | 4 | Production `_verify_class_auth()` IDOR protection |
@@ -333,7 +409,7 @@ The evaluation suite executes **50 deterministic test cases** with **zero LLM-as
 To eliminate false-positive test cases, benchmarks were subjected to intentional sabotage:
 
 | Intentional Code Sabotage | Benchmark Outcome |
-|---|---|
+| --- | --- |
 | Strip persona anchoring logic in `nodes/debate.py` | 4/4 Persona Fidelity tests **FAIL** |
 | Remove measured scoring artifact `learning_outcome_measured.json` | 4/4 Learning Outcome tests **FAIL** |
 
@@ -347,6 +423,7 @@ To eliminate false-positive test cases, benchmarks were subjected to intentional
 ## 7. Multimodal Ingestion Evidence
 
 The multimodal OCR pipeline (`nodes/ocr.py`) was evaluated on **12 real-world handwritten essay samples** (`eval/test_images/`) encompassing varied handwriting styles, cursive, pencil, cross-outs, and uneven lighting:
+
 * **9 samples:** `confidence = high`
 * **1 sample:** `confidence = medium` (sample with heavy physical cross-outs)
 * **2 samples:** `confidence = low` (dense shorthand notes; correctly routed to `pending_essays`)

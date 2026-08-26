@@ -14,11 +14,13 @@ SKIPPED when the score is degraded.
 
 from __future__ import annotations
 
+import copy
 from unittest.mock import patch
 
 import pytest
 
 from eduagent import interactive
+from eduagent.memory import firestore_session
 
 
 @pytest.fixture(autouse=True)
@@ -223,3 +225,148 @@ def test_default_seams_are_offline_under_pytest():
     # Neither call raises and neither touches GCP, because PYTEST_CURRENT_TEST is set.
     interactive._default_persist_essay_result(student_id="x")
     interactive._default_publish_event(event_id="x")
+
+
+# ---------------------------------------------------------------------------
+# ĐỢT 17 #2 -- multi-instance regression AT THE interactive LAYER.
+#
+# tests/test_firestore_session.py already has a two-instance test, but it drives
+# firestore_session.load_session() directly -- the inner tier, which owns the 3s
+# freshness bound and was never the broken one. Every real request goes through
+# interactive.get_debate_session(), the OUTER tier, which had no freshness bound
+# at all and shadowed the inner one. That gap is why a green suite coexisted with
+# ADR-015 being false on the live read path.
+# ---------------------------------------------------------------------------
+
+
+class _FakeDoc:
+    def __init__(self, store, doc_id):
+        self._store, self._id = store, doc_id
+
+    @property
+    def exists(self):
+        return self._id in self._store
+
+    def to_dict(self):
+        value = self._store.get(self._id)
+        return copy.deepcopy(value) if value is not None else None
+
+    def get(self, transaction=None):
+        return self
+
+    def set(self, payload):
+        self._store[self._id] = copy.deepcopy(payload)
+
+    def update(self, changes):
+        merged = copy.deepcopy(self._store[self._id])
+        merged.update(copy.deepcopy(changes))
+        self._store[self._id] = merged
+
+    def delete(self):
+        self._store.pop(self._id, None)
+
+
+class _FakeCollection:
+    def __init__(self, store):
+        self._store = store
+
+    def document(self, doc_id):
+        return _FakeDoc(self._store, doc_id)
+
+
+class _SharedFirestore:
+    """The one thing genuinely shared between Cloud Run instances."""
+
+    def __init__(self):
+        self.store = {}
+
+    def collection(self, name):
+        assert name == "debate_sessions"
+        return _FakeCollection(self.store)
+
+
+@pytest.fixture
+def shared_db(monkeypatch):
+    db = _SharedFirestore()
+    monkeypatch.setattr(firestore_session, "_default_client", lambda: db)
+    interactive._sessions.clear()
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+    yield db
+    interactive._sessions.clear()
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+
+
+def _start(session_id):
+    interactive.start_debate_session(
+        session_id,
+        persona_id="skeptic",
+        essay_text="E",
+        summary={"fallacies_draft": ["hasty generalization"]},
+        prior_weaknesses=[],
+        language="en",
+        student_id="c1_stu01",
+        name="An",
+        class_id="c1",
+    )
+
+
+def test_interactive_layer_does_not_serve_a_stale_session_to_a_warm_instance(shared_db):
+    """ĐỢT 17 #2: instance A keeps its dict warm across requests. When the load
+    balancer sends a later turn back to A, A must not serve the copy it made
+    before instance B wrote to Firestore."""
+    _start("s-multi")
+    instance_a_memory = copy.deepcopy(interactive._sessions)
+
+    # --- instance B: fresh process, reads from Firestore, appends a turn ---
+    interactive._sessions.clear()
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+    session_b = interactive.get_debate_session("s-multi")
+    session_b["turns"].append({"turn": 2, "question": "written by instance B"})
+    firestore_session.save_session("s-multi", session_b)
+
+    # --- load balancer routes the next request back to instance A ---
+    interactive._sessions.clear()
+    interactive._sessions.update(instance_a_memory)
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+
+    session_a = interactive.get_debate_session("s-multi")
+
+    assert [t["turn"] for t in session_a["turns"]] == [2], (
+        "instance A served its stale in-process copy and lost instance B's turn "
+        "-- ADR-015 regressed at the interactive layer"
+    )
+
+
+def test_a_session_deleted_by_another_instance_is_not_resurrected(shared_db):
+    """The flip side: preferring Firestore must not mean falling back to a warm
+    local dict when Firestore authoritatively says the session is gone. That
+    would undo ADR-022's single-use reflection teardown across instances."""
+    _start("s-gone")
+    instance_a_memory = copy.deepcopy(interactive._sessions)
+
+    # instance B ends the debate (ADR-022 teardown after reflection)
+    interactive.end_debate_session("s-gone")
+    assert "s-gone" not in shared_db.store
+
+    # instance A still has it warm in memory
+    interactive._sessions.clear()
+    interactive._sessions.update(instance_a_memory)
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+
+    with pytest.raises(interactive.UnknownSessionError):
+        interactive.get_debate_session("s-gone")
+
+    # and the stale local copy is dropped rather than left to be found later
+    assert "s-gone" not in interactive._sessions
+
+
+def test_without_a_durable_store_the_in_process_dict_still_serves(monkeypatch):
+    """Local runs and pytest have no Firestore client; the dict IS the store
+    there, and must keep working -- otherwise this fix would break every
+    laptop demo to close a multi-instance bug."""
+    monkeypatch.setattr(firestore_session, "_default_client", lambda: None)
+    interactive._sessions.clear()
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+
+    _start("s-local")
+    assert interactive.get_debate_session("s-local")["student_id"] == "c1_stu01"

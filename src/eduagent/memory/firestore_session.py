@@ -228,6 +228,18 @@ def delete_session(session_id: str, *, client=None) -> None:
         _logger.warning(f"Could not delete session {session_id} from Firestore: {exc}")
 
 
+def store_is_authoritative(*, client=None) -> bool:
+    """True when a real Firestore client backs this store.
+
+    ĐỢT 17 #2: `load_session()` returns None both for "this session genuinely
+    does not exist" and for "there is no durable store configured at all"
+    (local dev, pytest). A caller that treats those the same either resurrects
+    a session another instance already deleted, or refuses to serve one that
+    only exists in memory. This lets the caller tell them apart.
+    """
+    return (client or _default_client()) is not None
+
+
 def _default_client():
     """The real Firestore client, or None when no client should be used.
 

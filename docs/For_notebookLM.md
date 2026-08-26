@@ -37,7 +37,7 @@ A modern Socratic pedagogical framework:
 | **Track** | Collaborative Partner |
 | **Submission Window** | August 3, 2026 – August 31, 2026 |
 | **Live Demo URL** | https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/ |
-| **Demo Passcode** | `eduagent2026` |
+| **Demo Passcodes** | Student `eduagent2026` / Teacher `eduagent-teacher-2026` (separate by design, ADR-025) |
 
 ### 1.4 Equitable Access Mission
 
@@ -218,6 +218,8 @@ Zero LLM-as-judge dependency to eliminate reward-hacking loops. Output validated
 * **ADR-023:** Least-squares slope + `volatile` verdict so a mid-window score collapse is not read as `stagnant`.
 * **ADR-024:** An LLM outage records the reflection as *unevaluated* (`resolved=false`) instead of minting a breakthrough; `growth_bonus` clamped to 0.0-1.0; the reflection claim is transactional.
 * **ADR-025:** Teacher token *issuance* separated from the public demo passcode (`EDUAGENT_TEACHER_PASSWORD`), closing the half of ADR-016 that stayed open.
+* **ADR-026:** Rate-limit key taken from the **last** `X-Forwarded-For` hop; the first entry is caller-supplied and made the limiter bypassable with one header.
+* **ADR-027:** Session reads prefer Firestore; a second unbounded in-process cache had shadowed ADR-015's 3-second bound on the path every request takes.
 
 ---
 

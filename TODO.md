@@ -1938,3 +1938,456 @@ Dưới đây là các lỗ hổng/phát hiện nghiêm trọng vẫn còn sót 
 | Per-Instance Rate Limiter trên Cloud Run | Do sử dụng cơ chế token bucket in-memory, ở chế độ scale `--max-instances 5`, mỗi instance Cloud Run sẽ có một Rate Limiter riêng biệt, khiến khả năng bảo vệ trở nên vô nghĩa với các request phân tán. | **Cần kiểm tra** | Source code ở `rate_limit.py` ghi nhận nhược điểm nhưng thực tế lại đang được dùng như biện pháp chính để chặn Cost-DoS. |
 
 
+
+### ĐỢT 16 — DEPLOY & KIỂM CHỨNG TRÊN LIVE (2026-08-26) ✅
+
+Revision mới: **`eduagent-class-aggregator-00034-zpn`** (100% traffic).
+
+| Kiểm chứng | Lệnh | Kết quả |
+|---|---|---|
+| Deploy | `python scripts/deploy_to_cloud_run.py` | ✅ exit 0; preflight xác nhận cả 3 secret tồn tại |
+| Secrets không cleartext (ADR-020) | `gcloud run services describe ... --format=json` | ✅ `secretKeyRef: ['EDUAGENT_SESSION_SECRET','GMAIL_COMPOSE_TOKEN_JSON','SHEETS_TOKEN_JSON']`, 0 plaintext |
+| Health | `curl $URL/health-check` | ✅ `{"status":"ok"}` HTTP 200 |
+| Push OIDC (ADR-014) | `curl -X POST $URL/` không token | ✅ HTTP **401** |
+| **#7 doctor check push mode** | `python scripts/doctor.py` | ✅ `delivery is PUSH -> .../ with OIDC as eduagent-sa@...` — **9 passed, 2 warned, 0 failed** |
+| **#1 cờ `degraded` có trên live** | debate thật 3 lượt → `POST /api/debate/reflect` | ✅ response chứa `"degraded":false` (trước ĐỢT 16 **không có** key này) |
+| **#2 clamp** | cùng lệnh trên | ✅ `growth_bonus: 1.0`, không có log `clamped` → model trả đúng biên lần này; clamp vẫn tại chỗ |
+| ADR-022 single-use | `POST /reflect` lần 2 cùng `session_id` | ✅ HTTP **404** — không farm được bonus thứ hai |
+| ADR-022 session không tồn tại | `POST /reflect` với `session_id` bịa | ✅ HTTP **404** |
+| Ghi profile thật | `get_profile("c1_stu01")` | ✅ `breakthrough_count: 2`, `total_growth_bonus: 1.9`, `last_reflection.resolved: True` |
+
+Bằng chứng response live (rút gọn):
+```json
+{"student_id":"c1_stu01","resolved":true,"growth_bonus":1.0,
+ "feedback":"Excellent self-correction! You've successfully shifted from an absolute claim to a nuanced hypothesis...",
+ "degraded":false}
+```
+
+**2 WARN của doctor đều là cố ý:** "Session signing secret" (local dùng default — đúng thiết kế) và "Teacher password separation" (tradeoff mục #6, được báo cáo thay vì giấu).
+
+#### ⚠️ Dữ liệu probe đã ghi vào hồ sơ demo `c1_stu01`
+
+Phép thử end-to-end ở trên là một debate **thật**, nên nó đã thêm 1 essay vào `student_profiles/c1_stu01`:
+
+```
+essay_history:
+  - 2026-08-24T14:34:38Z | persona: skeptic   | avg: 8.0
+  - 2026-08-26T13:08:14Z | persona: nitpicker | avg: 1.75   <-- probe của ĐỢT 16
+score_trend: declining   (trước đó không phải "declining")
+```
+
+Bài luận probe cố tình viết dở (hasty generalization) nên điểm 1.75 kéo `score_trend` của học sinh "An" thành `declining`. **Cần quyết định trước khi quay video:** giữ lại (lớp demo có thêm 1 học sinh đang sa sút — có thể có lợi cho beat "Intervention Priority Index"), hay xoá entry này để trả hồ sơ về trạng thái cũ.
+
+---
+
+## ĐỢT 17 — THẨM ĐỊNH BÁO CÁO "SENIOR STAFF ENGINEER" + PLAN (2026-08-26)
+
+> Áp dụng đúng nguyên tắc dự án lên chính bản review này: **verify, don't trust**. Kết quả: **2 claim ĐÚNG (1 là Blocker thật, đã xác nhận trên live)**, **1 claim đúng-sự-kiện nhưng sai-mức-độ**, **1 claim đã được tài liệu hoá từ trước**, **1 đề xuất từ chối**. Và quan trọng nhất: khi đi kiểm chứng claim của họ, tôi tìm ra **1 Blocker thứ hai mà CẢ HAI bên đều bỏ sót**.
+
+### Bảng thẩm định
+
+| # | Claim của reviewer | Phán quyết | Ghi chú |
+|---|---|---|---|
+| 1 | Rate limiter bị bypass bằng `X-Forwarded-For` giả | ✅ **ĐÚNG — Blocker, xác nhận trên LIVE** | Bằng chứng thực nghiệm bên dưới. Đây là phát hiện giá trị nhất của bản review |
+| 2 | `deploy_to_cloud_run.py` không set `EDUAGENT_TEACHER_PASSWORD` | ⚠️ **Đúng sự kiện, sai mức độ** | Không phải "vô tình bỏ quên phá vỡ bảo mật" — biến này là opt-in, mới thêm ở ĐỢT 16, fallback đã được ADR-025 tuyên bố và `doctor.py` báo WARN. Nhưng đúng là **ADR-025 hiện không bật được qua deploy path chính thức** → P1 thật |
+| 3 | Rate limiter in-memory vô nghĩa khi multi-instance | 📋 **Đúng nhưng đã tự công bố** | ADR-017 + README §5 đã ghi "per-process buckets, real ceiling `N_instances x capacity`... not a distributed limiter". Không phải phát hiện mới — nhưng nó **cộng hưởng** với #1 |
+| 4 | `interactive.py` giữ state bằng in-process dict `_sessions` | ✅ **ĐÚNG — và tệ hơn họ nghĩ** | Họ nêu như mối lo chung. Thực tế đây là **ADR-015 TÁI PHÁT**, đã chứng minh bằng script. Xem Blocker #2 |
+| 5 | Nên tách Pub/Sub handler thành microservice riêng | ❌ **Từ chối** | Lý do bên dưới |
+
+---
+
+### 🔴 BLOCKER #1 — Rate limiter bị vô hiệu bằng một header (ADR-017 thủng hoàn toàn)
+
+`rate_limit.py:129-142` lấy IP từ **phần tử ĐẦU** của `X-Forwarded-For`, kèm comment khẳng định sai:
+
+```python
+# "the real client address is the FIRST entry of X-Forwarded-For
+#  (the proxy appends, so later entries are attacker-supplied...)"
+first = x_forwarded_for.split(",")[0].strip()
+```
+
+Thực tế ngược lại: Cloud Run **append** IP thật vào cuối, nên phần tử **đầu** là do client tự khai.
+
+**Thực nghiệm trên service LIVE (`00034-zpn`), 3 bước liền nhau không nghỉ:**
+
+```
+1) bơm cạn với XFF=9.9.9.9 (10 req):
+   401 401 401 401 401 429 429 429 429 429
+2) NGAY LẬP TỨC đổi sang XFF ngẫu nhiên (8 req):
+   401 401 401 401 401 401 401 401        <-- 8/8 lọt, KHÔNG có 429 nào
+3) NGAY LẬP TỨC quay lại XFF=9.9.9.9 (3 req):
+   429 429 429                            <-- bucket cũ vẫn cạn => không phải do refill
+```
+
+Bước 3 là đối chứng loại trừ giả thuyết "token tự hồi": nếu bucket đã hồi thì bước 3 phải ra 401.
+
+**Xác nhận từ Cloud Logging** — app dùng giá trị giả, trong khi Cloud Run vẫn biết IP thật:
+
+```
+jsonPayload.client_key   = 9.9.9.9                              <-- app key theo giá trị BỊA
+httpRequest.remoteIp     = 2001:f75:720:900:e812:3f46:8ced:a110  <-- IP thật, Cloud Run biết
+```
+
+**Vì sao là Blocker:** ADR-017 nói *"Implement a real in-process token-bucket rate limiter rather than deleting the DoS claim"*, và bảng STRIDE dòng **D** liệt kê nó là biện pháp chống cost-DoS. Một giám khảo thêm đúng một header là quota Vertex AI mở toang. Tệ hơn: đây là **"false sense of security"** — dự án đã tự hào vì *build thật thay vì un-claim*, mà thứ build ra không chặn được kẻ tấn công đơn giản nhất. Trúng cả **Architecture (30%)** lẫn uy tín bảng bảo mật.
+
+**Fix (~15 phút):**
+1. `client_key()` lấy phần tử **cuối** của XFF (Cloud Run append IP thật), fallback `peer_host`.
+2. Sửa comment đang khẳng định ngược.
+3. Test: cùng XFF giả → cùng key; đổi XFF giả nhưng cùng peer → vẫn cùng key. Sabotage về `[0]` phải làm test đỏ.
+4. Deploy + chạy lại đúng 3 bước thực nghiệm trên; kỳ vọng bước 2 ra **429** ngay từ request đầu.
+
+---
+
+### 🔴 BLOCKER #2 — ADR-015 TÁI PHÁT (cả 2 bản review đều bỏ sót)
+
+`interactive.py:173-181` là cache-first **không có giới hạn tuổi**:
+
+```python
+def get_debate_session(session_id: str) -> dict:
+    session = _sessions.get(session_id)
+    if session is None:                      # chỉ chạm Firestore khi dict RỖNG
+        fs_session = _firestore_get_session(session_id)
+        ...
+    return session                           # ngược lại: trả bản in-process, cũ bao nhiêu cũng mặc
+```
+
+Có **hai tầng cache**, và tầng ngoài vô hiệu hoá tầng trong:
+- `interactive._sessions` — **không giới hạn** (chỉ bị quét bởi `evict_stale_sessions`, TTL **24h**)
+- `firestore_session._LOCAL_SESSION_CACHE` — giới hạn 3s (`_CACHE_FRESHNESS_SECONDS`)
+
+Tầng 3s **không bao giờ được với tới** khi `_sessions` còn entry. Đây đúng nguyên văn cái ADR-015 tự mô tả là bug đã sửa: *"the first implementation preferred any cache entry inside the 24h session TTL, which meant turn 3 landing back on instance A served a stale copy and then overwrote Firestore with it — the bug this ADR claimed to fix."*
+
+**Chứng minh (mô phỏng 2 instance ở TẦNG `interactive`, dùng chung 1 Firestore giả):**
+
+```
+Firestore sau khi B ghi   : [2]
+Instance A đọc lại thấy   : []
+
+>>> ADR-015 TÁI PHÁT: instance A phục vụ bản CŨ, mất turn của B.
+```
+
+**Vì sao test hiện có không bắt được:** `tests/test_firestore_session.py::test_two_instances_do_not_lose_a_debate_turn` gọi thẳng `firestore_session.load_session()` — tức là test **tầng trong** (tầng có bound 3s). Mọi request thật lại đi qua `interactive.get_debate_session()` — **tầng ngoài**, không được test đa-instance nào phủ. Test xanh nhưng bảo vệ sai lớp.
+
+**Vì sao là Blocker:** README bảng ADR ghi *"Backs active debates with Firestore documents and a **3-second bounded** in-memory read cache"*. Bound đó không tồn tại trên đường đọc thật. Đây là **lần thứ ba** cùng một class lỗi (ADR-005 → ADR-015 → nay) — nếu giám khảo phát hiện, nó phá luôn luận điểm "chúng tôi học từ lỗi và ghi lại ADR". Rủi ro **Demo (30%)**: debate 3 lượt là beat trung tâm của video, `maxScale=5` đang bật.
+
+**Fix (~20 phút):** `get_debate_session()` luôn gọi `_firestore_get_session()` trước (hàm này đã tự có bound 3s + cache riêng), chỉ dùng `_sessions` làm fallback khi Firestore trả `None` vì lỗi hạ tầng. Thêm test đa-instance **ở tầng `interactive`** (không phải tầng `firestore_session`), sabotage về cache-first phải làm nó đỏ.
+
+---
+
+### 🟡 P1 — `EDUAGENT_TEACHER_PASSWORD` không có đường vào production
+
+`grep -c EDUAGENT_TEACHER_PASSWORD scripts/deploy_to_cloud_run.py` → **0**. Script dùng dict env hardcode (dòng 102-111) và không có biến này, cũng không đọc từ Secret Manager.
+
+Cải chính mức độ so với bản review: đây **không** phải "phá vỡ bảo mật đang có". Biến này mới thêm ở ĐỢT 16, là **opt-in**, fallback về passcode chung đã được ADR-025 tuyên bố công khai và `doctor.py` báo WARN đích danh. Nhưng hệ quả thật vẫn đáng sửa: **cơ chế ADR-025 hiện không bật được bằng deploy path chính thức** → ADR mô tả một khả năng mà production không với tới.
+
+**Fix (~10 phút):** thêm `eduagent-teacher-password` vào `_REQUIRED_SECRETS` dạng **tuỳ chọn** (có thì mount, không có thì bỏ qua + in cảnh báo), để `doctor.py` chuyển WARN → PASS khi đã cấu hình.
+
+---
+
+### 🟢 P2 — Giới hạn per-instance: giữ nguyên, chỉ chỉnh câu chữ sau khi vá #1
+
+Đã tự công bố ở ADR-017 và README §5. **Không** implement Cloud Armor cho hackathon: tốn tiền, thêm hạ tầng, và không phải thứ được chấm điểm. Sau khi vá #1, cập nhật một câu trong ADR-017 nêu rõ mô hình đe doạ được chặn (spam từ một nguồn) và không được chặn (botnet phân tán), kèm dòng "production belongs behind Cloud Armor" vốn đã có.
+
+---
+
+### ❌ Từ chối — "tách Pub/Sub handler thành microservice riêng"
+
+Đây là ý kiến kiến trúc, không phải defect: không có test đỏ, không có hành vi sai, không có tuyên bố nào trong repo bị nó chứng minh là sai. Tách ra sẽ **tăng** rủi ro sát ngày quay: thêm 1 service, 1 Dockerfile, 1 IAM binding, 1 URL push mới, và phải deploy lại toàn bộ chuỗi bằng chứng GCP (ADR-014, doctor, evidence checklist). Đúng bài học "không phình phạm vi" đã ghi ở ĐỢT 7. Giữ nguyên; nếu bị hỏi trong Q&A thì trả lời thẳng: một Cloud Run service phục vụ cả UI và push endpoint là lựa chọn có chủ đích cho phạm vi hackathon, và OIDC ở tầng app (ADR-014) là thứ giữ ranh giới bảo mật giữa hai đường vào.
+
+---
+
+### PLAN — thứ tự thi công
+
+| Thứ tự | Việc | Ước tính | Vì sao thứ tự này |
+|---|---|---|---|
+| 1 | Blocker #1 — XFF lấy phần tử cuối + test + sabotage | 15' | Rủi ro cao nhất, dễ bị giám khảo tự thử nhất (1 dòng curl) |
+| 2 | Blocker #2 — `get_debate_session` ưu tiên Firestore + test đa-instance ở tầng đúng | 20' | Nằm trên beat trung tâm của video demo |
+| 3 | P1 — deploy script hỗ trợ `EDUAGENT_TEACHER_PASSWORD` | 10' | Làm ADR-025 thành sự thật thay vì mô tả |
+| 4 | Chạy `pytest` + `run_eval_suite --strict` + `doctor.py` | 5' | Cổng chất lượng |
+| 5 | **Deploy lại** + chạy lại 3 bước thực nghiệm XFF trên live | 10' | #1 chỉ tính là sửa xong khi bước 2 ra 429 |
+| 6 | Cập nhật README (ADR-017, ADR-015), `failure_matrix.md`, STRIDE dòng D | 15' | Đồng bộ tuyên bố với code |
+
+**Tổng ~1h15.** Sau đó **0 Blocker mở**, và cả hai lỗi đều có test có-thể-FAIL bảo vệ.
+
+### ĐỢT 17 (thi công) — checklist
+
+- [x] **1. Blocker #1** — `rate_limit.client_key()` lấy phần tử **cuối** của `X-Forwarded-For`; sửa comment khẳng định ngược; test + sabotage ✅
+- [x] **2. Blocker #2** — `interactive.get_debate_session()` ưu tiên Firestore; `_sessions` chỉ còn fallback; 3 test đa-instance ở tầng `interactive` + sabotage ✅
+- [x] **3. P1** — `deploy_to_cloud_run.py` mount `EDUAGENT_TEACHER_PASSWORD` khi secret tồn tại, không chặn deploy khi không có ✅
+- [x] **4.** 273 passed · eval 50/50 · doctor 9 PASS / 2 WARN / 0 FAIL ✅
+- [x] **5.** Deploy `00035-r9j` + thực nghiệm XFF lại trên live: bước 2 ra **429 x8** ✅
+- [x] **6.** Đồng bộ README (ADR-026/027 + áp lại ĐỢT 16), `failure_matrix.md`, STRIDE dòng D, `For_notebookLM.md` ✅
+
+### ĐỢT 17 — KẾT QUẢ (2026-08-26) ✅ HOÀN THÀNH 3/3 + deploy
+
+**Bằng chứng quyết định — cùng một thực nghiệm, trước và sau, trên service LIVE:**
+
+```
+                                     TRƯỚC (00034)          SAU (00035-r9j)
+1) bơm cạn XFF=9.9.9.9 x10           401x5 rồi 429x5        401x5 rồi 429x5
+2) đổi XFF ngẫu nhiên x8             401 x8  <-- LỌT HẾT    429 x8  <-- CHẶN HẾT
+3) nhiều hop giả "1.1.1.1, 2.2.2.2"  (chưa thử)             429 x3
+```
+
+Cloud Logging sau khi vá — key đã khớp đúng IP thật, bất chấp header giả:
+```
+jsonPayload.client_key = 2001:f75:720:900:e812:3f46:8ced:a110
+httpRequest.remoteIp   = 2001:f75:720:900:e812:3f46:8ced:a110   <-- trùng khớp
+```
+(Trước khi vá: `client_key = 9.9.9.9`, tức giá trị bịa.)
+
+**Blocker #2 — ADR-015:** script mô phỏng 2 instance ở tầng `interactive` giờ in
+`>>> OK: instance A thấy trạng thái mới nhất.` (trước: `ADR-015 TÁI PHÁT`).
+
+**Sabotage (ADR-019) — cả 3 fix đều có test CÓ THỂ FAIL:**
+
+| Sabotage | Test đỏ |
+|---|---|
+| `client_key` quay lại hop đầu | `test_client_key_uses_the_last_forwarded_hop_not_the_client_supplied_one` |
+| `get_debate_session` quay lại cache-first | `test_interactive_layer_does_not_serve_a_stale_session_to_a_warm_instance`, `test_a_session_deleted_by_another_instance_is_not_resurrected` |
+
+Đã khôi phục nguyên trạng sau mỗi lần sabotage (`git diff src/` sạch).
+
+**ADR mới:** **ADR-026** (chỉ tin hop mà proxy bảo chứng) và **ADR-027** (một cache, không phải hai).
+
+#### ⚠️ Cảnh báo quy trình: README.md bị ghi đè, mất sửa đổi ĐỢT 16
+
+Khi cập nhật tài liệu ĐỢT 17, phát hiện `README.md` đã bị ghi đè lại (bởi một lượt sinh tài liệu chạy song song) và **mất toàn bộ đính chính của ĐỢT 16**:
+
+- ADR-024, ADR-025 biến mất khỏi bảng ADR (nhưng vẫn còn trong `docs/`)
+- Câu overclaim *"preventing double-click race condition exploits"* **quay trở lại** §5 Security
+- Mất mục rate-limit bao gồm `/api/parent-note`, mất *"Stated scope"* của HMAC token
+
+Đã áp lại toàn bộ cùng với ĐỢT 17. **Bài học:** `README.md` đang là file dễ mất đính chính nhất vì hay được sinh lại nguyên khối. Trước khi quay video nên chạy:
+
+```bash
+for p in ADR-024 ADR-025 ADR-026 ADR-027 "Stated scope"; do echo "$p: $(grep -c "$p" README.md)"; done
+grep -c "double-click race condition exploits" README.md   # kỳ vọng: 0
+# kỳ vọng: 4 ADR đều > 0, "Stated scope" >= 2
+```
+
+### Còn lại
+
+**0 Blocker mở.** Còn 5 ngày tới deadline 31/08 17:00 PT. Live revision `00035-r9j` đã mang đủ fix của ĐỢT 16 + ĐỢT 17.
+
+---
+
+## ĐỢT 18 — THẨM ĐỊNH BẢN PHẢN BIỆN (2026-08-26)
+
+> Bản phản biện này viết trên **context cũ**: nó đề nghị "bắt tay fix X-Forwarded-For ngay" trong khi lỗi đó **đã được vá và deploy** ở ĐỢT 17 (revision `00035-r9j`), đã đo lại trên live. Không có việc phải làm cho mục 1 và 2.
+
+### Bảng thẩm định
+
+| # | Luận điểm | Phán quyết | Hành động |
+|---|---|---|---|
+| 1 | Đồng thuận Blocker #1 (XFF) | ✅ Đúng | Không cần — đã vá + deploy + đo lại ở ĐỢT 17 |
+| 2 | Đồng thuận Blocker #2 (`_sessions`) | ✅ Đúng, **nhưng claim "code đã sạch bóng `_sessions`" là SAI** | Đã kiểm chứng: sửa đổi của họ bị chặn, `_sessions` vẫn còn. Xem bên dưới vì sao **may là bị chặn** |
+| 3 | Deploy phải fail-closed, không fail-open | ⚠️ **Nguyên tắc đúng, dữ kiện sai** | Sửa dữ kiện; đề xuất phương án thật (cần bạn quyết) |
+| 4 | Mâu thuẫn `--max-instances 5` vs limiter in-process | ✅ **Điểm sắc nhất của bản phản biện** | ✅ Đã sửa — lượng hoá trần thay vì nói chung chung |
+| 5 | Không tách service nhưng phải ghi hạn chế ra văn bản | ✅ Đúng — **nhưng câu mẫu họ đưa sai sự thật** | ✅ Đã thêm mục README, viết bản đúng |
+
+---
+
+### 2. Về claim "tôi đã sửa Blocker #2, code sạch bóng `_sessions`"
+
+**Kiểm chứng:** `_sessions` vẫn ở `interactive.py:89`; `git diff` chỉ chứa đúng thay đổi ĐỢT 17 của tôi; 273 test xanh; debate thật 3 lượt + reflect chạy hết trên live với Firestore thật.
+
+**Và may là thay đổi đó bị chặn.** Xoá hẳn `_sessions` sẽ **phá pytest và mọi bản demo trên laptop**: `firestore_session._default_client()` trả `None` khi `PYTEST_CURRENT_TEST` được set hoặc khi không có credential GCP. Không còn dict nào thì `get_debate_session()` không có gì để trả về.
+
+Đó chính là lý do fix của ĐỢT 17 **giữ** `_sessions` nhưng hạ nó xuống fallback, phân biệt bằng `store_is_authoritative()`:
+
+- Firestore trả document → dùng nó (đường đi thật, có bound 3s)
+- Firestore **có** nhưng nói không tồn tại → **vứt** bản local, raise `UnknownSessionError` — nếu không sẽ hồi sinh session mà ADR-022 đã tear down ở instance khác
+- Không có Firestore (local/pytest) → dict **chính là** store
+
+Có test riêng cho cả ba nhánh (`test_without_a_durable_store_the_in_process_dict_still_serves`).
+
+---
+
+### 3. "Fail-closed vs fail-open" — nguyên tắc đúng, dữ kiện sai
+
+**Nguyên tắc:** đồng ý. Deploy path không nên tự rơi về cấu hình bảo mật thấp nhất.
+
+**Nhưng hai dữ kiện trong lập luận sai, và cả hai đều kiểm chứng được trong 10 giây:**
+
+```
+$ grep -nE "@app\.(delete)" src/eduagent/server.py
+(rỗng)
+```
+
+Kịch bản họ đưa — *"giám khảo lấy URL live, nhập pass `eduagent2026` và **xoá dữ liệu**"* — **không thực hiện được**: hệ thống **không có endpoint DELETE nào**. Toàn bộ quyền của teacher token là: đọc priority/settings/analytics/students, ghi class settings, test Sheets, soạn parent note. Không có đường xoá.
+
+Phơi nhiễm thật là **đọc PII + sửa class settings**, đã ghi ở ADR-025 và STRIDE dòng S. Nghiêm túc, nhưng không phải mất dữ liệu.
+
+**Vì sao KHÔNG fail-closed ở deploy:** passcode được công bố trong README **có chủ đích**, để giám khảo mở được cả Student Portal lẫn Teacher Portal mà không cần GCP identity hay OAuth flow. Chặn deploy khi thiếu biến sẽ khoá giám khảo khỏi Teacher Dashboard — tức **một nửa bài demo**. Đó là đổi một rủi ro giả (không có đường xoá dữ liệu) lấy một thiệt hại thật (mất 50% phần trình diễn).
+
+**Đề xuất thật (cần bạn quyết — xem cuối file):** tách passcode giáo viên thành giá trị **khác**, rồi **công bố nó trong README mục dành cho giám khảo**. Đóng được đường leo thang thực tế trong lớp học — *học sinh biết passcode học sinh không đọc được sổ điểm cả lớp* — mà demo vẫn mở. `doctor.py` chuyển WARN → PASS.
+
+---
+
+### 4. `--max-instances 5` — điểm sắc nhất, đã sửa
+
+Đây là luận điểm giá trị nhất của bản phản biện: *"tự chọn scale up rồi lại dùng giải pháp chặn DoS không hoạt động khi scale up"*. Mâu thuẫn có thật, và giám khảo trừ điểm mâu thuẫn bất kể ADR viết gì.
+
+**Nhưng "vô nghĩa" là nói quá.** Đã sửa bằng cách **viết thẳng phép tính** vào `rate_limit.py` thay vì mô tả mơ hồ:
+
+```
+burst      5 instances x 10 tokens         =  50 requests
+sustained  5 instances x 0.2 tokens/second =   1 request/second
+```
+
+1 req/s Gemini-backed bền vững ≈ 86k request/ngày ở trường hợp xấu nhất — yếu hơn 5 lần so với con số per-instance gợi ý, nhưng vẫn là **trần có giới hạn**. "Vô nghĩa" mô tả trạng thái *không có trần*, tức là trước ADR-017. Ghi cả hai nửa của lập luận vào file để người sau đọc được cả phần phản biện lẫn phần bác bỏ.
+
+---
+
+### 5. Mục hạn chế kiến trúc — đồng ý, nhưng câu mẫu của họ SAI
+
+Câu họ đề nghị dán vào README:
+
+> *"Nếu Pub/Sub gặp Poison Pill hoặc Out-Of-Memory, nó sẽ kéo sập cả Web UI."*
+
+**Poison pill không kéo sập gì cả.** Message không xử lý được → trả lỗi → Pub/Sub retry → sau `max_delivery_attempts = 5` (ADR-003) đi vào DLQ. Kiểm chứng:
+
+```
+$ gcloud pubsub subscriptions describe class-aggregator-sub \
+    --format='value(deadLetterPolicy.maxDeliveryAttempts,deadLetterPolicy.deadLetterTopic)'
+5	projects/project-4fc36103-f4ca-49f6-883/topics/essay-evaluated-dlq
+```
+
+Container không bao giờ bị nội dung message làm chết. Dán câu đó vào README là **tự bịa một điểm yếu không có thật** — đúng class lỗi mà ĐỢT 12/16 đã tốn công diệt (`+5.62`, 11 trace attribute bịa). Một mục "hạn chế" nói quá về rủi ro của chính nó thì cũng mất uy tín y như mục giấu rủi ro.
+
+**Đã thêm `README §4b — Architectural Limitations`** với bản đúng, mọi số liệu đã verify (`cpu=1000m, memory=512Mi, maxScale=5, concurrency=80`):
+
+- Chia chung instance pool → triệu chứng thật là **latency**, không phải hỏng
+- Cạnh sắc thật là **memory**: upload ~10MB base64 (ADR-012) trên instance 512Mi với concurrency 80 → đủ nhiều upload đồng thời sẽ OOM instance đó. Cloud Run restart instance, instance khác vẫn phục vụ → **degrade, không sập**; rate limiter (ADR-017/026) là thứ chặn tốc độ một caller đi tới đó
+- Poison pill → DLQ, **nêu chính xác vì đây là điều người ta mặc định sẽ hỏng ở service dùng chung**
+- Nêu rõ vì sao không tách trước deadline, và rằng tách là việc đầu tiên nếu có ngày thứ sáu
+
+Cách này ăn điểm "tư duy hệ thống" đúng như họ nói, mà không đánh đổi bằng một tuyên bố sai.
+
+---
+
+### Đã sửa trong ĐỢT 18
+
+- `src/eduagent/rate_limit.py` — lượng hoá trần service-wide (5 × capacity), ghi lại cả luận điểm phản biện và phần bác bỏ.
+- `README.md` — thêm **§4b Architectural Limitations**, mọi số liệu đã verify bằng `gcloud`.
+
+### Cần bạn quyết
+
+1. **Tạo `eduagent-teacher-password`?** Nếu có, tôi sẽ tạo secret, deploy lại, và ghi passcode giáo viên mới vào README mục giám khảo. Kết quả: đóng đường học-sinh-leo-thang-thành-giáo-viên, `doctor.py` 10 PASS / 1 WARN. Demo vẫn mở cho giám khảo.
+2. **Entry probe `avg 1.75`** trong hồ sơ `c1_stu01` (từ ĐỢT 16) đang làm `score_trend` của "An" thành `declining` — giữ hay xoá?
+
+---
+
+## ĐỢT 18 (thi công) — tách passcode giáo viên + dọn README (2026-08-26) ✅
+
+Revision live: **`eduagent-class-aggregator-00036-dbv`**.
+
+### Đã làm
+
+- [x] Tạo secret `eduagent-teacher-password` (giá trị `eduagent-teacher-2026`) + IAM binding `secretAccessor` **chỉ trên secret đó** cho `eduagent-sa` (least privilege, không cấp project-wide).
+- [x] Deploy — script tự phát hiện và mount: `[OK] optional secret 'eduagent-teacher-password' exists -> will be mounted as EDUAGENT_TEACHER_PASSWORD`.
+- [x] Công bố passcode giáo viên trong `README.md`, `docs/devpost_submission_draft.md`, `docs/For_notebookLM.md`, `docs/submission_checklist.md` — kèm giải thích **vì sao tách hai passcode**.
+- [x] Xoá khối trùng lặp trong README (heading `## 8. License` bị chèn vào giữa nội dung §7, làm §7 xuất hiện hai lần).
+- [x] Tạo file `LICENSE` (MIT) — README trỏ tới nó nhưng **file không tồn tại**.
+- [x] `entry probe avg 1.75` trong hồ sơ `c1_stu01`: **GIỮ** theo quyết định của bạn. `score_trend` của "An" = `declining`, có lợi cho beat Intervention Priority Index.
+
+### Kiểm chứng trên LIVE — 4/4 đúng kỳ vọng
+
+```
+1) teacher + passcode HỌC SINH (eduagent2026)      -> 401 {"detail":"Incorrect password."}
+2) teacher + passcode GIÁO VIÊN (eduagent-teacher-2026) -> 200 + token
+3) student + passcode học sinh                      -> 200
+4) student + passcode giáo viên                     -> 401
+```
+
+Đường **học sinh leo thang thành giáo viên đã đóng** — đây là mô hình đe doạ thực tế trong lớp học.
+
+```
+$ gcloud run services describe ... --format=json | (lọc env)
+secretKeyRef EDUAGENT_TEACHER_PASSWORD eduagent-teacher-password   <-- không cleartext
+
+$ python scripts/doctor.py
+[PASS] Teacher password separation
+       EDUAGENT_TEACHER_PASSWORD is set separately -- a teacher token cannot be
+       minted with the README's student passcode.
+10 passed, 1 warned, 0 failed.
+```
+
+WARN duy nhất còn lại là signing key ở local — đúng thiết kế (ADR-016).
+
+Cổng chất lượng: **273 passed** · eval **50/50** · doctor **10 PASS / 1 WARN / 0 FAIL**.
+
+`docs/video_script.md` đã kiểm tra: **không nhắc passcode nào**, nên việc đổi passcode giáo viên không phá kịch bản quay.
+
+---
+
+## ĐỢT 19 — VIỆC CHO NGÀY MAI (27/08) — hướng tới điểm tuyệt đối
+
+> Không còn Blocker. Danh sách này là **nâng chất lượng**, xếp theo giá trị-trên-công-sức. Đã cố ý loại các đề xuất phình phạm vi (tách microservice, Cloud Armor) — xem ĐỢT 17/18 để biết lý do từ chối.
+
+### 🔴 P0 — phải xong trước khi quay video
+
+- [ ] **1. `doctor.py::check_teacher_password_separation()` đang kiểm tra SAI đối tượng.**
+  Nó đọc `eduagent.auth` của **tiến trình local**, không phải revision đang deploy. Hệ quả: chạy `doctor.py` trên máy (không set env) sẽ báo **WARN** dù production **đã PASS** — và ngược lại, nếu ai đó lỡ gỡ secret khỏi Cloud Run thì doctor local vẫn báo PASS. Đây đúng class lỗi ĐỢT 8 (tài liệu/công cụ mô tả một thứ, hệ thống thật là thứ khác).
+  **Sửa:** đọc revision thật giống `check_no_plaintext_credentials_on_cloud_run()` đã làm — tìm `EDUAGENT_TEACHER_PASSWORD` trong `valueFrom.secretKeyRef` của live revision.
+  **Verify:** `python scripts/doctor.py` trên máy sạch (không export env) phải ra `[PASS]`, vì production có secret.
+
+- [ ] **2. Rà lại TOÀN BỘ `docs/video_script.md` trên revision `00036-dbv`.**
+  Chưa đợt nào chạy thử từng beat trên service đang deploy. Đã đổi khá nhiều hôm nay (passcode giáo viên, panel degraded, rate limit key). Đi từng beat, tự bấm đúng như kịch bản, ghi lại beat nào lệch.
+  **Verify:** dán checklist beat-by-beat vào TODO, mỗi beat ✅/❌.
+
+- [ ] **3. Kiểm tra kiến trúc diagram khớp luồng code thật.**
+  README §2 có diagram. Xác nhận nó vẽ **push** (không phải pull), có DLQ, và có OIDC ở `POST /`. ĐỢT 8 từng lộ ra diagram mô tả kiến trúc cũ.
+  **Verify:** `grep -n "pull\|Pull" README.md` → không được có ở phần mô tả luồng Pub/Sub.
+
+### 🟡 P1 — tăng điểm Architecture / Demo
+
+- [ ] **4. `_sessions` giờ phình theo mọi lượt đọc.**
+  Sau fix ĐỢT 17, mỗi `get_debate_session()` đều ghi `_sessions[session_id] = fs_session`. Dict chỉ bị quét bởi `evict_stale_sessions()` (TTL **24h**), trên instance 512Mi. Đây là rò rỉ bộ nhớ chậm — và giờ nó **không còn tác dụng gì** trên production (mọi lượt đọc đều đi Firestore trước), chỉ còn cần cho local/pytest.
+  **Sửa:** thêm cận số lượng key (giống `_MAX_TRACKED_KEYS` của `rate_limit.py`), hoặc chỉ ghi vào `_sessions` khi `store_is_authoritative()` là False. Phương án sau sạch hơn: dict chỉ tồn tại cho đúng trường hợp nó còn được dùng.
+  **Verify:** test 1000 lượt đọc với Firestore giả → `len(interactive._sessions)` phải bị chặn.
+
+- [ ] **5. Bằng chứng độ phủ test (coverage).**
+  Đang có 273 test nhưng **không có con số phủ nào** để trưng. Giám khảo chấm Architecture thích thấy số đo, và ta có sẵn hạ tầng.
+  **Sửa:** `pip install pytest-cov`, chạy `pytest --cov=src/eduagent --cov-report=term-missing`, dán kết quả vào README §6 cạnh bảng eval 50/50. **Không** đặt ngưỡng gate — chỉ trưng số thật.
+  **Cẩn trọng:** nếu con số thấp ở module nào thì ghi trung thực, đừng chọn lọc.
+
+- [ ] **6. Bằng chứng chi phí vận hành.**
+  Chưa có tài liệu nào nói dự án tốn bao nhiêu. Đây là điểm cộng "Operational Utility" rẻ tiền.
+  **Sửa:** dùng skill `gcp-audit` hoặc `gcloud billing`, ghi chi phí thật của project trong thời gian phát triển + ước tính đơn giá mỗi debate (số lời gọi Gemini × giá flash). Dán vào README §4b.
+
+- [ ] **7. Đối chiếu `PROJECT_WIKI.md` với các ADR mới.**
+  ADR-024→027 đã vào README + `docs/`, nhưng `PROJECT_WIKI.md` mục 12 (50KB, nguồn cho NotebookLM) **chưa được đối chiếu** ở ĐỢT 16-18. Rủi ro: wiki còn mô tả hành vi cũ (outage bịa breakthrough, cache-first, XFF hop đầu).
+  **Verify:** `grep -n "growth_bonus\|_sessions\|X-Forwarded" PROJECT_WIKI.md` rồi đọc từng chỗ.
+
+### 🟢 P2 — làm nếu còn thời gian
+
+- [ ] **8. Thêm test end-to-end chạy trên service LIVE thành script.**
+  Hôm nay tôi chạy tay: login → start debate → 3 lượt → reflect → đọc profile. Biến nó thành `scripts/smoke_live.py` để chạy một lệnh trước khi quay, thay vì gõ lại chuỗi curl.
+  **Giá trị:** bản thân script là bằng chứng "production readiness" cho giám khảo.
+
+- [ ] **9. Rà `assets/` — ảnh/diagram có bị stale không.**
+  Chưa đợt nào mở các file trong `assets/`. Nếu có screenshot dashboard cũ hoặc diagram vẽ kiến trúc pull thì đó là bằng chứng chết.
+
+- [ ] **10. Một lượt đọc toàn bộ README bằng mắt người lạ.**
+  Hôm nay đã tìm ra heading trùng + `LICENSE` thiếu chỉ bằng cách nhìn cấu trúc mục. README bị sinh lại nguyên khối nhiều lần nên còn khả năng sót lỗi tương tự.
+  **Verify:** `grep -n "^## " README.md` → đánh số mục phải liên tục, không trùng.
+
+### ⚠️ Cảnh báo quy trình (nhắc lại từ ĐỢT 17)
+
+`README.md` là file dễ mất đính chính nhất — đã bị ghi đè mất sửa đổi ĐỢT 16 một lần. **Trước khi quay, chạy:**
+
+```bash
+grep -c "double-click race condition exploits" README.md   # kỳ vọng: 0
+for p in ADR-024 ADR-025 ADR-026 ADR-027 "Stated scope" "Architectural Limitations"; do
+  echo "$p: $(grep -c "$p" README.md)"; done                # kỳ vọng: tất cả > 0
+grep -c "^## 8. License" README.md                          # kỳ vọng: 1
+ls LICENSE                                                  # kỳ vọng: tồn tại
+```
+
+### Tổng kết cuối ngày 26/08
+
+**0 Blocker mở.** Còn **5 ngày** tới deadline 31/08 17:00 PT.
+Live `00036-dbv` · 273 test · eval 50/50 · doctor **10 PASS / 1 WARN / 0 FAIL**.
+Rủi ro lớn nhất còn lại **không phải code** mà là **mục P0-2**: chưa ai chạy thử từng beat của `video_script.md` trên service đang deploy.
