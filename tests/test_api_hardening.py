@@ -158,28 +158,27 @@ def test_parent_note_is_rate_limited(monkeypatch):
 def test_teacher_login_can_require_its_own_password(monkeypatch):
     """ĐỢT 16 #6: ADR-016 closed token forgery but not token issuance -- the
     README publishes the demo passcode, so anyone could mint a role=teacher
-    token for any class_id. Teacher login now honours a separate secret."""
-    import importlib
+    token for any class_id. Teacher login now honours a separate secret.
 
-    monkeypatch.setenv("EDUAGENT_TEACHER_PASSWORD", "a-private-teacher-password")
+    Patches the resolved module constant rather than reloading the module:
+    `eduagent.auth` is imported by name into server.py and others, so a reload
+    swaps the class objects out from under them and breaks unrelated tests.
+    """
     import eduagent.auth as auth
 
-    auth = importlib.reload(auth)
-    try:
-        assert auth.teacher_password_is_shared_with_students() is False
+    monkeypatch.setattr(auth, "_TEACHER_PASSWORD", "a-private-teacher-password")
 
-        # The student passcode no longer buys a teacher token...
-        with pytest.raises(auth.LoginError):
-            auth.login(auth.LoginRequest(role="teacher", user_id="c1_teacher", password="eduagent2026"))
+    assert auth.teacher_password_is_shared_with_students() is False
 
-        # ...but students are unaffected, and the real teacher password works.
-        assert auth.login(auth.LoginRequest(role="student", user_id="c1_stu01", password="eduagent2026")).role == "student"
-        assert auth.login(
-            auth.LoginRequest(role="teacher", user_id="c1_teacher", password="a-private-teacher-password")
-        ).role == "teacher"
-    finally:
-        monkeypatch.delenv("EDUAGENT_TEACHER_PASSWORD", raising=False)
-        importlib.reload(auth)
+    # The student passcode no longer buys a teacher token...
+    with pytest.raises(auth.LoginError):
+        auth.login(auth.LoginRequest(role="teacher", user_id="c1_teacher", password="eduagent2026"))
+
+    # ...but students are unaffected, and the real teacher password works.
+    assert auth.login(auth.LoginRequest(role="student", user_id="c1_stu01", password="eduagent2026")).role == "student"
+    assert auth.login(
+        auth.LoginRequest(role="teacher", user_id="c1_teacher", password="a-private-teacher-password")
+    ).role == "teacher"
 
 
 def test_teacher_password_defaults_to_shared_passcode_for_local_demo():

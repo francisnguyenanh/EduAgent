@@ -214,6 +214,10 @@ Zero LLM-as-judge dependency to eliminate reward-hacking loops. Output validated
 * **ADR-019:** Falsifiable evaluation cases validated via sabotage testing.
 * **ADR-020:** Mounting all credentials via Secret Manager references (`secretKeyRef`).
 * **ADR-021:** Purpose-built interactive debate bridge over complex agent loops.
+* **ADR-022:** `/api/debate/reflect` bound to a completed session; single-use claim prevents `growth_bonus` farming.
+* **ADR-023:** Least-squares slope + `volatile` verdict so a mid-window score collapse is not read as `stagnant`.
+* **ADR-024:** An LLM outage records the reflection as *unevaluated* (`resolved=false`) instead of minting a breakthrough; `growth_bonus` clamped to 0.0-1.0; the reflection claim is transactional.
+* **ADR-025:** Teacher token *issuance* separated from the public demo passcode (`EDUAGENT_TEACHER_PASSWORD`), closing the half of ADR-016 that stayed open.
 
 ---
 
@@ -242,6 +246,7 @@ Zero LLM-as-judge dependency to eliminate reward-hacking loops. Output validated
 ### Slide 6: Metacognitive Self-Correction Loop & Delta Scoring
 - Objective metric: $\Delta = \text{Score}_{\text{after}} - \text{Score}_{\text{before}}$.
 - Production scorer evaluation: mean $+2.75/10$ improvement on targeted axis; 7/8 scenarios positive.
+- The metric refuses to inflate itself (ADR-024): a Vertex AI outage records the attempt as *unevaluated* rather than as a breakthrough, and the model-supplied `growth_bonus` is clamped to its declared 0.0-1.0 range instead of trusted. `breakthrough_count` only ever counts evaluations that actually happened.
 
 ### Slide 7: Tier 2: Teacher Co-Pilot Dashboard
 - Deterministic Intervention Priority Index ranking students by urgency.

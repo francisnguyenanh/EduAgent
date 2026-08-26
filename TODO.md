@@ -1834,3 +1834,107 @@ EOF
 ```
 
 **Kết luận: ✅ Đã sửa (có bằng chứng chạy lại) — không cần làm gì thêm.** Hai lỗi này **không** nằm trong 8 mục của bảng ĐỢT 16.
+
+---
+
+## ĐỢT 16 (thi công) — XỬ LÝ TOÀN BỘ 8 MỤC (2026-08-26) ✅ HOÀN THÀNH 8/8
+
+> Sửa tuần tự theo đúng thứ tự ưu tiên trong bảng ĐỢT 16. Mỗi mục đều có test mới, và **mỗi test mới đều được sabotage để chứng minh nó CÓ THỂ FAIL** (ADR-019). Không sửa test cho pass: test duy nhất bị viết lại là `test_submit_reflection_degrades_gracefully_on_llm_failure`, và đó là sửa **đặc tả** (nó đang khoá chặt hành vi vi phạm ADR-008), có ghi lý do trong docstring.
+
+### Bảng trạng thái
+
+| # | Vấn đề | Trạng thái | Bằng chứng |
+|---|---|---|---|
+| 1 | Outage bịa "Cognitive Breakthrough" | ✅ Đã sửa | `resolved=False`, `breakthrough_count: 0`, `degraded: True` |
+| 2 | `growth_bonus` không kẹp biên | ✅ Đã sửa | LLM trả 99.0 → persisted 1.0; trả -7.5 → 0.0 |
+| 3 | 11 trace attribute bịa | ✅ Đã sửa | `grep -oE '\`eduagent\.[a-zA-Z_.]+' docs/failure_matrix.md \| wc -l` → **0** |
+| 4 | ADR-022 overclaim double-click race | ✅ Đã sửa | `claim_reflection_atomically()` + test 2 thread |
+| 5 | `/api/parent-note` không rate limit | ✅ Đã sửa | `_enforce_rate_limit` 8 call-site (trước: 7) |
+| 6 | Ai cũng mint được teacher token | ✅ Đã sửa (code + tuyên bố trung thực) | `EDUAGENT_TEACHER_PASSWORD` + doctor WARN |
+| 7 | `doctor.py` không check `push_config` | ✅ Đã sửa | doctor in ra `delivery is PUSH -> ... with OIDC as ...` |
+| 8 | 6 chỗ trỏ sang `deploy.txt` bị gitignore | ✅ Đã sửa | `grep -rn "deploy\.txt" src/ scripts/ docs/ README.md` → **0** |
+
+### Kiểm chứng tổng thể (chạy thật, 26/08)
+
+```
+pytest -q                              -> 270 passed          (trước: 264)
+pytest tests/ -q -m "not e2e"          -> 268 passed, 2 deselected
+python scripts/run_eval_suite.py --strict -> 50/50 passed (100%)
+python scripts/doctor.py               -> 9 passed, 2 warned, 0 failed
+```
+
+WARN thứ 2 là **cố ý**: "Teacher password separation" — báo cáo tradeoff của mục 6 thay vì giấu nó.
+
+### Chi tiết thi công
+
+**#1 + #2 — `src/eduagent/api.py::submit_reflection()`**
+- Nhánh `except LLMGenerationError` giờ đặt `resolved=False, growth_bonus=0.0, degraded=True`, vẫn ghi vào `reflections_history` để giữ audit trail, nhưng `resolved=False` là thứ chặn `merge_reflection_into_profile()` tăng `breakthrough_count`/`total_growth_bonus`.
+- Thêm `release_reflection_claim()` (`interactive.py`): trả lại lượt reflect khi degraded, nên outage **retry được** thay vì vĩnh viễn. Không gọi `end_debate_session()` ở nhánh degraded.
+- `growth_bonus` kẹp bằng `GROWTH_BONUS_MIN/MAX`, có log cảnh báo khi phải kẹp.
+- `resolved` mặc định đổi `True` → `False` (nếu model trả JSON thiếu field thì không mặc định thành breakthrough).
+- Response **luôn** có key `degraded`. `demo_page.py` render panel hổ phách "⏳ Not evaluated yet" + nút **Try Again** thay vì panel xanh.
+
+Bằng chứng chạy lại (cùng script đã dùng để tìm ra bug):
+```
+=== A) unclamped growth_bonus ===
+returned: 1.0 persisted: 1.0
+=== B) Vertex outage -> fabricated breakthrough ===
+persisted resolved= False growth_bonus= 0.0
+breakthrough_count: 0 total_growth_bonus: 0.0
+response has 'degraded' key?: True
+```
+
+Test: `test_submit_reflection_on_llm_failure_records_but_does_not_mint_a_breakthrough`, `test_llm_failure_gives_the_reflection_attempt_back_so_the_student_can_retry`, `test_growth_bonus_from_the_model_is_clamped_to_its_declared_range`.
+
+**#3 — `docs/failure_matrix.md`**
+Cột đổi tên `Trace Attribute / Log Audit` → `Observable Signal (grep-able in code / Cloud Logging)`. Thay 11 giá trị bịa bằng tín hiệu thật (log message + file:line, hoặc field trên document/response). Đã verify **12/12 tín hiệu mới đều grep được trong `src/`**. Sửa thêm một lệch nhỏ phát hiện lúc làm: doc ghi `status: duplicate_skipped`, code trả `"skipped_duplicate"`. Dòng #6 viết lại cho khớp hành vi mới của #1.
+
+**#4 — `firestore_session.claim_reflection_atomically()`**
+Compare-and-set trong `@firestore.transactional`; cả kiểm tra `completed` lẫn `has_reflected` nằm **trong** transaction. `interactive.claim_reflection()` ưu tiên đường transaction, chỉ rơi về read-modify-write khi không có Firestore client (dev/pytest — nơi chỉ có 1 process nên không có race để thua).
+Sabotage (bỏ transaction, quay lại read-modify-write) → `test_concurrent_reflection_claims_yield_exactly_one_winner` **đỏ**. Đã khôi phục.
+
+**#5 — `server.py::api_parent_note`** thêm `_enforce_rate_limit(request, debate_limiter)`. Sabotage bỏ dòng này → test đỏ.
+
+**#6 — `auth.py`** thêm `_TEACHER_PASSWORD` (env `EDUAGENT_TEACHER_PASSWORD`, fallback về passcode chung để demo/pytest không cần setup) + `teacher_password_is_shared_with_students()`; so sánh mật khẩu chuyển sang `hmac.compare_digest`. `doctor.py` thêm check báo WARN nêu đích danh nguy cơ. Sabotage → test đỏ.
+
+**#7 — `doctor.py::check_pubsub_topology`** thêm 2 nhánh FAIL: subscription ở PULL mode, và push subscription không có OIDC token. Output thật:
+```
+[PASS] Pub/Sub topic/DLQ/subscription
+       ... delivery is PUSH -> https://eduagent-class-aggregator-...run.app/
+       with OIDC as eduagent-sa@project-4fc36103-f4ca-49f6-883.iam.gserviceaccount.com.
+```
+
+**#8** — 6 tham chiếu `deploy.txt` đổi thành "README section 3.4, step N".
+
+### Tài liệu đã cập nhật
+
+- `README.md` — **ADR-024** (outage không được bịa growth) và **ADR-025** (issuance token giáo viên) vào bảng + phần chi tiết; sửa 4 tuyên bố trong §5 Security (double-click race, rate-limit coverage, HMAC scoped tokens kèm *stated scope*, ADR-017 summary row).
+- `docs/failure_matrix.md` — cột tín hiệu viết lại; dòng #6 sửa; thêm dòng **12b** (rate-limit coverage gap) và **14b** (teacher token issuance); tiêu đề 17 → 19 component.
+- `docs/data_lifecycle_and_privacy.md` — STRIDE dòng **S** (issuance vs forgery), **T** (đính chính tuyên bố double-click), **D** (parent-note).
+- `docs/For_notebookLM.md` — thêm ADR-022→025 vào danh sách ADR; Slide 6 thêm 1 dòng nêu vì sao metric không tự thổi phồng.
+- `docs/gcp_evidence_checklist.md` — thêm 2 lệnh tự kiểm chứng **(7b)** push mode + OIDC service account, **(7c)** `POST /` trả 401 khi không auth.
+- `docs/submission_checklist.md` — bỏ tham chiếu `deploy.txt`.
+
+### Còn lại
+
+**0 Blocker mở.** Còn 5 ngày tới deadline 31/08 17:00 PT.
+
+⚠️ **Việc bắt buộc trước khi quay video:** các sửa đổi trên **chưa được deploy** — revision live `00033-v2f` vẫn chạy code cũ (vẫn bịa breakthrough khi Vertex sập). Chạy:
+```bash
+python scripts/deploy_to_cloud_run.py
+python scripts/doctor.py     # kỳ vọng: 9 PASS / 2 WARN / 0 FAIL, dòng Pub/Sub in "delivery is PUSH"
+```
+
+---
+
+## BÁO CÁO TỪ SENIOR STAFF ENGINEER (Independent Review)
+
+Dưới đây là các lỗ hổng/phát hiện nghiêm trọng vẫn còn sót lại mà ban giám khảo có thể dễ dàng kiểm chứng được:
+
+| Lỗi / Vấn đề | Chi tiết | Mức độ | Bằng chứng (Command / Code) |
+|---|---|---|---|
+| Mất cấu hình `EDUAGENT_TEACHER_PASSWORD` khi deploy | Script `deploy_to_cloud_run.py` đã vô tình bỏ quên việc mount / inject biến môi trường `EDUAGENT_TEACHER_PASSWORD`. Kết quả là Cloud Run luôn fallback về `EDUAGENT_MOCK_PASSWORD` (`eduagent2026`). Điều này phá vỡ cơ chế bảo mật (tách biệt mật khẩu) và khiến hệ thống thực tế trên Production không hề an toàn như tuyên bố. | **Blocker** | `grep EDUAGENT_TEACHER_PASSWORD scripts/deploy_to_cloud_run.py` (0 kết quả). |
+| Rate Limiter (IP Spoofing) | Trong `rate_limit.py`, `client_key` lấy IP từ `x_forwarded_for.split(",")[0]`. Cloud Run nối thêm IP thực vào **cuối** chuỗi header. Do đó, địa chỉ đầu tiên là do client kiểm soát. Kẻ tấn công có thể giả mạo header `X-Forwarded-For: 1.2.3.4` (hoặc random IP) liên tục để lách hoàn toàn Rate Limit. | **Blocker** | Kẻ tấn công dùng `curl -H "X-Forwarded-For: random_ip"` bypass giới hạn. |
+| Per-Instance Rate Limiter trên Cloud Run | Do sử dụng cơ chế token bucket in-memory, ở chế độ scale `--max-instances 5`, mỗi instance Cloud Run sẽ có một Rate Limiter riêng biệt, khiến khả năng bảo vệ trở nên vô nghĩa với các request phân tán. | **Cần kiểm tra** | Source code ở `rate_limit.py` ghi nhận nhược điểm nhưng thực tế lại đang được dùng như biện pháp chính để chặn Cost-DoS. |
+
+

@@ -155,6 +155,18 @@ python scripts/doctor.py   # "No plaintext credentials on Cloud Run" must PASS
 gcloud run services describe eduagent-class-aggregator --region asia-southeast1 --format=json \
   | python -c 'import json,sys; [print(("PLAINTEXT " if "value" in e else "secretRef  ")+e["name"]) for e in json.load(sys.stdin)["spec"]["template"]["spec"]["containers"][0].get("env",[])]'
 
+# (7b) Audit Wave 16 -- prove the pipeline is genuinely PUSH, not a pull script
+#      run beside the demo (this was the Wave 8 blocker; doctor.py now fails on it)
+gcloud pubsub subscriptions describe class-aggregator-sub \
+  --format='value(pushConfig.pushEndpoint,pushConfig.oidcToken.serviceAccountEmail)'
+# expected: <service URL>/   eduagent-sa@project-4fc36103-f4ca-49f6-883.iam.gserviceaccount.com
+# empty output = PULL mode = nothing is actually event-driven
+
+# (7c) Audit Wave 16 -- the push endpoint really rejects an unauthenticated caller (ADR-014)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL/" \
+  -H 'Content-Type: application/json' -d '{"message":{"data":"e30="}}'
+# expected: 401
+
 # (8) Verify Firestore TTL policy is ACTIVE
 gcloud firestore fields ttls list --collection-group=debate_sessions
 

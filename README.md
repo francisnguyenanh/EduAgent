@@ -193,7 +193,7 @@ python scripts/run_eval_suite.py --strict
 
 ## 4. Architecture Decision Records (ADRs)
 
-The table below summarizes our 23 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
+The table below summarizes our 25 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
 
 | ID | Title | Category | Core Decision & Impact |
 |:---:|---|---|---|
@@ -213,16 +213,18 @@ The table below summarizes our 23 architectural decisions. Expand any section fo
 | **ADR-014** | Push Webhook OIDC Verify | Security | Implements application-layer Google OIDC signature verification for Pub/Sub push endpoints. |
 | **ADR-015** | Firestore Durable Sessions | State | Backs active debates with Firestore documents and a 3-second bounded in-memory read cache. |
 | **ADR-016** | Fail-Fast Session Secret | Security | Container aborts boot on Cloud Run if default repo signing secret is detected. |
-| **ADR-017** | Token-Bucket Rate Limiter | Security | In-process token-bucket rate limiting on debate endpoints to mitigate cost-DoS attacks. |
+| **ADR-017** | Token-Bucket Rate Limiter | Security | In-process token-bucket rate limiting on every Gemini-invoking route (debate endpoints + parent-note) and login, to mitigate cost-DoS. |
 | **ADR-018** | Student Route Authorization | Security | Requires Bearer token on all student debate routes; derives ownership from session state. |
 | **ADR-019** | Falsifiable Sabotage Evals | Evaluation | Enforces that every eval benchmark is verified capable of failing via code sabotage tests. |
 | **ADR-020** | Secret Manager Mounting | Security | Mounts all credentials via `--update-secrets` (`secretKeyRef`), banning cleartext env vars. |
 | **ADR-021** | Deterministic Graph Bridge | Architecture | Purpose-built FunctionNode debate bridge preserving deterministic persona orchestration. |
 | **ADR-022** | Metacognitive Session Boundary | Integrity | Restricts `/api/debate/reflect` to terminal completed sessions; prevents multi-submit score farming. |
 | **ADR-023** | Least-Squares Trend Volatility | Analytics | Introduces linear OLS regression for score trends; flags 'volatile' trajectory as priority signal. |
+| **ADR-024** | Outage Cannot Mint Growth | Data Integrity | An unevaluated reflection records as `resolved=false`; `growth_bonus` clamped; the claim is transactional. |
+| **ADR-025** | Teacher Token Issuance Gate | Security | Separates teacher login from the public demo passcode, closing the issuance half of ADR-016. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-023)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-025)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
 * **Context:** Google's `gmail.compose` OAuth scope officially permits message transmission (`messages.send()`).
@@ -269,9 +271,19 @@ The table below summarizes our 23 architectural decisions. Expand any section fo
 * **Decision:** Implement Least-Squares Linear Regression for slope analysis. Introduce the `volatile` trend category when slope is flat but variance exceeds threshold, adding `1.5` to teacher priority weights.
 * **Rejected Alternative:** Labeling dips as 'declining' which misreports trajectory details to teachers and parents.
 
+### ADR-024: A Model Outage May Not Mint Cognitive Growth
+* **Context:** `/api/debate/reflect` handled `LLMGenerationError` by setting `resolved=True, growth_bonus=0.5` and persisting it. A Vertex AI outage therefore wrote a permanent, teacher-visible "Cognitive Breakthrough" into `student_profiles` for any string at all, and the UI rendered the identical green panel, so nothing on screen distinguished it from a real evaluation. This is precisely what ADR-008 exists to forbid ("never write a fabricated score on an LLM outage") — the rule had simply never been applied to `breakthrough_count`. A test asserted the wrong behaviour, which is why a green suite did not catch it.
+* **Decision:** Three parts. (1) A degraded evaluation records the attempt with `resolved=false`, which is what stops `merge_reflection_into_profile()` incrementing `breakthrough_count` or `total_growth_bonus`; the response always carries `degraded`, and the UI renders an amber "Not evaluated yet" panel. (2) `growth_bonus` is clamped to `GROWTH_BONUS_MIN/MAX` rather than trusted from the model, whose 0.0–1.0 range lived only in the schema's prose `description` — the same discipline as ADR-007 refusing the model's self-reported OCR `confidence`. (3) Since ADR-022 spends the claim *before* the LLM call, a degraded run hands it back (`release_reflection_claim()`) so an outage is retryable instead of permanent.
+* **Rejected Alternative:** Returning 503 and persisting nothing — loses the audit trail that the student did submit a revision, which the teacher-facing record should keep.
+
+### ADR-025: Teacher Token Issuance, Not Just Forgery
+* **Context:** ADR-016 described the exposure it closed as "anyone who reads the repo can mint a `role=teacher` token for any `class_id` and read that class's student PII". It closed the **forgery** route by moving the signing key to Secret Manager. It left the **issuance** route wide open: `POST /api/auth/login` returns a teacher token for any `class_id` to anyone presenting the shared demo passcode, and that passcode is published in this README. One `curl` reproduced the exact outcome ADR-016 claimed to have prevented.
+* **Decision:** Teacher login honours its own `EDUAGENT_TEACHER_PASSWORD` when configured, falling back to the shared passcode so a laptop demo and `pytest` need no setup. Because the fallback is the judging default, `scripts/doctor.py` reports a WARN naming the exposure whenever teacher login still accepts the student passcode — the state is visible before a demo rather than discovered by a judge. Password comparison also moved to `hmac.compare_digest`.
+* **Rejected Alternative:** Adding a real IdP (out of scope for judging), or silently leaving the claim as-is — a security table that overstates its coverage costs more credibility than the gap itself.
+
 </details>
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26) — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review (2026-08-26) — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
 
 ---
 
@@ -281,11 +293,11 @@ The table below summarizes our 23 architectural decisions. Expand any section fo
 * **Gmail Least-Privilege AST Gate:** OAuth scope restricted to `gmail.compose` only. AST parser check (`tests/test_gmail_mcp_never_sends.py`) fails build if `.send()` is ever written. Human teacher compose-and-send action is the sole transmission path.
 * **Append-Only Audit Trails:** Google Sheets API integration exports only `append_audit_row()`, protecting historic metrics against truncation or modification.
 * **Webhook OIDC Authentication:** FastAPI `/` push subscriber verifies Google's Pub/Sub OIDC signature (`google.oauth2.id_token.verify_oauth2_token`) against Google public keys, rejecting unauthenticated web requests.
-* **HMAC Scoped Tokens:** Role-based token models with passcode-access prevent cross-class leakage (IDOR mitigation). Students and classes verify that `token.class_id == target.class_id`.
+* **HMAC Scoped Tokens (ADR-013 / ADR-025):** Role-based tokens prevent cross-class leakage between authenticated sessions (IDOR mitigation): every `/api/classes/*` route verifies `token.class_id == target.class_id`. **Stated scope:** token *scoping* is not token *issuance*. Unless `EDUAGENT_TEACHER_PASSWORD` is set, teacher login accepts the same demo passcode published in this README, so anyone reading it can obtain a teacher token for any class. That is a deliberate judging convenience, reported as a WARN by `scripts/doctor.py`, not a property this system claims to have.
 * **Fail-Fast Secret Management (ADR-016):** Signing secret must reside in Secret Manager; container refuses to boot on Cloud Run if the default public secret is detected.
-* **Reflection Validation (ADR-022):** Reflection submissions read original fields directly from server-side Firestore records rather than client payloads. Reflect flags are set *before* calling Vertex AI, preventing double-click race condition exploits.
+* **Reflection Validation (ADR-022 / ADR-024):** Reflection submissions read original fields directly from server-side Firestore records rather than client payloads. The `has_reflected` claim is a **Firestore transaction** (`claim_reflection_atomically()`), so the check and the write cannot be split by a concurrent request on another instance — the earlier read-then-write version of this claim did not actually prevent the concurrent double-submit it was documented as preventing. A degraded (unevaluated) reflection never increments `breakthrough_count`, and the model's `growth_bonus` is clamped to 0.0–1.0.
 * **Student-Facing Authorization (ADR-018):** All debate routes enforce Bearer authentication; student tokens are scoped to their own IDs, and `/turn` resolves metadata from the session before looking it up, avoiding timing/existence oracle vulnerabilities.
-* **Token-Bucket Rate Limiting (ADR-017):** IP-bucket limiters throttle login (5 burst, 1/10s sustained) and debate routes (10 burst, 1/5s sustained) to bound Vertex AI cost exposures.
+* **Token-Bucket Rate Limiting (ADR-017):** IP-bucket limiters throttle login (5 burst, 1/10s sustained) and every Gemini-invoking route — the five debate endpoints and `/api/parent-note` (10 burst, 1/5s sustained) — to bound Vertex AI cost exposures. Buckets are per-process, so the real ceiling is `N_instances x capacity`; this stops casual abuse and is not a distributed limiter.
 * **Active Firestore TTL Policy:** Debate sessions write an explicit `expire_at` field and enforce an ACTIVE GCP TTL policy on that field to automatically delete documents after 24 hours.
 * **Layered Prompt-Injection Sanitization:** Regex filters execute at both the HTTP boundary and the ADK graph node layer, stripping tags (`<system>`, `Ignore instructions`, role hijacking) from typed texts, OCR, and replies.
 * **Input Boundaries & Payload Constraints:** Upper limits gate all inputs: max 20k characters for essays, 4k for replies, 10MB for base64 handwriting images, and 100KB for Google Doc fetches.
