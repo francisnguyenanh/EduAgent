@@ -119,6 +119,72 @@ def test_score_trend_stagnant_within_flat_band():
     assert profile["score_trend"] == "stagnant"
 
 
+def test_score_trend_flags_a_mid_window_collapse_as_volatile():
+    """ĐỢT 15 #3 -- the audit's case: [10, 0, 10].
+
+    The slope over that window is genuinely flat, so the old code called it
+    "stagnant" and it contributed 0 to the teacher's ranking -- ranked exactly
+    like a student holding a steady 5. A whole essay collapsing is not the same
+    thing as a steady score, so it now reports "volatile": the slope keeps its
+    honest meaning and the swing gets its own signal rather than being reported
+    as a decline the student is not actually in.
+    """
+    profile = empty_profile(name="An", class_id="c1")
+    for i, score in enumerate((10, 0, 10), start=1):
+        profile = merge_essay_into_profile(
+            profile, essay_id=f"e{i}", timestamp=f"t{i}", persona_used="skeptic", scores=_scores(score), weakness_detected=[]
+        )
+    assert profile["score_trend"] == "volatile"
+
+
+def test_score_trend_volatile_outranks_stagnant_for_the_teacher():
+    """The point of the classification: it has to change the ordering, or the
+    teacher never sees the collapse. (ĐỢT 15 #3)"""
+    from datetime import datetime, timezone
+
+    from eduagent.aggregator.priority_engine import compute_priority
+
+    now = datetime.now(timezone.utc)
+    ts = now.isoformat()
+
+    def _profile(trend):
+        return {"score_trend": trend, "essay_history": [{"timestamp": ts, "weakness_detected": []}], "persona_streak": {}}
+
+    volatile = compute_priority(_profile("volatile"), now=now, common_fallacy_set=set())
+    stagnant = compute_priority(_profile("stagnant"), now=now, common_fallacy_set=set())
+    declining = compute_priority(_profile("declining"), now=now, common_fallacy_set=set())
+
+    assert volatile["total"] > stagnant["total"]
+    # ...but a sustained decline is still the stronger signal of the two.
+    assert declining["total"] > volatile["total"]
+
+
+def test_score_trend_small_swing_is_still_stagnant():
+    """The volatility band must not fire on ordinary essay-to-essay noise."""
+    profile = empty_profile(name="An", class_id="c1")
+    for i, score in enumerate((5, 6, 5), start=1):
+        profile = merge_essay_into_profile(
+            profile, essay_id=f"e{i}", timestamp=f"t{i}", persona_used="skeptic", scores=_scores(score), weakness_detected=[]
+        )
+    assert profile["score_trend"] == "stagnant"
+
+
+def test_trend_slope_is_a_real_regression_over_a_wider_window():
+    """ĐỢT 15 #3: the old `sum(diffs)/len(diffs)` telescoped to
+    (last - first) / (n - 1), so every essay between the ends cancelled out.
+    At TREND_WINDOW == 3 the two agree; this pins the difference that appears
+    the moment the window widens, so the bug cannot come back by config change.
+    """
+    from eduagent.memory.student_profile import _trend_slope
+
+    # Same endpoints, different shape in between -- the telescoping version read
+    # 1.0 for both, because everything but the endpoints cancelled out.
+    assert _trend_slope([0.0, 0.0, 0.0, 0.0, 4.0]) == 0.8
+    assert _trend_slope([0.0, 1.0, 2.0, 3.0, 4.0]) == 1.0
+    # A pure straight line must still read exactly as its slope.
+    assert _trend_slope([1.0, 2.0, 3.0, 4.0]) == 1.0
+
+
 def test_student_feedback_is_stored_per_essay():
     profile = empty_profile(name="An", class_id="c1")
     profile = merge_essay_into_profile(

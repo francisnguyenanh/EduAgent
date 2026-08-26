@@ -238,6 +238,23 @@ def check_firestore_ttl_policy() -> tuple[str, str]:
 _CREDENTIAL_ENV_VARS = ("EDUAGENT_SESSION_SECRET", "GMAIL_COMPOSE_TOKEN_JSON", "SHEETS_TOKEN_JSON")
 
 
+def _gcloud_executable() -> str | None:
+    """Absolute path to the gcloud launcher, or None if it is not on PATH.
+
+    ĐỢT 15 #5: this used to be the bare string "gcloud" passed to
+    subprocess.run(). On Windows gcloud installs as `gcloud.cmd` (a batch
+    wrapper) and there is no extension-less `gcloud` binary, so CreateProcess
+    raised FileNotFoundError and the whole doctor run died with a traceback
+    instead of reporting the check. shutil.which() resolves the real launcher on
+    every platform (it honours PATHEXT on Windows), which also removes the
+    shell=True workaround -- passing a user-influenced command line through a
+    shell for a preflight script is not a trade worth making.
+    """
+    import shutil
+
+    return shutil.which("gcloud") or shutil.which("gcloud.cmd")
+
+
 def check_no_plaintext_credentials_on_cloud_run() -> tuple[str, str]:
     """ĐỢT 14 / ADR-020: verify no credential is stored as a plain env var on the
     deployed revision.
@@ -251,14 +268,21 @@ def check_no_plaintext_credentials_on_cloud_run() -> tuple[str, str]:
     import json
     import subprocess
 
-    probe = subprocess.run(
-        [
-            "gcloud", "run", "services", "describe", "eduagent-class-aggregator",
-            "--region", "asia-southeast1", "--format=json",
-        ],
-        capture_output=True,
-        text=True,
-    )
+    gcloud = _gcloud_executable()
+    if gcloud is None:
+        return WARN, "gcloud CLI not found on PATH -- cannot inspect the live revision's env vars. Skipped."
+
+    try:
+        probe = subprocess.run(
+            [
+                gcloud, "run", "services", "describe", "eduagent-class-aggregator",
+                "--region", "asia-southeast1", "--format=json",
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        return WARN, f"Could not execute gcloud ({exc}) -- skipped."
     if probe.returncode != 0:
         return WARN, "Could not describe the Cloud Run service (not deployed, or gcloud not authorized) -- skipped."
 

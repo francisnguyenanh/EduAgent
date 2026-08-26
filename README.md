@@ -1,4 +1,4 @@
-# eduagent — Autonomous Socratic Collaborative Partner
+# EduAgent — Autonomous Socratic Collaborative Partner
 
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-Vertex_AI_%7C_Cloud_Run_%7C_Firestore-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/)
 [![Google ADK2](https://img.shields.io/badge/Framework-Google_ADK2-34A853?logo=google&logoColor=white)](https://github.com/google/agent-development-kit)
@@ -11,7 +11,7 @@
 
 ---
 
-`eduagent` is a two-tier agentic platform built on **Google ADK2 + Gemini (Vertex AI) + Firestore + Pub/Sub + Cloud Run**:
+`EduAgent` is a two-tier agentic platform built on **Google ADK2 + Gemini (Vertex AI) + Firestore + Pub/Sub + Cloud Run**:
 
 * **Tier 1 (Per-Student Adaptive Socratic Partner):** Students submit essays via typed text, Google Doc share links, or photos of messy handwriting. Instead of rewriting or handing out answers, the agent actively challenges them through an adversarial Socratic debate loop.
   * **Autonomous Persona Routing:** Diagnoses reasoning weaknesses across 4 cognitive dimensions (*Evidence, Counterarguments, Logical Coherence, Scope*) and routes to specialized personas (`The Skeptic`, `The Devil's Advocate`, `The Nitpicker`, `The Expander`).
@@ -193,7 +193,7 @@ python scripts/run_eval_suite.py --strict
 
 ## 4. Architecture Decision Records (ADRs)
 
-The table below summarizes our 21 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
+The table below summarizes our 23 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
 
 | ID | Title | Category | Core Decision & Impact |
 |:---:|---|---|---|
@@ -213,14 +213,16 @@ The table below summarizes our 21 architectural decisions. Expand any section fo
 | **ADR-014** | Push Webhook OIDC Verify | Security | Implements application-layer Google OIDC signature verification for Pub/Sub push endpoints. |
 | **ADR-015** | Firestore Durable Sessions | State | Backs active debates with Firestore documents and a 3-second bounded in-memory read cache. |
 | **ADR-016** | Fail-Fast Session Secret | Security | Container aborts boot on Cloud Run if default repo signing secret is detected. |
-| **ADR-017** | Token-Bucket Rate Limiter | Security | In-process token bucket rate limiting on debate endpoints to mitigate cost-DoS attacks. |
+| **ADR-017** | Token-Bucket Rate Limiter | Security | In-process token-bucket rate limiting on debate endpoints to mitigate cost-DoS attacks. |
 | **ADR-018** | Student Route Authorization | Security | Requires Bearer token on all student debate routes; derives ownership from session state. |
 | **ADR-019** | Falsifiable Sabotage Evals | Evaluation | Enforces that every eval benchmark is verified capable of failing via code sabotage tests. |
 | **ADR-020** | Secret Manager Mounting | Security | Mounts all credentials via `--update-secrets` (`secretKeyRef`), banning cleartext env vars. |
 | **ADR-021** | Deterministic Graph Bridge | Architecture | Purpose-built FunctionNode debate bridge preserving deterministic persona orchestration. |
+| **ADR-022** | Metacognitive Session Boundary | Integrity | Restricts `/api/debate/reflect` to terminal completed sessions; prevents multi-submit score farming. |
+| **ADR-023** | Least-Squares Trend Volatility | Analytics | Introduces linear OLS regression for score trends; flags 'volatile' trajectory as priority signal. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-021)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-023)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
 * **Context:** Google's `gmail.compose` OAuth scope officially permits message transmission (`messages.send()`).
@@ -257,21 +259,40 @@ The table below summarizes our 21 architectural decisions. Expand any section fo
 * **Decision:** Mount all credentials (`EDUAGENT_SESSION_SECRET`, `GMAIL_COMPOSE_TOKEN_JSON`, `SHEETS_TOKEN_JSON`) via Secret Manager references (`--update-secrets`). Enforced via AST build tests and preflight checks.
 * **Rejected Alternative:** Inlining JSON strings into environment files.
 
+### ADR-022: Metacognitive Reflection Session Boundary
+* **Context:** Metacognitive reflection must be bound to a completed Socratic debate. Previously, client bodies passed raw identifiers, allowing infinite score farming loops.
+* **Decision:** `/api/debate/reflect` receives only `session_id` + `revised_claim`. Session state is resolved server-side. Once reflected, the session is marked completed and cannot be claimed again.
+* **Rejected Alternative:** Deleting the session immediately upon turn 3, which loses audit logs and forces client trust.
+
+### ADR-023: Linear Least-Squares Regression and Volatility Verdict
+* **Context:** Score trends previously used telescoping averages, reading only the first and last essays. Volatile dip patterns like `[10, 0, 10]` were labeled stagnant (adding 0 to teacher priority index).
+* **Decision:** Implement Least-Squares Linear Regression for slope analysis. Introduce the `volatile` trend category when slope is flat but variance exceeds threshold, adding `1.5` to teacher priority weights.
+* **Rejected Alternative:** Labeling dips as 'declining' which misreports trajectory details to teachers and parents.
+
 </details>
+
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26) — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
 
 ---
 
 ## 5. Security & Threat Model
 
-* **Principle of Least Privilege (IAM):** Dedicated service account (`eduagent-sa`) restricted to 5 granular roles: `datastore.user`, `pubsub.editor`, `aiplatform.user`, `cloudtrace.agent`, `logging.logWriter`.
-* **Human-in-the-Loop Email Gate:** The agent only creates Gmail drafts (`gmail_mcp.py`). AST test `tests/test_gmail_mcp_never_sends.py` strictly prevents automated sending.
-* **Append-Only Audit Trails:** Google Sheets client exposes only `append_audit_row()`, preventing modification or truncation of historical logs.
-* **Multi-Tenant Isolation & IDOR Prevention:** Stateless HMAC-signed tokens bind user identity and class scope (`auth.py`). All student and class endpoints enforce `token.class_id == target.class_id`.
-* **Fail-Fast Secret Management:** Production revisions mandate Secret Manager references; unconfigured signing keys fail at container boot (ADR-016, ADR-020).
-* **Token-Bucket Rate Limiting:** Per-IP token buckets throttle incoming debate and login requests, mitigating cost-DoS threats against Vertex AI quotas (ADR-017).
-* **Multi-Layer Prompt Injection Sanitization:** Regex sanitizers strip malicious tokens (`<system>`, `Ignore instructions`, role hijacking) at both REST API ingress and ADK graph nodes.
-* **Bounded Ingress Payloads:** Maximum size bounds enforced on all inputs: 20k characters for essays, 4k for debate turns, 10MB for handwriting images.
-* **Automated Data Lifecycle:** Session documents in Firestore enforce an ACTIVE 24-hour TTL policy.
+* **Dedicated Service Account (`eduagent-sa`):** Exactly 5 granular IAM roles: `datastore.user`, `pubsub.editor`, `aiplatform.user`, `cloudtrace.agent`, and `logging.logWriter`. Zero Owner/Editor credentials.
+* **Gmail Least-Privilege AST Gate:** OAuth scope restricted to `gmail.compose` only. AST parser check (`tests/test_gmail_mcp_never_sends.py`) fails build if `.send()` is ever written. Human teacher compose-and-send action is the sole transmission path.
+* **Append-Only Audit Trails:** Google Sheets API integration exports only `append_audit_row()`, protecting historic metrics against truncation or modification.
+* **Webhook OIDC Authentication:** FastAPI `/` push subscriber verifies Google's Pub/Sub OIDC signature (`google.oauth2.id_token.verify_oauth2_token`) against Google public keys, rejecting unauthenticated web requests.
+* **HMAC Scoped Tokens:** Role-based token models with passcode-access prevent cross-class leakage (IDOR mitigation). Students and classes verify that `token.class_id == target.class_id`.
+* **Fail-Fast Secret Management (ADR-016):** Signing secret must reside in Secret Manager; container refuses to boot on Cloud Run if the default public secret is detected.
+* **Reflection Validation (ADR-022):** Reflection submissions read original fields directly from server-side Firestore records rather than client payloads. Reflect flags are set *before* calling Vertex AI, preventing double-click race condition exploits.
+* **Student-Facing Authorization (ADR-018):** All debate routes enforce Bearer authentication; student tokens are scoped to their own IDs, and `/turn` resolves metadata from the session before looking it up, avoiding timing/existence oracle vulnerabilities.
+* **Token-Bucket Rate Limiting (ADR-017):** IP-bucket limiters throttle login (5 burst, 1/10s sustained) and debate routes (10 burst, 1/5s sustained) to bound Vertex AI cost exposures.
+* **Active Firestore TTL Policy:** Debate sessions write an explicit `expire_at` field and enforce an ACTIVE GCP TTL policy on that field to automatically delete documents after 24 hours.
+* **Layered Prompt-Injection Sanitization:** Regex filters execute at both the HTTP boundary and the ADK graph node layer, stripping tags (`<system>`, `Ignore instructions`, role hijacking) from typed texts, OCR, and replies.
+* **Input Boundaries & Payload Constraints:** Upper limits gate all inputs: max 20k characters for essays, 4k for replies, 10MB for base64 handwriting images, and 100KB for Google Doc fetches.
+* **Output Hygiene & XSS Mitigation:** Web dashboard applies strict contextual HTML escaping (`esc()`) and `textContent` DOM nodes to prevent stored XSS attacks.
+* **Validator Independence:** `nodes/validator.py` is strictly decoupled from LLM invocation code, ensuring generating model never acts as its own validator.
+* **Credential Secret Mounting (ADR-020):** Secrets are mounted via Secret Manager references (`secretKeyRef`), avoiding cleartext in revision specs. Enforced via AST build checks and preflight deployment blocks.
+* **Secret Hygiene:** Environment templates, JSON keys, and keys directories are strictly gitignored and verified clean via regex log scans.
 
 ---
 

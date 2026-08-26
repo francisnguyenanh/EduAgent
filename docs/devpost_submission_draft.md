@@ -1,4 +1,4 @@
-# Devpost Submission Draft — eduagent
+# Devpost Submission Draft — EduAgent
 
 > [!NOTE]
 > **Instructions for Use:**
@@ -7,13 +7,20 @@
 
 ---
 
+> *"AI was born in the cloud. The question is what we choose to grow with it."*
+>
+> **EduAgent**
+> *Powered by Gemini & Google Cloud*
+
+---
+
 ## 1. Project Name
-**eduagent — Collaborative Partner Socratic Mentor**
+**EduAgent — Collaborative Partner Socratic Mentor**
 
 ---
 
 ## 2. Elevator Pitch
-eduagent is a persistent Socratic partner that challenges students instead of correcting them, **mutates a persistent learning profile** from each student's history, and turns individual learning signals into prioritized, human-approved actions for teachers.
+EduAgent is a persistent Socratic partner that challenges students instead of correcting them, **mutates a persistent learning profile** from each student's history, and turns individual learning signals into prioritized, human-approved actions for teachers.
 
 ---
 
@@ -25,7 +32,7 @@ Overcrowded classrooms often leave a single teacher responsible for 40+ students
 Our philosophy is the exact opposite: **we use AI to teach students how not to depend on AI.** We wanted to build a persistent, collaborative Socratic partner that challenges student reasoning, remembers their logical blind spots over time, and acts as a force multiplier for overloaded educators.
 
 ## What it does
-`eduagent` operates across two highly decoupled, robust tiers:
+EduAgent operates across two highly decoupled, robust tiers:
 
 ### Tier 1: Per-Student Adaptive Socratic Pipeline
 1. **Multimodal Messy Ingestion:** A student can submit typed text, a public Google Doc share link, or upload a photo of a handwritten essay. The system routes images through **Gemini Vision OCR**, transcribing verbatim (preserving original misspellings/cross-outs) and running a **deterministic self-consistency cross-check** (transcribing twice and calculating string similarity) to detect transcription inconsistencies and keep low-confidence OCR out of the scoring pipeline.
@@ -45,7 +52,7 @@ Every graded essay publishes an asynchronous Pub/Sub event. A Cloud Run subscrib
 
 
 ## How we built it
-We built eduagent as a new system around Google ADK and GCP services:
+We built EduAgent as a new system around Google ADK and GCP services:
 - **Google ADK2 (Agent Development Kit):** We defined a clean `Workflow` using `FunctionNode` blocks and real conditional routing (`ctx.route` to branch between typed text and OCR).
 - **Gemini 3.5 & 3.7 Flash:** Accessed through Vertex AI using service-account credentials. Flash is used for OCR, summarization, and debate loops; Gemini 3.7 Flash is leveraged for the heavier teacher digest synthesis.
 - **Google Cloud Firestore (Native Mode):** Serves as our persistent long-term Memory Bank, executing atomic transactional updates during profile mutations.
@@ -78,7 +85,7 @@ We built eduagent as a new system around Google ADK and GCP services:
 - **Audit the code against the documentation, in that direction.** Every serious defect we found in our final pass came from reading a claim in a doc and then grepping for the mechanism it described. Two mitigations in our own STRIDE table did not exist in the source at all.
 - **A fix has a blast radius, and it is usually smaller than the bug's.** Our two worst findings were both cases of patching the instance in front of us rather than the class of problem: we secured one secret and left two, and we authenticated the teacher routes and left the student routes. Both times the second half was found by someone else. The durable countermeasure is not more diligence, it is a check that runs without us — which is why each of those fixes shipped with a test or a `doctor.py` check attached.
 
-## What's next for eduagent
+## What's next for EduAgent
 - **Teacher Intervention Feedback Loop:** Track whether a teacher's chosen intervention actually improved that student's later outcomes, closing the loop `Observe → Diagnose → Intervene → Measure → Adapt`.
 - **Longitudinal Class Analytics:** Detect whether systemic reasoning weaknesses decline across multiple assignments over a term, not just within one essay cycle.
 - **Production Hardening:** Formalize data retention windows, accessibility, multi-school tenancy, and load testing under real concurrent traffic.
@@ -161,3 +168,10 @@ We do not use an LLM to judge whether our system passed its safety and behaviora
 * **Which Google AI Models did you use?** Gemini 3.5 Flash (for OCR, summarization, and debate loops) and Gemini 3.7 Flash (for teacher digest synthesis).
 * **Link to a piece of content (blog, podcast, video) for bonus points:** `[Insert published technical blog URL]`
 * **Link to a social media post for bonus points:** `[Insert published X / LinkedIn post URL with hashtag #AllThingsAgenticHackathon]`
+
+---
+
+**Don't give every student an answer. Give every student a reason to think.**
+
+**EduAgent**
+*Powered by Gemini & Google Cloud*

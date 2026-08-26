@@ -94,7 +94,7 @@ def test_evict_stale_sessions_removes_only_expired_ones():
         interactive.get_debate_session("old")
 
 
-def test_complete_debate_session_scores_and_ends_session():
+def test_complete_debate_session_scores_and_closes_session():
     interactive.start_debate_session(
         "s7", persona_id="skeptic", essay_text="Homework is bad.", summary={}, class_id="c1", student_id="stu1"
     )
@@ -113,8 +113,13 @@ def test_complete_debate_session_scores_and_ends_session():
     assert result["student_feedback"] == "Nice work overall."
     assert result["degraded"] is False
     assert result["class_id"] == "c1"
-    with pytest.raises(interactive.UnknownSessionError):
-        interactive.get_debate_session("s7")
+
+    # ĐỢT 15 #2: the session is kept after scoring, flagged terminal, so the
+    # metacognitive reflection can be bound to a debate that really happened.
+    # It is closed all the same -- no further turn may be taken.
+    assert interactive.get_debate_session("s7")["completed"] is True
+    with pytest.raises(interactive.DebateSessionComplete):
+        interactive.step_debate_turn("s7", "let me try again")
 
 
 def test_start_debate_session_lazily_evicts_stale_sessions():

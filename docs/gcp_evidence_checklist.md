@@ -10,6 +10,38 @@
 
 ---
 
+## 🔗 QUICK REFERENCE URLs — GCP Console Shortcuts
+
+| Service | URL | 
+|---|---|
+| **Cloud Run Service** | https://console.cloud.google.com/run/detail/asia-southeast1/eduagent-class-aggregator?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Run Logs** | https://console.cloud.google.com/run/detail/asia-southeast1/eduagent-class-aggregator/logs?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Run Metrics** | https://console.cloud.google.com/run/detail/asia-southeast1/eduagent-class-aggregator/metrics?project=project-4fc36103-f4ca-49f6-883 |
+| **Pub/Sub Topic** | https://console.cloud.google.com/cloudpubsub/topic/detail/essay-evaluated?project=project-4fc36103-f4ca-49f6-883 |
+| **Pub/Sub Subscription & DLQ** | https://console.cloud.google.com/cloudpubsub/subscription/detail/class-aggregator-sub?project=project-4fc36103-f4ca-49f6-883 |
+| **Pub/Sub DLQ Topic** | https://console.cloud.google.com/cloudpubsub/topic/detail/essay-evaluated-dlq?project=project-4fc36103-f4ca-49f6-883 |
+| **Firestore Database** | https://console.cloud.google.com/firestore/databases/default/data?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Trace Explorer** | https://console.cloud.google.com/traces/list?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Logging** | https://console.cloud.google.com/logs/query?project=project-4fc36103-f4ca-49f6-883 |
+| **Secret Manager** | https://console.cloud.google.com/security/secret-manager?project=project-4fc36103-f4ca-49f6-883 |
+| **Firestore TTL Policies** | (Use CLI: `gcloud firestore fields ttls list --collection-group=debate_sessions`) |
+
+---
+
+## ⏱️ VIDEO TIMELINE — GCP Screen Capture Sequence
+
+| Timestamp | Video Content | GCP Evidence to Capture |
+|---|---|---|
+| **0:00 - 0:45** | Problem statement & handwritten essay OCR upload | *(No GCP required)* |
+| **0:45 - 1:30** | Student Socratic Socratic debate live run (1 turn) | *(No GCP required)* |
+| **1:30 - 2:15** | **Show Cloud Run logs & latency** | `02_cloud_run_service_metrics.png` + `05_cloud_logging_structured.png` |
+| **2:15 - 2:45** | **Show Firestore data mutation** | `03_firestore_live_data.png` |
+| **2:45 - 3:15** | **Show Pub/Sub event-driven workflow & DLQ** | `04_pubsub_topic_dlq.png` |
+| **3:15 - 3:45** | **Show Cloud Trace span hierarchy waterfall** | `01_cloud_trace_e2e_spans.png` |
+| **3:45 - 4:00** | Conclusion & live `.run.app` URL display | *(No GCP required, show URL overlay)* |
+
+---
+
 ## 🚀 Execution Plan for Generating Live Telemetry & Traces
 
 Run the following scenarios to generate real traffic, logs, traces, and Firestore records before capturing evidence:

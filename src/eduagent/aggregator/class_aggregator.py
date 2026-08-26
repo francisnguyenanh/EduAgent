@@ -83,6 +83,11 @@ def _priority_badges(reason: dict) -> str:
         badges.append('<span style="background:#fde2e1;color:#9b1c1c;padding:2px 8px;border-radius:10px;font-size:12px;">stuck streak</span>')
     if reason.get("score_trend") == "declining":
         badges.append('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:12px;">declining</span>')
+    if reason.get("score_trend") == "volatile":
+        # ĐỢT 15 #3 -- a collapse-and-recover inside the trend window. Its own
+        # badge, not folded into "declining": the teacher is being told the
+        # scores are unstable, not that they are heading down.
+        badges.append('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:12px;">volatile</span>')
     if reason.get("inactivity_days", 0) >= 14:
         badges.append('<span style="background:#e5e7eb;color:#374151;padding:2px 8px;border-radius:10px;font-size:12px;">inactive</span>')
     if reason.get("shared_fallacies"):

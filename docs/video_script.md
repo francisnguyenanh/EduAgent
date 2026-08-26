@@ -1,4 +1,4 @@
-# Video Script: eduagent — The Autonomous Collaborative Partner for Critical Thinking
+# Video Script: EduAgent — The Autonomous Collaborative Partner for Critical Thinking
 
 > **Target Duration:** Exactly 3:45 - 4:00 minutes  
 > **Narrative Arch:** Problem → Single-Student Adaptive Trajectory (Proof of Partner) → Autonomous Teacher Synthesis → Production Architecture & Deterministic Eval Suite → Vision.
@@ -56,11 +56,14 @@ timeline
 ---
 
 ### 🎬 Scene 1: The Problem & The Paradigm Shift (0:00 - 0:40)
-* **Visual:** Split screen. Left side: standard chatbot generating a ready-made essay (label: *Passive Consumer*). Right side: eduagent logo and dashboard (label: *Autonomous Collaborative Partner*).
+* **Visual:** Split screen. Left side: standard chatbot generating a ready-made essay (label: *Passive Consumer*). Right side: EduAgent logo and dashboard (label: *Autonomous Collaborative Partner*).
+  `[VISUAL: cloud-to-classroom transition, or fallback to text-only "EduAgent" reveal — let the image carry the geography idea, voice carries the words.]`
 * **Voiceover:**
-  > *"Generative AI in classrooms today suffers from a fundamental paradox: instead of teaching students how to think, it does the thinking for them. Students submit prompts; AI spits out answers.*  
-  > *Meet **eduagent** — an autonomous, adaptive Collaborative Partner built on Google Cloud and Gemini that **refuses to write the essay**. Instead, it acts as a relentless Socratic adversary, challenging logical fallacies, tracking long-term cognitive growth across weeks, and autonomously synthesizing class-wide insights for teachers."*
-  > (Say "adaptive" or "autonomous," not "multi-agent" — personas are routed within one ADK `Workflow` of `FunctionNode`s, `src/eduagent/graph/tier1_pipeline.py`, not separate agent instances. "Multi-agent" invites a "where are the agents?" question we can't answer well.)
+  > *"AI was born in the cloud. But its power shouldn't be limited by geography. Every student, rural or urban, deserves a partner that makes them think.*
+  >
+  > *Generative AI in classrooms today suffers from a fundamental paradox: instead of teaching students how to think, it does the thinking for them. Students submit prompts; AI spits out answers.*  
+  > *Meet **EduAgent** — an autonomous, Collaborative Partner built on Google Cloud and Gemini that **refuses to write the essay**. Instead, it acts as a relentless Socratic adversary, challenging logical fallacies, tracking long-term cognitive growth across weeks, and autonomously synthesizing class-wide insights for teachers."*
+  > (Say "autonomous," not "multi-agent" — personas are routed within one ADK `Workflow` of `FunctionNode`s, `src/eduagent/graph/tier1_pipeline.py`, not separate agent instances. "Multi-agent" invites a "where are the agents?" question we can't answer well. "adaptive" is also trimmed here per timing note above.)
 
 ---
 
@@ -69,7 +72,7 @@ timeline
   - Socratic Turn 1 pops up: *"What empirical data accounts for battery manufacturing and regional power grids?"*
   - Show live debate exchange across 3 turns. Notice how the Independent Validator guarantees **ZERO answer leaks**.
 * **Visual 2 (1:00 - 1:25):** Fast forward to Essay 2. Binh repeats an unsupported claim.
-  - Show the **Long-Term Memory in action**: eduagent recognizes Binh's repeated struggle, rotates persona to **The Expander**, and explicitly injects memory context:  
+  - Show the **Long-Term Memory in action**: EduAgent recognizes Binh's repeated struggle, rotates persona to **The Expander**, and explicitly injects memory context:  
     > *"This student has previously struggled with: unsupported claim. Probing broader context..."*
 * **Visual 3 (1:25 - 1:45):** **Metacognitive Reflection Node**.
   - Binh submits a revised thesis statement based on the debate.
@@ -101,21 +104,17 @@ timeline
   - Say "**50 out of 50 deterministic test cases passed**", never "the system is 100% correct" — a judge will hear the difference.
   - **Strongest 15 seconds available if you have them:** *"We audited our own suite and found twelve tests that could not fail — one group was asserting that eight minus two is at least four. We rewired them to production code and now prove every case can go red by breaking the code on purpose."* This is a credibility gain, not an admission; it is also the core of the bonus blog post (ADR-019).
 * **Visual 3 (3:20 - 3:30):** **Memory A/B Experiment Evidence**.
-  - Show comparative graph: Stateless Baseline (repeated stagnant persona) vs. eduagent Persistent Memory (0% repeated stagnant interventions, 100% contextual adaptation).
+  - Show comparative graph: Stateless Baseline (repeated stagnant persona) vs. EduAgent Persistent Memory (0% repeated stagnant interventions, 100% contextual adaptation).
 
 ---
 
 ### 🎬 Scene 5: Conclusion & Live Verification (3:30 - 4:00)
 * **Visual:** Live Cloud Run URL, GitHub repository badge, and Judge 1-Click Showcase screen.
+  `[VISUAL: "EduAgent / Powered by Gemini & Google Cloud" text lockup appears on screen simultaneously with QR code.]`
 * **Voiceover:**
-  > *"eduagent bridges the gap between individual Socratic coaching and scalable classroom intelligence. Fully deployed on Google Cloud, MIT/Apache-licensed, and verified with deterministic rigor.*  
-  > *Experience eduagent live at our Cloud Run showcase link today."*
-
----
-
-## 📋 Production Checklist for Video Recording
-
-- [x] Full HD 1080p / 60 FPS recording.
-- [x] Clear voiceover audio with subtitle captions.
-- [x] Live Cloud Run instance demonstrated (no localhost-only captures).
-- [x] Displaying OpenTelemetry Trace graph and Eval report summary table.
+  > *"EduAgent bridges the gap between individual Socratic coaching and scalable classroom intelligence. Fully deployed on Google Cloud, MIT/Apache-licensed, and verified with deterministic rigor.*
+  >
+  > *Don't give every student an answer. Give every student a reason to think.*
+  >
+  > *Experience EduAgent live at our Cloud Run showcase link today."*
+  > (CTA "Experience EduAgent..." remains the final line.)

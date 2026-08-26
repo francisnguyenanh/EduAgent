@@ -94,10 +94,14 @@ def test_submit_debate_turn_marks_complete_at_max_turns():
     assert turn_finish["result"]["show_score_radar"] is True
     assert turn_finish["result"]["scores"]["logical_coherence"] == 5
 
-    # complete_debate_session already ran inside submit_debate_turn on completion --
-    # the session should no longer be reachable.
-    with pytest.raises(interactive.UnknownSessionError):
-        interactive.get_debate_session(session_id)
+    # complete_debate_session already ran inside submit_debate_turn on completion.
+    # ĐỢT 15 #2: the session is kept (flagged `completed`) so the metacognitive
+    # reflection that follows can be tied to a debate that really happened -- it
+    # is torn down by submit_reflection(), or by the 24h TTL if the student never
+    # reflects. It must be terminal all the same.
+    assert interactive.get_debate_session(session_id)["completed"] is True
+    with pytest.raises(interactive.DebateSessionComplete):
+        interactive.step_debate_turn(session_id, "extra")
 
 
 def test_submit_debate_turn_hides_scores_when_radar_disabled():

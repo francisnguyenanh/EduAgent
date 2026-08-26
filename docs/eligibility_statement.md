@@ -1,6 +1,6 @@
 # Hackathon Eligibility & Originality Boundary Statement
 
-> **Submission Certification:** The **eduagent** project was developed entirely from scratch for the All Things Agentic Hackathon, adhering 100% to originality guidelines, architectural transparency, and open-source licensing standards.
+> **Submission Certification:** The **EduAgent** project was developed entirely from scratch for the All Things Agentic Hackathon, adhering 100% to originality guidelines, architectural transparency, and open-source licensing standards.
 
 ---
 
@@ -8,7 +8,7 @@
 
 To provide full transparency to judges, the table below delineates the baseline prior art from the novel architectural contributions developed during this hackathon:
 
-| Area | Baseline / Prior Art | Novel eduagent Contribution |
+| Area | Baseline / Prior Art | Novel EduAgent Contribution |
 |---|---|---|
 | **Interaction Paradigm** | Single-turn Q&A chatbot / direct answer generator | **Autonomous 3-Turn Socratic Debate Loop** with 4 specialized pedagogical personas and a strict zero-answer-leak constraint. |
 | **Agent Memory** | Stateless (each session is isolated and forgotten) | **Persistent Long-Term Memory (Firestore)**: Tracks longitudinal student profiles across weeks, resolves persona stagnation streaks, and computes empirical score trajectories. |

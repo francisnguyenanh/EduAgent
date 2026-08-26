@@ -37,10 +37,12 @@ from eduagent.api import (
     DebateStartFromImageRequest,
     DebateStartRequest,
     DebateTurnRequest,
+    DebateNotComplete,
     DebateReflectionRequest,
     LoginError,
     LoginRequest,
     ParentNoteRequest,
+    ReflectionAlreadySubmitted,
     UnknownSessionError,
     class_priority,
     get_debate_session,
@@ -358,18 +360,39 @@ async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
 @app.post("/api/debate/reflect")
 async def api_debate_reflect(request: Request, payload: DebateReflectionRequest) -> dict:
     """ĐỢT 7: Metacognitive self-correction loop -- evaluates the student's
-    post-debate revised claim and updates their profile with growth bonus."""
+    post-debate revised claim and updates their profile with growth bonus.
+
+    ĐỢT 15 #2: the payload is now session-only, so this route resolves ownership
+    the same way /api/debate/turn does -- from the session's own stored
+    student_id/class_id, authenticating BEFORE the lookup so the 403-vs-404
+    split cannot be used to probe which session ids are real.
+    """
     _enforce_rate_limit(request, debate_limiter)
     # This route WRITES a growth bonus into a student profile, so it needs the
     # same ownership check as the debate routes -- otherwise anyone could
     # inflate any student's breakthrough_count.
-    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
+    _require_token(request.headers.get("authorization"))
+    try:
+        session = get_debate_session(payload.session_id)
+    except UnknownSessionError:
+        raise HTTPException(status_code=404, detail=f"Unknown session_id: {payload.session_id!r}")
+    _verify_student_auth(
+        student_id=session.get("student_id", ""),
+        class_id=session.get("class_id", ""),
+        authorization=request.headers.get("authorization"),
+    )
     try:
         return submit_reflection(payload)
+    except UnknownSessionError:
+        raise HTTPException(status_code=404, detail=f"Unknown session_id: {payload.session_id!r}")
+    except ReflectionAlreadySubmitted as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except DebateNotComplete as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
-        _logger.exception("submit_reflection failed for student_id=%s", payload.student_id)
+        _logger.exception("submit_reflection failed for session_id=%s", payload.session_id)
         raise HTTPException(status_code=502, detail="Failed to evaluate reflection -- check server logs.")
 
 

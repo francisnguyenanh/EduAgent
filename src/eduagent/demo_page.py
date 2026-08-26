@@ -654,10 +654,6 @@ async function startDebate() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     sessionId = data.session_id;
-    lastExtractedSummary = data.summary;
-    if (document.getElementById('essay_text').value) {
-      lastEssayInput = document.getElementById('essay_text').value;
-    }
     document.getElementById('student-form').classList.add('hidden');
     document.getElementById('debate-area').classList.remove('hidden');
     const turnsEl = document.getElementById('turns');
@@ -741,9 +737,6 @@ const AXIS_LABELS = {
   counterargument_handling: 'Counterargument handling',
   scope_awareness: 'Scope awareness',
 };
-
-let lastExtractedSummary = null;
-let lastEssayInput = '';
 
 function createRadarChartSvg(scores) {
   if (!scores) return '';
@@ -845,15 +838,15 @@ async function submitReflection() {
   statusEl.textContent = 'Evaluating cognitive revision...';
   feedbackEl.classList.add('hidden');
   try {
-    const fallacy = (lastExtractedSummary && lastExtractedSummary.fallacies_draft && lastExtractedSummary.fallacies_draft[0]) || 'Hasty generalization in initial premise';
+    // ĐỢT 15 #2: session_id only. The student_id, class_id, original essay and
+    // the fallacy being revised all come off the server's session record now --
+    // this client used to supply them, which let anyone POST a reflection with
+    // no debate behind it and collect the growth bonus.
     const resp = await fetch('/api/debate/reflect', {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        student_id: auth ? auth.user_id : 'c1_stu01',
-        class_id: auth ? auth.class_id : 'c1',
-        original_fallacy: fallacy,
-        original_claim: lastEssayInput,
+        session_id: sessionId,
         revised_claim: text,
       }),
     });
@@ -879,8 +872,6 @@ async function submitReflection() {
 
 function resetForNewEssay() {
   sessionId = null;
-  lastExtractedSummary = null;
-  lastEssayInput = '';
   document.getElementById('turns').innerHTML = '';
   document.getElementById('complete-radar').innerHTML = '';
   document.getElementById('complete-feedback').textContent = '';
@@ -919,7 +910,6 @@ async function presetScenario(scenario) {
     showTab('student');
     clearEssayForm();
     document.getElementById('essay_text').value = 'Electric vehicles completely eliminate environmental pollution because they have zero tailpipe emissions. Therefore, if everyone switches to electric cars immediately, global climate change will be entirely solved.';
-    lastEssayInput = document.getElementById('essay_text').value;
   } else if (scenario === 'ocr') {
     await autoLogin('c1_stu01', 'student', 'An');
     enterApp();

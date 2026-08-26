@@ -6,7 +6,7 @@
 
 ## 1. Summary Evaluation Metrics
 
-| Metric | Branch A: Stateless Baseline (No Memory) | Branch B: eduagent (Long-Term Memory) | Pedagogical Impact |
+| Metric | Branch A: Stateless Baseline (No Memory) | Branch B: EduAgent (Long-Term Memory) | Pedagogical Impact |
 |---|:---:|:---:|---|
 | **Intervention Persona Sequence** | `skeptic → skeptic → nitpicker` | `skeptic → expander → nitpicker` | Branch B adapts and rotates personas upon detecting recurring weaknesses |
 | **Repeated Stagnant Interventions** | **1 occurrence** (Repeated Skeptic) | **0 occurrences** (0% repetition) | Eliminates repetitive questioning angles that cause student fatigue |
@@ -39,5 +39,5 @@
 
 ## 3. Architectural Takeaways
 
-1. **Empirical Proof of Adaptive Partnership:** `eduagent` demonstrates the defining characteristic of a *Collaborative Partner*: the agent **adapts from past interactions** to adjust its pedagogical strategy rather than functioning as a stateless chatbot responding in isolation.
+1. **Empirical Proof of Adaptive Partnership:** `EduAgent` demonstrates the defining characteristic of a *Collaborative Partner*: the agent **adapts from past interactions** to adjust its pedagogical strategy rather than functioning as a stateless chatbot responding in isolation.
 2. **Deterministic Governance:** Persona routing and Priority Index calculations remain completely **deterministic (ZERO LLM-as-judge)**, guaranteeing 100% reproducibility and auditability.
