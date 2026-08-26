@@ -2572,3 +2572,142 @@ bố sẵn có trở thành đúng — độc lập với việc điều lệ c�
 **Cần bạn tự xác nhận** trong điều lệ chính thức trên Devpost mục "Submission Requirements" xem có
 yêu cầu giấy phép OSI-approved không. Nếu có mà thiếu, đó là rủi ro **loại tư cách**, không phải mất
 điểm — nên đáng 2 phút kiểm tra.
+
+---
+
+## ĐỢT 21 — ĐỐI CHIẾU VỚI ĐIỀU LỆ CHÍNH THỨC (2026-08-27) 🔴
+
+> Lần đầu tiên có toàn văn Official Rules. Đối chiếu từng yêu cầu với trạng thái thật của repo.
+> **Kết quả: 3 vấn đề nghiêm trọng, không cái nào là lỗi code.** Một cái là rủi ro **loại tư cách**,
+> một cái đang làm mất tới **0.6 điểm (10% thang điểm tối đa)**.
+
+### 🔴 BLOCKER #1 — Repo PRIVATE và chưa cấp quyền cho ban giám khảo (rủi ro LOẠI TƯ CÁCH)
+
+**Điều lệ §6 Submission Requirements:**
+> *"Include a URL to your private or public code repository (on Github, Gitlab or Bitbucket) to show
+> how your project was built. **If private, must give access to testing@devpost.com and
+> cloudhackathons@google.com**"*
+
+**Trạng thái thật:**
+
+```
+$ gh repo view francisnguyenanh/EduAgent --json visibility,isPrivate
+{"isPrivate":true,"visibility":"PRIVATE"}
+
+$ gh api repos/francisnguyenanh/EduAgent/collaborators --jq '.[] | "\(.login) | \(.role_name)"'
+francisnguyenanh | admin          <-- chỉ có chủ repo
+
+$ gh api repos/francisnguyenanh/EduAgent/invitations
+(rỗng)                            <-- KHÔNG có lời mời nào đang chờ
+```
+
+Đây là mục **Stage One (pass/fail)**. Không đạt = trượt ngay vòng đầu, bất kể code tốt đến đâu.
+
+**Thêm một lý do nữa để chuyển sang public:** tiêu chí chấm **Demo & Production Readiness (30%)**
+viết nguyên văn:
+> *"Does the **public GitHub repository** feature a clean architecture diagram and reproducible setup instructions?"*
+
+Tức ngay cả khi cấp quyền cho 2 email, repo private vẫn có thể bị trừ điểm ở trục 30% này.
+
+**Đề xuất: chuyển repo sang PUBLIC.** An toàn — ĐỢT 16 đã quét toàn bộ git history:
+
+```
+git log -p --all | grep -inE "refresh_token|AIza[0-9A-Za-z_-]{30}|BEGIN PRIVATE KEY|private_key"
+-> rỗng
+```
+
+`.env`, `secrets/`, `deploy.txt` đều trong `.gitignore` và chưa từng vào history. Passcode demo
+trong README là **cố ý công bố** (ADR-025). Khoá ký nằm ở Secret Manager, không ở repo.
+
+**Nếu vẫn muốn giữ private**, phải mời **cả hai**: `testing@devpost.com` và `cloudhackathons@google.com`.
+
+⚠️ **Đây là việc tác động ra bên ngoài tài khoản GitHub của bạn — cần bạn tự quyết và tự thực hiện.**
+
+### 🔴 BLOCKER #2 — Commit chưa được push, GitHub không có ĐỢT 19–20
+
+```
+$ git status -sb
+## master...origin/master [ahead 1]
+```
+
+Giám khảo đọc GitHub, không đọc máy bạn. Toàn bộ công việc ĐỢT 19–20 (doctor đọc revision thật,
+`smoke_live.py`, sửa video script, coverage 86%, diagram có OIDC) **chưa lên GitHub**.
+
+### 🔴 BLOCKER #3 — Ghi sai luật bonus, đang tự bỏ 0.6 điểm
+
+**`docs/submission_checklist.md:43-45` hiện ghi:**
+> *"## 5. Bonus Criteria Verification (Bonus Stage Three — **+0.4 Points**)"*
+> *"⚠️ Scoring Note (Audit Wave 14): Official hackathon rules designate two quantifiable bonus items:
+> published technical blog (+0.2) and social media post (+0.2). **Additional model usage is noted
+> under optional contributions without separate numeric points.**"*
+
+**Điều lệ §8 Stage Three viết nguyên văn:**
+> *"Earn **0.2 bonus points for each additional Google AI model** successfully integrated (such as
+> Gemma, Veo, or Lyria), **up to a maximum of 0.6 total bonus points**"*
+
+Ghi chú của ĐỢT 14 **sai**. Phép cộng khớp với chính điều lệ: *"Each Submission will receive a Final
+score from 1 to 6"* = **5 (Stage Two) + 1.0 bonus** (0.2 blog + 0.2 social + **0.6 model**).
+
+Dự án đang tin trần bonus là **+0.4**, tức tự đặt trần điểm ở **5.4/6.0**.
+
+**Trạng thái thật:** `grep -rniE "gemma|veo|lyria|imagen" src/ scripts/` → **rỗng**. Chưa có model phụ nào.
+
+**0.6 điểm = 10% thang điểm.** Đây là cơ hội tăng điểm lớn nhất còn lại, và dự án đã **chủ động từ
+chối nó dựa trên một cách đọc sai điều lệ**.
+
+### 🟡 #4 — Architecture Diagram là mục BẮT BUỘC, không phải trang trí
+
+**Điều lệ §6:**
+> *"Include an **Architecture Diagram** with a clear visual representation of your system (e.g., how
+> Gemini connects to your backend, database, and frontend)."*
+
+Xác nhận `assets/architecture_diagram.png` còn thiếu (ĐỢT 19 #9) là **mục Stage One**, không phải
+việc nice-to-have. README đã có diagram mermaid — chỉ cần export thành ảnh cho form Devpost.
+
+### ✅ #5 — LICENSE: điều lệ KHÔNG yêu cầu (đính chính ĐỢT 20)
+
+Đã đọc toàn văn. Điều lệ nhắc "license" ở đúng hai chỗ, **không chỗ nào** bắt bạn phát hành dự án
+của mình theo giấy phép mã nguồn mở:
+
+1. **§6 Intellectual Property:** *"An Entrant may submit a Submission that includes the use of open
+   source software..., provided the Entrant **complies with applicable open source licenses**"* —
+   tức tuân thủ giấy phép của thư viện bạn **dùng**, không phải cấp phép cho code bạn **viết**.
+2. **§12:** bạn cấp cho Google một license để đánh giá và quảng bá — điều này tự động có khi nộp bài.
+
+**Kết luận: file `LICENSE` KHÔNG bắt buộc theo điều lệ.** Ở ĐỢT 20 tôi nói "có thể là yêu cầu bắt
+buộc, cần bạn kiểm tra" — nay kiểm tra được thì **không phải**. Lý do tạo nó vẫn đúng nguyên vẹn
+nhưng là lý do **nội bộ**: `docs/eligibility_statement.md` tự khẳng định *"open-source licensing
+standards"* và *"License: MIT License / Open Source"*, còn README §9 trỏ tới `LICENSE` — file khi
+đó không tồn tại. Tạo file làm cho một tuyên bố sẵn có trở thành đúng. Không mất gì, không phải
+điều kiện dự thi.
+
+### 🟢 #6 — Hạn xin credit $150: 28/08 12:00 PT (còn 1 ngày)
+
+§5: *"request $150 in Google Cloud credits by completing this form by **August 28th at 12:00 pm PT**
+or while supplies last"*. Chỉ liên quan nếu bạn chưa xin và đang lo chi phí.
+
+### ✅ Đã đối chiếu — ĐẠT
+
+| Yêu cầu §6 | Trạng thái |
+|---|---|
+| Gemini 3.5 trở lên qua Gemini API/Vertex AI | ✅ `gemini-3.5-flash` + `gemini-3.7-flash` qua Vertex |
+| ≥1 Google Agent Framework (ADK/GenAI SDK/Antigravity/GenKit) | ✅ `google.adk` — 9 `FunctionNode` |
+| ≥1 Google Cloud infra service | ✅ Cloud Run + Firestore + Pub/Sub |
+| URL hosted project | ✅ `.run.app` live, `smoke_live.py` 13/13 |
+| Spin-up instructions trong README.md | ✅ §3, đã test chạy được không cần credential GCP |
+| Video ≤ 4 phút, English, chứng minh backend chạy trên Google Cloud | ✅ script Scene 4 có Cloud Run + Trace + `.run` URL |
+| Hỗ trợ tiếng Anh | ✅ UI 0 ký tự tiếng Việt hardcode (ĐỢT 14) |
+| New project + disclose pre-existing code | ✅ README §1 Mandatory Disclosure (CritiqAI) |
+| Testing: cấp credential đăng nhập | ✅ README §Judge Quickstart, 2 passcode |
+| Category: Collaborative Partner | ✅ |
+| Deadline 31/08 17:00 PT | ✅ còn 4 ngày |
+
+### Việc cần làm — xếp theo mức rủi ro
+
+| # | Việc | Ai làm | Rủi ro nếu bỏ qua |
+|---|---|---|---|
+| 1 | **Chuyển repo sang public** (hoặc mời 2 email BGK) | **Bạn** — tác động tài khoản GitHub | **Trượt Stage One** |
+| 2 | **Push commit lên GitHub** | Bạn duyệt, tôi chạy được | Giám khảo không thấy ĐỢT 19–20 |
+| 3 | **Sửa ghi chú bonus sai + cân nhắc tích hợp 1–3 model phụ** | Tôi sửa doc được ngay; tích hợp cần bạn quyết | Mất tới **0.6 điểm** |
+| 4 | Export `assets/architecture_diagram.png` | Bạn | Thiếu mục Stage One |
+| 5 | Diễn tập buổi quay + `smoke_live.py` trước khi ghi | Bạn | Hỏng demo |

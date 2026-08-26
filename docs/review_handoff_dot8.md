@@ -9,7 +9,7 @@
 ## 1. Context & Scoring Rubric
 
 - Repo: `eduagent` — two-tier system (ADK2 + Gemini/Vertex AI + Firestore + Pub/Sub + Cloud Run).
-- Score Matrix: Innovation & Utility 40%, Architectural Discipline 30%, **Demo & Readiness 30%**, Bonus +0.4 pts.
+- Score Matrix: Innovation & Utility 40%, Architectural Discipline 30%, **Demo & Readiness 30%**, Bonus up to **+1.0 pts** (blog +0.2, social +0.2, additional Google AI models +0.2 each up to +0.6). *Corrected in Wave 21 — this line previously said +0.4, which under-counted the model bonus and led us to skip it.*
 - Target Deadline: August 31, 5:00 PM PT (with target submission 24h prior).
 
 ---

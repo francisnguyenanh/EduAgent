@@ -40,11 +40,38 @@
 - [ ] Fill in Hosted URL (`https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`), demo credentials (student `eduagent2026`, teacher `eduagent-teacher-2026`), Google SDK list, Cloud Services, and attach the architecture diagram image.
 - [ ] **Teammates:** Confirm all team members have accepted invitations on Devpost before final submission.
 
-## 5. Bonus Criteria Verification (Bonus Stage Three — **+0.4 Points**)
+## 5. Bonus Criteria Verification (Bonus Stage Three — up to **+1.0 Points**)
 
-> ⚠️ **Scoring Note (Audit Wave 14):** Official hackathon rules designate two quantifiable bonus items: published technical blog (**+0.2**) and social media post (**+0.2**). Additional model usage is noted under optional contributions without separate numeric points.
+> ⚠️ **Scoring Correction (Audit Wave 21 — the Wave 14 note here was wrong).** Wave 14 recorded that
+> "additional model usage is noted under optional contributions without separate numeric points."
+> The official rules say the opposite, verbatim:
+>
+> > *"Earn **0.2 bonus points for each additional Google AI model** successfully integrated (such as
+> > Gemma, Veo, or Lyria), **up to a maximum of 0.6 total bonus points**"*
+>
+> The arithmetic corroborates it: the rules state *"Each Submission will receive a Final score from
+> 1 to 6"*, which is 5 (Stage Two maximum) **+ 1.0 bonus** = 0.2 blog + 0.2 social + **0.6 models**.
+>
+> Acting on the Wave 14 note capped this submission at **5.4/6.0** and led us to decline extra-model
+> work on the belief it scored nothing. `grep -rniE "gemma|veo|lyria|imagen" src/ scripts/` returns
+> zero, so **0.6 points — 10% of the maximum — is currently unclaimed.**
 - [ ] **Technical Blog Post:** Publish the article from `docs/blog_post_draft.md` on Medium/Dev.to (or LinkedIn Article) publicly, including the statement: *"Written for the All Things Agentic Hackathon"* (+0.2 pts).
 - [ ] **Social Media Post:** Publish a project summary with demo link on LinkedIn or X with hashtag `#AllThingsAgenticHackathon` (+0.2 pts).
+- [ ] **Additional Google AI models (+0.2 each, max +0.6):** currently **0 integrated**. Any genuine
+      integration counts — the rules name Gemma, Veo and Lyria as examples. Candidates that fit this
+      project without inventing a feature nobody asked for:
+  - [ ] **Gemma** (open model, servable on Vertex AI) for a deterministic, cheap local task the
+        Flash models currently do — e.g. the language detection in `skills/language.py` or a
+        first-pass fallacy tag. Best fit: it is a real architectural decision (small open model for
+        a narrow task, Flash for reasoning), not a bolt-on.
+  - [ ] **Imagen** to render the teacher's 15-minute mini-lesson as a printable classroom visual.
+  - [ ] **Veo** or **Lyria** — honestly the weakest fit for this product; only pursue if the other
+        two prove awkward, and do not ship a feature that exists purely to farm the bonus.
+
+> **Discipline note:** integrate only what survives the same standard as every other feature here —
+> it must do real work, have a test, and be defensible in Q&A. A judge who asks "why is Veo in an
+> essay-debate app?" and hears "for bonus points" costs more on the 40% Innovation criterion than
+> the 0.2 is worth.
 - [ ] **Models Disclosed:** `gemini-3.5-flash` (default) and `gemini-3.7-flash` (heavy model for Teacher Digest). Declared accurately under technologies used.
 - [ ] Add blog and social post links to the Devpost form.
 
