@@ -2711,3 +2711,102 @@ or while supplies last"*. Chỉ liên quan nếu bạn chưa xin và đang lo ch
 | 3 | **Sửa ghi chú bonus sai + cân nhắc tích hợp 1–3 model phụ** | Tôi sửa doc được ngay; tích hợp cần bạn quyết | Mất tới **0.6 điểm** |
 | 4 | Export `assets/architecture_diagram.png` | Bạn | Thiếu mục Stage One |
 | 5 | Diễn tập buổi quay + `smoke_live.py` trước khi ghi | Bạn | Hỏng demo |
+
+---
+
+## ĐỢT 22 — KHẢO SÁT KHẢ THI: lấy lại 0.6 điểm bonus model (2026-08-27)
+
+> Câu hỏi: *"có cải thiện được không?"* — Trả lời: **được +0.2 một cách chính đáng, ngay hôm nay.**
+> Còn +0.4 nữa thì **khuyến nghị KHÔNG lấy** — lý do bên dưới, và lý do đó là điểm số, không phải sự lười.
+
+### Đã kiểm chứng bằng lệnh chạy thật (không suy đoán)
+
+**1. Model nào thực sự tồn tại trong project này**
+
+```
+location=global           : 25 model, TẤT CẢ đều là Gemini. Không Gemma/Imagen/Veo/Lyria.
+location=us-central1      : 130 model — gemma/gemma2/gemma3/gemma4/shieldgemma2/paligemma/
+                            medgemma/codegemma..., veo-2.0/3.0/3.1, lyria-002/lyria-3
+location=asia-southeast1  : 9 model — gemma3, gemma4
+```
+
+**Imagen KHÔNG xuất hiện ở bất kỳ location nào** → loại khỏi danh sách ứng viên (ĐỢT 21 có nhắc
+Imagen cho mini-lesson; nay xác nhận không dùng được).
+
+**2. Nhưng "có trong danh mục" ≠ "gọi được".** Thử gọi thật từng cái:
+
+```
+asia-southeast1/gemma3              -> 404 NOT_FOUND        (Model Garden, phải tự deploy endpoint GPU)
+asia-southeast1/gemma4              -> 404 NOT_FOUND        (nt)
+us-central1/shieldgemma2            -> 404 NOT_FOUND        (nt)
+us-central1/gemma-4-26b-a4b-it-maas -> 400 FAILED_PRECONDITION
+    "...is only available via global endpoint."
+```
+
+Thông báo lỗi cuối chỉ thẳng đường đi. Thử lại trên `global`:
+
+```
+global/gemma-4-26b-a4b-it-maas -> 'OK'     ✅ GỌI ĐƯỢC
+```
+
+**Đây là kết quả quan trọng nhất:** Gemma 4 26B chạy được **ngay bây giờ**, dạng MaaS (trả theo
+token như Gemini), trên **đúng endpoint `global` mà dự án đang dùng** (`GOOGLE_CLOUD_LOCATION=global`).
+**Không cần GPU, không cần deploy endpoint, không đổi hạ tầng, không thêm region.**
+
+**3. Gemma làm được gì — đo thật, không đọc tài liệu**
+
+| Năng lực | Kết quả |
+|---|---|
+| **Đọc ảnh (multimodal)** | ✅ Transcribe đúng ảnh chữ viết tay thật `notes_socialmedia.jpg` (983KB): *"BRAINSTORMING: MODERN ISSUES Oct 26, 2023 / Doomscrolling constantly — never a break... / Affecting sleep? YES!"* |
+| **`response_mime_type: application/json`** | ✅ Trả về JSON |
+| **`response_schema` có được ép không** | ❌ **KHÔNG.** Yêu cầu schema `{resolved, reason}` nhưng Gemma trả `{"answer": "..."}` — nó sinh JSON nhưng **không tuân thủ schema** |
+| **Độ ổn định** | ⚠️ Lần đầu dính `429 RESOURCE_EXHAUSTED — "The request queue is full."`, 5 lần thử lại sau đó OK 5/5. **MaaS dùng chung capacity → 429 là chuyện bình thường, phải coi là best-effort** |
+
+### Kết luận thiết kế — hai ràng buộc trên tự chọn ra phương án
+
+Hai dữ kiện đo được ở trên loại bỏ phương án tôi định đề xuất ban đầu, và chỉ ra phương án tốt hơn:
+
+- Gemma **không ép schema** → **loại** ý tưởng "Gemma làm giám khảo thứ hai cho verdict reflection"
+  (chỗ đó cần `{resolved: bool, growth_bonus: float}` đáng tin — vá bằng parse phòng thủ là xây
+  trên nền yếu).
+- Gemma **đọc ảnh tốt** và **so sánh OCR dùng `difflib` trên văn bản thô, không cần schema nào cả**.
+
+**→ Phương án đúng: Gemma 4 làm lượt transcribe THỨ HAI trong cross-check của ADR-007.**
+
+**Vì sao đây là kỹ thuật thật, không phải gắn thêm để lấy điểm.** ADR-007 hiện chạy **cùng một model
+hai lần** rồi so bằng `difflib`. Cách đó bắt được **nhiễu ngẫu nhiên**, nhưng **không** bắt được lỗi
+hệ thống: nếu Gemini Vision đọc sai một nét chữ theo cùng một kiểu ở cả hai lượt — đúng thứ ADR-007
+mô tả (*"self-report confidence: high while transcribing completely unrelated, fabricated content"*)
+— thì hai lượt **cùng sai giống nhau** và cross-check báo "đồng thuận". Dùng **model khác họ** cho
+lượt hai làm cho hai lỗi **không còn tương quan**. Đây là bản nâng cấp đúng nghĩa của chính luận
+điểm ADR-007, không phải tính năng mới.
+
+**Câu trả lời khi giám khảo hỏi "vì sao có Gemma ở đây?"** — có sẵn, và nó thuyết phục:
+> *"ADR-007 nói chúng tôi không tin confidence model tự khai, nên transcribe hai lần và đối chiếu.
+> Nhưng hai lượt của cùng một model chia sẻ cùng điểm mù — một lỗi đọc hệ thống sống sót qua cả hai.
+> Lượt hai nay chạy Gemma 4, một họ model khác, nên cross-check bắt được cả lỗi tương quan. Gemma
+> MaaS dùng chung capacity nên có thể 429; khi đó hệ thống lùi về lượt hai cùng-model như cũ thay vì
+> chặn việc nộp bài."*
+
+**Chi phí:** không thêm hạ tầng. Cùng endpoint, cùng credential, cùng ADC. Thay đúng một lời gọi
+trong `nodes/ocr.py::transcribe_essay_image()` + fallback + test.
+
+### Vì sao KHÔNG đuổi nốt +0.4
+
+Còn lại chỉ **Veo** (video) và **Lyria** (nhạc) — Imagen không tồn tại trong project. Không có cách
+nào để một app tranh luận văn nghị luận dùng model sinh video/nhạc mà không lộ ra là gắn cho có.
+Điều lệ chấm **Innovation & Operational Utility 40%** hỏi *"Does the system eliminate real-world
+friction?"*. Một giám khảo hỏi *"vì sao có Veo trong app này?"* và nghe *"để lấy 0.2"* sẽ trừ ở trục
+40% nhiều hơn 0.4 kiếm được ở Stage Three. **Trần điểm thực tế nên nhắm: 5.8/6.0, không phải 6.0.**
+
+Đây cũng đúng bài học ĐỢT 7 đã ghi: *"ưu tiên làm cho cái đang có KHÔNG THỂ BỊ BẺ GÃY hơn là thêm
+tính năng nửa vời"*.
+
+### Đề xuất — cần bạn quyết
+
+- [ ] **Tích hợp Gemma 4 làm lượt OCR thứ hai (ADR-028)** — ~45 phút: sửa `nodes/ocr.py`, thêm
+      fallback khi Gemma 429/lỗi, test + sabotage, ADR mới, cập nhật README/failure_matrix, deploy,
+      chạy lại `demo_real_handwriting_ocr.py` trên 12 ảnh thật để xác nhận không thoái hoá.
+      **Đổi lại: +0.2 điểm và một luận điểm kiến trúc mạnh hơn hiện tại.**
+      ⚠️ Lưu ý: ảnh hưởng beat OCR trong video (hiện đo 22.5s). Phải đo lại độ trễ sau khi đổi.
+- [ ] ~~Veo / Lyria / Imagen~~ — **khuyến nghị bỏ.** Lý do ở trên.
