@@ -1247,3 +1247,63 @@ async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 ```
+
+## ĐỢT 15 — 26/08/2026 — Senior Staff Engineer Audit (Blockers & Innovations)
+
+### Tóm tắt 1 dòng cho mỗi vấn đề
+
+| # | Vấn đề | Mức độ | Trạng thái | File/dòng |
+|---|---|---|---|---|
+| 1 | OAuth Token của Gmail và Sheets đã hết hạn (`invalid_grant`) | 🔴 Blocker | Chưa làm | `secrets/gmail_compose_only_token.json` |
+| 2 | Lỗ hổng farm điểm: `submit_reflection` nhận input từ client, không liên kết `session_id` | 🔴 Blocker | Chưa làm | `src/eduagent/api.py:443` |
+| 3 | Bug Toán học `_score_trend`: Phép tính bỏ qua hoàn toàn các bài essay ở giữa (Telescoping sum) | 🟡 Cần kiểm tra | Chưa làm | `src/eduagent/memory/student_profile.py:56` |
+| 4 | Lỗ hổng Prompt Injection trong `submit_reflection`: `original_claim` không được sanitize | 🔴 Blocker | Chưa làm | `src/eduagent/api.py:468` |
+| 5 | `doctor.py` bị crash `FileNotFoundError` khi chạy check gcloud trên Windows | 🟢 Nice-to-have | Chưa làm | `scripts/doctor.py:254` |
+
+### Chi tiết từng vấn đề
+
+#### 1. OAuth Token của Gmail và Sheets đã hết hạn (Demo Blocker)
+**Phát hiện:** 
+Chạy `python scripts/doctor.py` báo lỗi:
+`[FAIL] Gmail OAuth token -> RefreshError: ('invalid_grant: Token has been expired or revoked.')`
+**Vì sao đây là rủi ro cho điểm số:** (Demo 30%) Việc token bị revoke sẽ khiến service Cloud Run (khi chạy luồng Tier 2 tạo digest/audit) ném ra Exception. Demo video quay cảnh "tự động có digest" sẽ hoàn toàn thất bại vì Gmail MCP không thể tạo nháp. Giám khảo thử thật sẽ không thấy điều gì xảy ra ở đích đến.
+**Đề xuất sửa:** Chạy lại luồng OAuth (ví dụ `scripts/verify_gmail_compose_only.py`) để lấy `refresh_token` mới, và cập nhật ngay vào Secret Manager (`gcloud secrets versions add ...`) trước khi quay video.
+**Reviewer tự kiểm chứng (lệnh để người sau chạy lại):**
+`python scripts/doctor.py`
+kỳ vọng: Check Gmail/Sheets phải báo PASS, không có RefreshError.
+
+#### 2. Lỗ hổng "Farming" điểm Metacognitive: `submit_reflection` không yêu cầu `session_id`
+**Phát hiện:**
+Đọc `src/eduagent/api.py`, hàm `submit_reflection` nhận `DebateReflectionRequest` có chứa `student_id`, `original_claim`, `revised_claim` trực tiếp từ client. Nó hoàn toàn không check xem đoạn reflection này thuộc về `session_id` nào và debate đã thực sự xảy ra hay chưa.
+**Vì sao đây là rủi ro cho điểm số:** (Architecture 30% / Innovation 40%) Trái ngược hoàn toàn với triết lý "đánh giá thực chất", lỗ hổng này cho phép học sinh hoặc một kịch bản gọi API tự động bơm vô hạn điểm `growth_bonus` và `breakthrough_count` cho mình mà không cần làm bài essay hay trải qua Socratic debate. Giám khảo đọc API sẽ dễ dàng bẻ gãy hệ thống.
+**Đề xuất sửa:** Sửa `DebateReflectionRequest` thành chỉ nhận `session_id` (như `DebateTurnRequest`). Lấy `student_id`, `original_claim`, `original_fallacy` từ state của session được lưu trong Firestore. Lưu trạng thái `has_reflected = True` vào session để ngăn gửi nhiều lần.
+**Reviewer tự kiểm chứng:**
+`curl -X POST https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/api/debate/reflect -H "Content-Type: application/json" -H "Authorization: Bearer <TẠO_STUDENT_TOKEN>" -d '{"student_id":"<ID>","class_id":"c1","original_claim":"fake","revised_claim":"fake"}'`
+kỳ vọng: Nếu chưa sửa, lệnh này sẽ trả về success và cộng `growth_bonus` thành công vào profile dù không có debate nào.
+
+#### 3. Bug Toán Học: `_score_trend` bỏ qua các bài chấm ở giữa (Telescoping sum)
+**Phát hiện:**
+Trong `src/eduagent/memory/student_profile.py`, logic tính trung bình độ dốc:
+`diffs = [recent[i + 1] - recent[i] for i in range(len(recent) - 1)]`
+`avg_diff = sum(diffs) / len(diffs)`
+Toán học cơ bản: `(x1 - x0) + (x2 - x1) = x2 - x0`. 
+**Vì sao đây là rủi ro cho điểm số:** (Architecture 30%) Điểm của bài essay ở giữa bị triệt tiêu hoàn toàn. Một học sinh có điểm `[10, 0, 10]` sẽ có `x2 - x0 = 10 - 10 = 0`, bị hệ thống phán là `stagnant` thay vì cảnh báo sự sa sút ở bài thứ 2. Hệ thống ranking ưu tiên cho giáo viên sẽ đánh giá sai lệch.
+**Đề xuất sửa:** Không dùng `sum(diffs)`. Nên dùng Linear Regression hoặc ít nhất là tính trung bình của các giá trị thay đổi tuyệt đối nếu cần đo biến động.
+
+#### 4. Lỗ hổng Prompt Injection trong `submit_reflection`
+**Phát hiện:**
+Trong `submit_reflection` (`src/eduagent/api.py`), chỉ `revised_claim` được sanitize, còn `original_claim` và `original_fallacy` được nhúng thẳng vào prompt cho Gemini Flash.
+**Vì sao đây là rủi ro cho điểm số:** (Architecture 30%) Vi phạm trực tiếp ADR-012 "Enforce layered prompt-injection sanitization".
+**Đề xuất sửa:** Gắn kèm với fix của mục 2. Lấy `original_claim` từ Firestore session đã sanitize thì an toàn.
+
+#### 5. Lỗi `doctor.py` không chạy được check Cloud Run trên Windows
+**Phát hiện:**
+Dòng lệnh gọi `gcloud` bằng `subprocess.run(["gcloud", ...])` trong hàm `check_no_plaintext_credentials_on_cloud_run` sẽ ném ra `FileNotFoundError` trên Windows.
+**Vì sao đây là rủi ro cho điểm số:** (Demo) Lỗi này làm Doctor fail lãng nhách trên máy giám khảo/dev Windows.
+**Đề xuất sửa:** Đổi thành `subprocess.run(["gcloud.cmd", ...])` hoặc dùng `shell=True`.
+
+---
+**Tự chất vấn của Reviewer:**
+- *Giám khảo dành 10 phút có bắt được gì không?* Có. Gọi endpoint `/api/debate/reflect` độc lập sẽ thấy hệ thống tự cộng điểm mà không cần session. Doctor script check credentials báo fail Token OAuth.
+- *Có ADR nào nói sai không?* ADR-012 (Sanitization) bị vi phạm ở `submit_reflection`.
+- *Có bước nào giả mạo không?* Chạy thử luồng Pub/Sub Push -> Cloud Run -> Gmail sẽ thất bại vì token hết hạn.
