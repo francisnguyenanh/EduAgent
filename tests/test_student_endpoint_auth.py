@@ -47,7 +47,10 @@ _DEBATE_ROUTES = [
     ("/api/debate/start", {"essay_text": "x", "student_id": _VICTIM, "class_id": "c1"}),
     ("/api/debate/start-with-image", {"image_base64": base64.b64encode(b"f").decode(), "student_id": _VICTIM, "class_id": "c1"}),
     ("/api/debate/start-with-gdoc", {"gdoc_url": "https://docs.google.com/document/d/abc/edit", "student_id": _VICTIM, "class_id": "c1"}),
-    ("/api/debate/reflect", {"student_id": _VICTIM, "class_id": "c1", "revised_claim": "Revised."}),
+    # ĐỢT 15 #2: this payload is session-only now. The no-token / forged-token
+    # checks below still apply, because the token is verified BEFORE the session
+    # lookup (same ordering as /api/debate/turn).
+    ("/api/debate/reflect", {"session_id": "sess-x", "revised_claim": "Revised."}),
 ]
 
 
@@ -80,12 +83,28 @@ def test_student_cannot_submit_as_another_student():
 
 
 def test_student_cannot_reflect_as_another_student():
-    response = client.post(
-        "/api/debate/reflect",
-        json={"student_id": _VICTIM, "class_id": "c1", "revised_claim": "Revised."},
-        headers=_headers(_ATTACKER),
+    """ĐỢT 15 #2: the request no longer names a student, so the attacker has to
+    aim at the victim's SESSION -- and ownership is resolved from the session's
+    own stored student_id, so the same 403 must come back."""
+    from eduagent import interactive
+
+    interactive.start_debate_session(
+        "sess-victim",
+        persona_id="skeptic",
+        essay_text="Cats are great.",
+        summary={"fallacies_draft": ["hasty generalization"]},
+        student_id=_VICTIM,
+        class_id="c1",
     )
-    assert response.status_code == 403
+    try:
+        response = client.post(
+            "/api/debate/reflect",
+            json={"session_id": "sess-victim", "revised_claim": "Revised."},
+            headers=_headers(_ATTACKER),
+        )
+        assert response.status_code == 403
+    finally:
+        interactive._sessions.pop("sess-victim", None)
 
 
 def test_student_from_another_class_is_rejected():

@@ -184,6 +184,14 @@ def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
     turns: list[dict] = session["turns"]
     turn_number = len(turns) + 1
 
+    # ĐỢT 15 #2: a scored session is terminal, and the flag says so
+    # independently of the turn count. Completion normally coincides with
+    # max_debate_turns, but the session now outlives completion (so the
+    # reflection can be tied to it), and re-opening a debate whose score has
+    # already been written to the student's profile would let the transcript and
+    # the score disagree.
+    if session.get("completed"):
+        raise DebateSessionComplete(f"Session {session_id!r} is already scored and closed.")
     if turn_number > VALIDATOR.max_debate_turns:
         raise DebateSessionComplete(f"Session {session_id!r} already has {len(turns)} turns (max {VALIDATOR.max_debate_turns}).")
     if turn_number > 1 and student_reply is None:
