@@ -10,6 +10,36 @@ Lưu ý: Mở URL này bằng trình duyệt sẽ vào thẳng giao diện Web D
 
 ---
 
+## 🔗 **QUICK REFERENCE URLs — Copy-Paste để vào GCP**
+
+| Dịch vụ | URL | 
+|---|---|
+| **Cloud Run Service** | https://console.cloud.google.com/run/detail/asia-southeast1/eduagent-class-aggregator?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Run Logs** | https://console.cloud.google.com/run/detail/asia-southeast1/eduagent-class-aggregator/logs?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Run Metrics** | https://console.cloud.google.com/run/detail/asia-southeast1/eduagent-class-aggregator/metrics?project=project-4fc36103-f4ca-49f6-883 |
+| **Pub/Sub Topic** | https://console.cloud.google.com/cloudpubsub/topic/detail/essay-evaluated?project=project-4fc36103-f4ca-49f6-883 |
+| **Pub/Sub Subscription + DLQ** | https://console.cloud.google.com/cloudpubsub/subscription/detail/class-aggregator-sub?project=project-4fc36103-f4ca-49f6-883 |
+| **Pub/Sub DLQ Topic** | https://console.cloud.google.com/cloudpubsub/topic/detail/essay-evaluated-dlq?project=project-4fc36103-f4ca-49f6-883 |
+| **Firestore Database** | https://console.cloud.google.com/firestore/databases/default/data?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Trace Traces** | https://console.cloud.google.com/traces/list?project=project-4fc36103-f4ca-49f6-883 |
+| **Cloud Logging** | https://console.cloud.google.com/logs/query?project=project-4fc36103-f4ca-49f6-883 |
+| **Secret Manager** | https://console.cloud.google.com/security/secret-manager?project=project-4fc36103-f4ca-49f6-883 |
+| **Firestore TTL Policies** | (Dùng CLI: `gcloud firestore fields ttls list --collection-group=debate_sessions`) |
+
+---
+
+## ⏱️ **VIDEO TIMELINE — Khi nào chụp gì (4 phút video)**
+
+| Thời gian | Nội dung video | GCP Evidence cần chụp |
+|---|---|---|
+| **0:00 - 0:45** | Problem statement + upload ảnh viết tay OCR | (Không cần GCP) |
+| **0:45 - 1:30** | Student debate 1 turn live | (Không cần GCP) |
+| **1:30 - 2:15** | **Show Cloud Run logs & latency** 📸 | `02_cloud_run_service_metrics.png` + `05_cloud_logging_structured.png` |
+| **2:15 - 2:45** | **Show Firestore data mutation** 📸 | `03_firestore_live_data.png` |
+| **2:45 - 3:15** | **Show Pub/Sub event-driven + DLQ** 📸 | `04_pubsub_topic_dlq.png` |
+| **3:15 - 3:45** | **Show Cloud Trace span tree** 📸 | `01_cloud_trace_e2e_spans.png` |
+| **3:45 - 4:00** | Conclusion + URL `.run.app` displayed | (Không cần GCP, chỉ show URL trên màn hình) |
+
 ---
 
 ## 🚀 KỊCH BẢN TEST THỰC TẾ ĐỂ SINH DỮ LIỆU & TRACE (EXECUTION PLAN)
