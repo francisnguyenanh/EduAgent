@@ -43,3 +43,7 @@ scratch/
 
 ref/
 deploy.txt
+
+# coverage artifacts
+.coverage
+htmlcov/

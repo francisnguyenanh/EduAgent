@@ -41,6 +41,40 @@ Mitigations, in order of preference:
 
 ---
 
+## 🔑 Credentials & data you will actually type on camera (verified 2026-08-26 against revision `00036-dbv`)
+
+**The two portals now take DIFFERENT passcodes (ADR-025, Audit Wave 18).** Typing the student
+passcode into the Teacher Portal returns `401 Incorrect password.` on camera.
+
+| Portal | ID | Passcode |
+|---|---|---|
+| Student | `c1_stu01` (or any `c1_<name>`) | `eduagent2026` |
+| Teacher | `c1_teacher` | `eduagent-teacher-2026` |
+
+**⚠️ There are TWO students named "Binh" in class `c1`.** The one the script is about is
+`stu_stuck` — 4 essays, all on The Skeptic, `needs_attention = true`, ranked **#1**. The other
+(`c1_stu02`, also "Binh") sits at #3. On the Teacher Dashboard, click the **top row**. Verified
+live ranking:
+
+```
+1. stu_stuck          | Binh | priority=14.29   <-- the story
+2. c1_stu01           | An   | priority=8.50
+3. c1_stu02           | Binh | priority=8.50    <-- NOT this one
+4. stu_inactive       | Duc  | priority=5.50
+```
+
+Re-check on the day of recording (the ranking moves as data is added):
+
+```bash
+URL=https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app
+T=$(curl -s -X POST $URL/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"role":"teacher","user_id":"c1_teacher","password":"eduagent-teacher-2026"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s "$URL/api/classes/c1/priority" -H "Authorization: Bearer $T" | python3 -m json.tool | head -20
+```
+
+---
+
 ## ⏱️ Timeline & Shot Breakdown
 
 ```mermaid
@@ -83,7 +117,11 @@ timeline
 ### 🎬 Scene 3: Autonomous Class Synthesis & Teacher Action Loop (1:45 - 2:45)
 * **Visual 1 (1:45 - 2:10):** Switch to Teacher Dashboard (`c1`). 
   - Show the **Intervention Priority Index**: Ranked strictly by a deterministic rule engine (ZERO LLM-as-judge).
-  - Binh is flagged at Priority 1.5 due to a stuck streak and common fallacy.
+  - Binh (`stu_stuck`) is ranked **#1**. ⚠️ Do NOT say "Priority 1.5": `1.5` is only the
+    `shared_fallacy` *component* of the score, not the score. The measured total on 2026-08-26 was
+    **14.29**, broken down as `stuck_streak 9.0 + score_decline 2.5 + inactivity 1.29 +
+    shared_fallacy 1.5`. Per the numbers-discipline rule above, read whatever total the screen shows
+    — the components move with the data, and `inactivity` grows every day you do not re-seed.
 * **Visual 2 (2:10 - 2:30):** **Actionable 15-Minute Mini-Lesson**.
   - Show the newly generated class digest, and read out whatever number the screen actually shows: the systemic-pattern threshold is **2 or more distinct students** sharing a fallacy (`priority_engine.MIN_STUDENTS_FOR_COMMON_FALLACY = 2`), counted per student rather than per essay. Don't say "3 students" unless the digest on screen says 3 — the earlier draft of this line hard-coded a number the run may not produce.
 * **Visual 3 (2:30 - 2:45):** **1-Click Parent Progress Note**.
@@ -94,7 +132,7 @@ timeline
 ### 🎬 Scene 4: Architectural Discipline & Empirical Evaluation (2:45 - 3:30)
 * **Visual 1 (2:45 - 3:05):** Architecture Diagram & Google Cloud Trace.
   - Show live Google Cloud Run deployment (`asia-southeast1`), Firestore Memory, Pub/Sub Event Ingestion, and W3C Trace context propagation across nodes.
-  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the 10-check report land on screen. It is a single command that shows the deployed revision is healthy, the Firestore TTL policy is ACTIVE, and no credential is stored in cleartext. If you'd rather say one sentence than show a table: *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."*
+  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the **11-check** report land on screen (10 PASS / 1 WARN / 0 FAIL as of Audit Wave 18 — the WARN is the local signing key, which is correct for a laptop; say so if it is visible). It is a single command that shows the deployed revision is healthy, the Firestore TTL policy is ACTIVE, and no credential is stored in cleartext. If you'd rather say one sentence than show a table: *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."*
 * **Visual 2 (3:05 - 3:20):** **4-Layer Deterministic ADK Eval Suite — 50/50 deterministic test cases passed**.
   - Show terminal output of `scripts/run_eval_suite.py --strict`:
     1. Safety & Security (15/15)
@@ -104,7 +142,11 @@ timeline
   - Say "**50 out of 50 deterministic test cases passed**", never "the system is 100% correct" — a judge will hear the difference.
   - **Strongest 15 seconds available if you have them:** *"We audited our own suite and found twelve tests that could not fail — one group was asserting that eight minus two is at least four. We rewired them to production code and now prove every case can go red by breaking the code on purpose."* This is a credibility gain, not an admission; it is also the core of the bonus blog post (ADR-019).
 * **Visual 3 (3:20 - 3:30):** **Memory A/B Experiment Evidence**.
-  - Show comparative graph: Stateless Baseline (repeated stagnant persona) vs. EduAgent Persistent Memory (0% repeated stagnant interventions, 100% contextual adaptation).
+  - Show comparative graph: Stateless Baseline (1 repeated stagnant Skeptic) vs. EduAgent Persistent
+    Memory (**0 repeated stagnant interventions**). Say prior-weakness context was injected in
+    **2 of 3 essays — 100% of the essays that had any history to draw on**, which is what
+    `docs/experiment_memory_ab.md` measures. Dropping the qualifier turns a real result into an
+    overclaim a judge can check.
 
 ---
 
@@ -112,9 +154,9 @@ timeline
 * **Visual:** Live Cloud Run URL, GitHub repository badge, and Judge 1-Click Showcase screen.
   `[VISUAL: "EduAgent / Powered by Gemini & Google Cloud" text lockup appears on screen simultaneously with QR code.]`
 * **Voiceover:**
-  > *"EduAgent bridges the gap between individual Socratic coaching and scalable classroom intelligence. Fully deployed on Google Cloud, MIT/Apache-licensed, and verified with deterministic rigor.*
+  > *"EduAgent bridges the gap between individual Socratic coaching and scalable classroom intelligence. Fully deployed on Google Cloud, MIT-licensed, and verified with deterministic rigor.*
   >
   > *Don't give every student an answer. Give every student a reason to think.*
   >
   > *Experience EduAgent live at our Cloud Run showcase link today."*
-  > (CTA "Experience EduAgent..." remains the final line.)
+  > (CTA "Experience EduAgent..." remains the final line. Say **MIT**, not "MIT/Apache" — `LICENSE` in the repo root is MIT, and only MIT; naming a licence the repo does not carry is a free credibility hit.)

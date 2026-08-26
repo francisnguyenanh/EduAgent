@@ -2391,3 +2391,184 @@ ls LICENSE                                                  # kỳ vọng: tồn
 **0 Blocker mở.** Còn **5 ngày** tới deadline 31/08 17:00 PT.
 Live `00036-dbv` · 273 test · eval 50/50 · doctor **10 PASS / 1 WARN / 0 FAIL**.
 Rủi ro lớn nhất còn lại **không phải code** mà là **mục P0-2**: chưa ai chạy thử từng beat của `video_script.md` trên service đang deploy.
+
+---
+
+## ĐỢT 19 (thi công) — XỬ LÝ TOÀN BỘ 10 MỤC (2026-08-27) ✅ HOÀN THÀNH 10/10
+
+### Bảng trạng thái
+
+| # | Mục | Trạng thái | Bằng chứng |
+|---|---|---|---|
+| 1 | `doctor.py` kiểm tra sai đối tượng | ✅ Đã sửa | Chạy trên máy **không export env** vẫn ra PASS vì đọc revision thật |
+| 2 | Rà `video_script.md` trên revision live | ✅ Đã sửa | **5 chỗ lệch**, 2 trong đó sẽ làm hỏng buổi quay |
+| 3 | Diagram khớp luồng push | ✅ Đã sửa | Thêm nhãn OIDC + toàn bộ đường Web tương tác |
+| 4 | `_sessions` phình theo mọi lượt đọc | ✅ Đã sửa | Test 200 lượt đọc → dict rỗng; sabotage → đỏ |
+| 5 | Bằng chứng coverage | ✅ Đã thêm | **86%** (2157 câu lệnh, 292 miss) |
+| 6 | Bằng chứng chi phí | ✅ Đã thêm | Đo thật: **6 flash + 1 heavy** mỗi hành trình |
+| 7 | `PROJECT_WIKI.md` lệch ADR mới | ✅ Đã sửa | Thêm ADR-024→027 + 2 đính chính |
+| 8 | Script smoke test live | ✅ Đã tạo | `scripts/smoke_live.py` — **13/13 PASS** |
+| 9 | Rà `assets/` | ✅ Đã rà | 3 phát hiện — xem bên dưới |
+| 10 | Rà cấu trúc README | ✅ Đã sửa | Đánh số lại liền mạch 1→9 |
+
+### Cổng kiểm chứng cuối
+
+```
+pytest -q                        -> 274 passed
+run_eval_suite.py --strict       -> 50/50 (100%)
+doctor.py                        -> 10 passed, 1 warned, 0 failed
+smoke_live.py --skip-debate      -> 8 passed, 0 failed
+smoke_live.py (đầy đủ, có Gemini)-> 13 passed, 0 failed
+```
+
+---
+
+### #1 — `doctor.py` đã hỏi đúng câu hỏi
+
+Trước: `check_teacher_password_separation()` đọc `eduagent.auth` của **tiến trình local**. Chạy trên laptop báo WARN dù production đúng — và nguy hiểm hơn, sẽ báo **PASS** nếu ai gỡ secret khỏi Cloud Run trong lúc dev đang export biến môi trường.
+
+Nay đọc revision đang deploy (tách `_live_revision_env()` dùng chung với check ADR-020), phân biệt 3 trạng thái: mount từ Secret Manager → PASS, không có biến → WARN, có nhưng là **plaintext** → FAIL.
+
+```
+$ env -u EDUAGENT_TEACHER_PASSWORD python scripts/doctor.py
+[PASS] Teacher password separation
+       Live revision mounts EDUAGENT_TEACHER_PASSWORD from Secret Manager
+       ('eduagent-teacher-password') -- a teacher token cannot be minted with
+       the README's student passcode.
+```
+
+### #2 — `video_script.md`: 5 chỗ lệch, 2 chỗ đủ để hỏng buổi quay
+
+| Chỗ lệch | Thực tế đo được |
+|---|---|
+| 🔴 **Không có thông tin đăng nhập nào trong script** | Passcode giáo viên đã đổi ở ĐỢT 18. Gõ passcode học sinh vào Teacher Portal → `401` **ngay trên camera**. Đã thêm bảng credentials đã verify |
+| 🔴 **Có HAI học sinh tên "Binh" trong lớp `c1`** | `stu_stuck` (#1, priority 14.29) là nhân vật của kịch bản; `c1_stu02` cũng tên Binh, xếp #3. Đã thêm cảnh báo + bảng ranking thật + lệnh tự kiểm tra lại vào ngày quay |
+| "Binh is flagged at **Priority 1.5**" | Sai — `1.5` chỉ là thành phần `shared_fallacy`. Tổng thật: **14.29** (`stuck_streak 9.0 + score_decline 2.5 + inactivity 1.29 + shared_fallacy 1.5`) |
+| "let the **10-check** report land on screen" | `doctor.py` nay có **11** check |
+| "MIT/Apache-licensed" | Repo chỉ có **MIT** (file `LICENSE` mới tạo ở ĐỢT 18). Gọi tên một giấy phép repo không mang là mất điểm không cần thiết |
+
+Đã chỉnh thêm claim Memory A/B: script nói "100% contextual adaptation", nguồn `experiment_memory_ab.md` nói **2/3 bài — 100% số bài CÓ lịch sử để tham chiếu**. Bỏ mệnh đề điều kiện là biến kết quả thật thành overclaim kiểm chứng được.
+
+### #3 — Diagram
+
+Không có chữ "pull" nào (`grep -niE "\bpull\b" README.md` → rỗng), cạnh `PUBSUB --> SUB` đúng hướng. Hai thiếu sót đã bù:
+- Cạnh đó **không có nhãn** → OIDC (ADR-014), một trong những phát hiện bảo mật mạnh nhất của dự án, vô hình trên diagram.
+- **Toàn bộ đường Web tương tác vắng mặt**, dù §5 vừa nói một service phục vụ cả sync lẫn async. Giám khảo có thể hỏi "Web UI nằm đâu trong kiến trúc của bạn?". Đã thêm subgraph `WEB` (Bearer token + rate limit → `api.py` → `interactive.py` → `debate_sessions`).
+
+### #4 — `_sessions` không còn phình
+
+Hệ quả phụ của fix ĐỢT 17: mọi `get_debate_session()` đều ghi vào dict. Sau khi reads ưu tiên Firestore, việc cache này **không mua được gì** (lượt sau vẫn đi Firestore — đó là toàn bộ ý nghĩa của ADR-027) mà lại làm dict phình theo mọi lượt đọc, quét bởi TTL 24h, trên instance 512Mi.
+
+Nay đường Firestore không ghi ngược vào dict nữa. Test 200 lượt đọc (xoá cache 3s mỗi vòng để ép đọc thật) → `_sessions == {}`. Sabotage (cache lại) → **đỏ**.
+
+### #5 — Coverage 86%
+
+Báo cáo, **không** đặt ngưỡng gate, và **nêu đích danh** chỗ yếu thay vì giấu sau số trung bình: `sheets_mcp` 31%, `firestore_memory` 39%, `gmail_mcp` 52% — đều là lớp bọc I/O, và với mỗi cái đã ghi rõ *vì sao thấp mà vẫn ổn* (ví dụ: logic mà `firestore_memory` bọc nằm ở `student_profile.py`, **99%**, được giữ dạng pure function chính là để test được không cần database).
+
+Bảng sabotage trong README cũng mở rộng từ 2 lên **9 dòng** — mọi sabotage của ĐỢT 16–19 đều đã thực sự chạy, quan sát đỏ, rồi khôi phục.
+
+### #6 — Chi phí: đo, không đoán
+
+```
+6 models/gemini-3.5-flash:generateContent   <- summarizer, 3 lượt debate, scorer, reflection
+1 models/gemini-3.7-flash:generateContent   <- digest Tier 2
+```
+
+**Cố ý KHÔNG in con số tiền.** Billing của project không export sang BigQuery, nên mọi đơn giá viết ra sẽ là ước lượng đội lốt số đo — đúng thứ lỗi mà lịch sử audit dự án này nói về. Đại lượng tái lập được là số lời gọi ở trên.
+
+### #9 — `assets/` — 3 phát hiện
+
+- 🔴 **`assets/architecture_diagram.png` KHÔNG tồn tại** nhưng `devpost_submission_draft.md:181` ghi `[Upload assets/architecture_diagram.png]`. Đây là mục nộp bài, cần bạn export diagram mermaid ở README §2 thành PNG.
+- 🟡 **8 file có khoảng trắng trong tên** (`Metrics 1.png`, `Cloud Trace span end-to-end.png`...) — dễ vỡ markdown link nếu nhúng mà không encode.
+- 🟢 `Revisions.png` chụp 24/08, live nay là `00036-dbv`. Ảnh lịch sử vẫn là bằng chứng hợp lệ, nhưng đừng dùng nó để nói "đây là revision hiện tại".
+- `.DS_Store` **không** bị track (đã có trong `.gitignore`) — OK.
+
+### #10 — README
+
+Không còn heading trùng. Đánh số lại liền mạch **1→9** (mục "4b" thành §5), cập nhật anchor `#6-security--threat-model` và mọi tham chiếu chéo trong README lẫn `rate_limit.py`.
+
+---
+
+## ĐỢT 20 — CÒN LẠI (cần người thật làm)
+
+- [ ] 🔴 **Export diagram mermaid README §2 thành `assets/architecture_diagram.png`** — Devpost yêu cầu, không tự sinh được từ CLI.
+- [x] ✅ **Hai "Binh" đã xử lý** — xem ĐỢT 20 bên dưới. ~~Quyết định về hai "Binh"~~: đổi tên hiển thị của `c1_stu02` thành tên khác để Teacher Dashboard không có hai dòng trùng tên khi quay. Một lệnh ghi Firestore, không phá dữ liệu.
+- [ ] 🟡 **Diễn tập buổi quay** theo `video_script.md` đã sửa, bấm đúng thứ tự, canh giờ. Chạy `python scripts/smoke_live.py` ngay trước khi bấm ghi.
+- [ ] 🟢 Đổi tên 8 file ảnh có khoảng trắng trong `assets/gcp_evidence/`.
+
+### Tổng kết
+
+**0 Blocker mở.** Còn **4 ngày** tới deadline 31/08 17:00 PT. Live revision sau ĐỢT 19: **`00037-6h4`** (repo == live).
+Rủi ro lớn nhất còn lại **không phải code**: diagram PNG cho Devpost, và một buổi diễn tập.
+
+
+---
+
+## ĐỢT 20 — DỌN DỮ LIỆU DEMO (2026-08-27) ✅
+
+### 1. Hai học sinh trùng tên "Binh" → đã tách
+
+Đổi **duy nhất** field `name` của `c1_stu02`: `Binh` → `Khanh`. Không đụng `essay_history`,
+`reflections_history`, `score_trend` hay điểm số — có assert kiểm tra ngay sau khi ghi:
+
+```
+TRƯỚC: {'name': 'Binh',  'class_id': 'c1', 'total_essays_count': 3, 'score_trend': 'declining'}
+SAU  : {'name': 'Khanh', 'class_id': 'c1', 'total_essays_count': 3, 'score_trend': 'declining'}
+essays: 3 -> 3 | reflections: 3 -> 3
+```
+
+Bảng xếp hạng live hiện tại — không còn tên trùng, `stu_stuck` (Binh, nhân vật kịch bản) vẫn #1:
+
+```
+1. stu_stuck          | Binh  | 14.29    <-- nhân vật của video
+2. c1_stu01           | An    | 8.50
+3. c1_stu02           | Khanh | 8.50     <-- đã đổi tên
+4. stu_inactive       | Duc   | 5.50
+5. stu_declining      | Chi   | 4.86
+6. stu_improving      | Mai   | 4.14
+7. stu_common_fallacy | Em    | 2.93
+```
+
+### 2. Tự phát hiện & tự dọn: `smoke_live.py` làm bẩn lớp demo
+
+Khi kiểm chứng lại bảng xếp hạng, phát hiện **chính script tôi viết ở ĐỢT 19 đã tạo ra
+`c1_smoke01 | "Smoke Test"` đứng hạng #7 trong lớp demo** — tức sẽ hiện lên camera.
+
+Nguyên nhân: `class_id` là tiền tố của student id, nên mặc định `--student c1_smoke01` ghi thẳng
+vào lớp demo. Đã sửa **cả gốc lẫn ngọn**:
+
+- Mặc định đổi sang lớp vứt đi `zz9_smoke01`, không bao giờ chạm `c1`.
+- Thêm **guard cứng**: chạy hành trình debate với student thuộc lớp `c1` sẽ bị từ chối kèm giải
+  thích, trừ khi truyền `--allow-demo-class`.
+- Xoá bản ghi `c1_smoke01` đã lỡ tạo (1 bài luận, avg 1.75, do lần chạy hôm nay sinh ra).
+
+Đổi mặc định cũng làm lộ một bug thật trong chính script: payload hardcode `class_id: "c1"` trong
+khi token thuộc lớp `zz9` → toàn bộ hành trình `403` (ADR-018 hoạt động đúng). Nay `class_id` suy
+ra từ student id. **Script bắt được lỗi của chính nó — đúng thứ nó sinh ra để làm.**
+
+```
+python scripts/smoke_live.py     ->  13 passed, 0 failed   (ghi vào zz9, không đụng c1)
+```
+
+### 3. Về `LICENSE` — trả lời câu hỏi "rule có yêu cầu không?"
+
+**Không kiểm chứng được từ repo:** không có file rule/judging/track nào trong repository
+(`find . -iname "*rule*" -o -iname "*judging*" -o -iname "*track*"` → rỗng). Tôi **không** khẳng
+định được điều lệ cuộc thi nói gì.
+
+**Nhưng lý do cần nó không phụ thuộc vào điều lệ.** `docs/eligibility_statement.md` — tài liệu dự án
+tự nộp — khẳng định:
+
+> *"adhering 100% to originality guidelines, architectural transparency, and **open-source licensing standards**"*
+> *"**License:** MIT License / Open Source."*
+
+và `README.md` §9 ghi *"Distributed under the **MIT License**. See `LICENSE` for details."*
+
+Trước ĐỢT 18, **file `LICENSE` không tồn tại**. Tức dự án đang tuyên bố tuân thủ chuẩn cấp phép mã
+nguồn mở và trỏ người đọc tới một file không có. Đây đúng class lỗi mà ĐỢT 12/16 đã tốn công diệt
+(11 trace attribute bịa, `+5.62`): **tuyên bố không có gì chống lưng**. Tạo file làm cho một tuyên
+bố sẵn có trở thành đúng — độc lập với việc điều lệ có bắt buộc hay không.
+
+**Cần bạn tự xác nhận** trong điều lệ chính thức trên Devpost mục "Submission Requirements" xem có
+yêu cầu giấy phép OSI-approved không. Nếu có mà thiếu, đó là rủi ro **loại tư cách**, không phải mất
+điểm — nên đáng 2 phút kiểm tra.

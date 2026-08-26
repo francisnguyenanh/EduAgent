@@ -201,7 +201,13 @@ def get_debate_session(session_id: str) -> dict:
     """
     fs_session = _firestore_get_session(session_id)
     if fs_session is not None:
-        _sessions[session_id] = fs_session
+        # ĐỢT 19 #4: do NOT populate the local dict on a Firestore hit. Once
+        # reads prefer Firestore, caching here buys nothing -- the next read
+        # goes to Firestore anyway (that is the whole point of ADR-027) -- while
+        # every read of every session would grow a dict that is only swept on a
+        # 24h TTL, on a 512Mi instance. `firestore_session` already keeps its
+        # own 3s-bounded cache for the repeat reads inside a single request.
+        # The dict now exists solely for the no-durable-store case below.
         return fs_session
 
     if _firestore_is_authoritative():

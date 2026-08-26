@@ -222,24 +222,80 @@ def check_session_secret() -> tuple[str, str]:
     )
 
 
+def _live_revision_env() -> tuple[list | None, str]:
+    """Env entries of the deployed revision, or (None, reason-it-was-skipped)."""
+    import json
+    import subprocess
+
+    gcloud = _gcloud_executable()
+    if gcloud is None:
+        return None, "gcloud CLI not found on PATH"
+    try:
+        probe = subprocess.run(
+            [
+                gcloud, "run", "services", "describe", "eduagent-class-aggregator",
+                "--region", "asia-southeast1", "--format=json",
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        return None, f"could not execute gcloud ({exc})"
+    if probe.returncode != 0:
+        return None, "could not describe the Cloud Run service (not deployed, or gcloud not authorized)"
+    try:
+        return json.loads(probe.stdout)["spec"]["template"]["spec"]["containers"][0].get("env", []), ""
+    except (ValueError, KeyError, IndexError):
+        return None, "Cloud Run service description had an unexpected shape"
+
+
 def check_teacher_password_separation() -> tuple[str, str]:
     """ĐỢT 16 #6 / ADR-025: is a teacher token still obtainable with the public
     demo passcode?
 
-    ADR-016 closed token *forgery*; this reports on token *issuance*, which is
-    the other half of the same exposure and stayed open. Reported rather than
-    enforced: for judging, one shared passcode is a deliberate, documented
-    tradeoff -- what must not happen is the state being invisible.
-    """
-    from eduagent.auth import teacher_password_is_shared_with_students
+    ADR-016 closed token *forgery*; this reports on token *issuance*, the other
+    half of the same exposure.
 
-    if not teacher_password_is_shared_with_students():
-        return PASS, "EDUAGENT_TEACHER_PASSWORD is set separately -- a teacher token cannot be minted with the README's student passcode."
-    return WARN, (
-        "Teacher login accepts the same public demo passcode as students, so anyone who reads the "
-        "README can mint a role=teacher token for any class_id and read that class's roster/PII. "
-        "This is the documented hackathon-judging tradeoff (ADR-025); set EDUAGENT_TEACHER_PASSWORD "
-        "from Secret Manager to close it."
+    ĐỢT 19 #1 -- this check used to read `eduagent.auth` in the LOCAL process,
+    which answered a question nobody was asking. Running it on a laptop said
+    WARN while production was correctly configured, and -- far worse -- it
+    would have said PASS if someone unmounted the secret from Cloud Run while
+    the developer happened to have the env var exported. A pre-demo check that
+    reports on the machine you are standing at rather than the service the
+    judges will open is the ĐỢT 8 failure all over again. It now inspects the
+    deployed revision, exactly like check_no_plaintext_credentials_on_cloud_run().
+    """
+    env, skip_reason = _live_revision_env()
+    if env is None:
+        # Fall back to reporting the local process, clearly labelled as such,
+        # rather than staying silent about a security-relevant setting.
+        from eduagent.auth import teacher_password_is_shared_with_students
+
+        state = "shares the student passcode" if teacher_password_is_shared_with_students() else "is set separately"
+        return WARN, (
+            f"Could not inspect the live revision ({skip_reason}), so this reports the LOCAL process only: "
+            f"teacher login {state}. Re-run where gcloud is authorized to check what judges will actually hit."
+        )
+
+    entry = next((e for e in env if e["name"] == "EDUAGENT_TEACHER_PASSWORD"), None)
+    if entry is None:
+        return WARN, (
+            "The live revision has no EDUAGENT_TEACHER_PASSWORD, so teacher login accepts the same public "
+            "demo passcode as students: anyone who reads the README can mint a role=teacher token for any "
+            "class_id and read that class's roster/PII. This is the documented judging tradeoff (ADR-025); "
+            "close it with `gcloud secrets create eduagent-teacher-password --data-file=-` then redeploy."
+        )
+    if "value" in entry:
+        return FAIL, (
+            "EDUAGENT_TEACHER_PASSWORD is set as a PLAINTEXT env var on the live revision -- readable by "
+            "anyone with run.services.get, which defeats the point of separating it (ADR-020). Redeploy via "
+            "`python scripts/deploy_to_cloud_run.py` so it is mounted as a Secret Manager reference, then "
+            "rotate the value since it was exposed."
+        )
+    secret_name = entry.get("valueFrom", {}).get("secretKeyRef", {}).get("name", "<unknown>")
+    return PASS, (
+        f"Live revision mounts EDUAGENT_TEACHER_PASSWORD from Secret Manager ('{secret_name}') -- a teacher "
+        "token cannot be minted with the README's student passcode."
     )
 
 

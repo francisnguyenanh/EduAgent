@@ -370,3 +370,20 @@ def test_without_a_durable_store_the_in_process_dict_still_serves(monkeypatch):
 
     _start("s-local")
     assert interactive.get_debate_session("s-local")["student_id"] == "c1_stu01"
+
+
+def test_reads_backed_by_firestore_do_not_grow_the_in_process_dict(shared_db):
+    """ĐỢT 19 #4: after ADR-027 made reads prefer Firestore, caching every read
+    into `_sessions` bought nothing (the next read goes to Firestore anyway) and
+    cost an unbounded dict swept only on a 24h TTL, on a 512Mi instance."""
+    _start("s-nogrow")
+    firestore_session._LOCAL_SESSION_CACHE.clear()
+    interactive._sessions.clear()
+
+    for _ in range(200):
+        firestore_session._LOCAL_SESSION_CACHE.clear()  # force a real Firestore read each time
+        assert interactive.get_debate_session("s-nogrow")["student_id"] == "c1_stu01"
+
+    assert interactive._sessions == {}, (
+        f"Firestore-backed reads grew the in-process dict to {len(interactive._sessions)} entries"
+    )

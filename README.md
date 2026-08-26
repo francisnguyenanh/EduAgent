@@ -114,9 +114,19 @@ flowchart TD
         DIGEST --> ANALYTICS[("Firestore\nclass_analytics/digests")]
     end
 
-    PUBSUB --> SUB
+    PUBSUB -->|"push delivery + OIDC token\n(verified in-app, ADR-014)"| SUB
+
+    subgraph WEB["INTERACTIVE PATH — same Cloud Run service, synchronous (see §5)"]
+        direction TB
+        JUDGE(["Student / Teacher browser"]) -->|"Bearer token\n(ADR-018) + rate limit (ADR-017/026)"| API["Cloud Run: /api/debate/*, /api/classes/*\n(server.py + api.py)"]
+        API --> BRIDGE["interactive.py turn bridge\n(reuses the SAME summarizer /\npersona_selector / debate functions)"]
+        BRIDGE <--> SESSIONS[("Firestore\ndebate_sessions (24h TTL)")]
+    end
+
+    BRIDGE -.->|"reflection → growth_bonus\n(ADR-022/024)"| PROFILES
     MUT -.->|"read-modify-write"| PROFILES[("Firestore\nstudent_profiles")]
     PS -.->|"read history"| PROFILES
+    API -.->|"reads ranking / digests"| ANALYTICS
     GMAIL -.->|"teacher clicks Send\n(HITL human gate)"| TEACHER["Teacher Gmail Inbox"]
 ```
 
@@ -150,7 +160,7 @@ tests/            Pytest test suite (>240 tests, unit + integration)
 * Python 3.11+
 * Google Cloud Platform project with enabled APIs: `aiplatform`, `firestore`, `run`, `pubsub`, `cloudtrace`, `logging`, `secretmanager`, `gmail.googleapis.com`
 * Firestore Database (Native mode)
-* Authenticated `gcloud` CLI or Service Account with roles detailed in [Section 5](#5-security--threat-model)
+* Authenticated `gcloud` CLI or Service Account with roles detailed in [Section 5](#6-security--threat-model)
 
 ### 3.2 Installation & Connectivity Preflight
 
@@ -321,7 +331,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 
 ---
 
-## 4b. Architectural Limitations (deliberate, and what we would change with more time)
+## 5. Architectural Limitations (deliberate, and what we would change with more time)
 
 Every item here is a trade-off we made knowingly for a hackathon deadline, not something we
 discovered by accident. Each states the *actual* blast radius rather than the worst-sounding one,
@@ -357,13 +367,39 @@ we would do with a sixth day.
 a bounded cost ceiling, but a genuinely distributed attacker is not stopped by it. Production belongs
 behind Cloud Armor or API Gateway; see the arithmetic written out in `src/eduagent/rate_limit.py`.
 
+**Operational cost profile — measured, not estimated.** One complete student journey
+(start → 3 debate turns → metacognitive reflection) plus the Tier 2 class digest it triggers was
+measured against the live service by counting the actual Vertex AI requests in Cloud Logging:
+
+```bash
+gcloud logging read 'resource.type="cloud_run_revision"
+  AND resource.labels.service_name="eduagent-class-aggregator"
+  AND timestamp>="<window start>" AND timestamp<="<window end>"' \
+  --limit=300 --format='value(textPayload,jsonPayload.message)' \
+  | grep -oE "models/[a-z0-9.-]+:generateContent" | sort | uniq -c
+#   6 models/gemini-3.5-flash:generateContent      <- summarizer, 3 debate turns, scorer, reflection
+#   1 models/gemini-3.7-flash:generateContent      <- Tier 2 teacher digest synthesis
+```
+
+So the unit of work is **6 Flash calls + 1 heavier Flash call per student journey**, all on Flash-tier
+models (ADR-002) with short prompts. The image path adds **2 more Vision calls** for the same photo
+(ADR-007's self-consistency cross-check — a deliberate 2x cost on ingestion, bought to catch the
+hallucinated transcriptions that prompt-only instructions did not stop). The rate limiter (ADR-017 /
+ADR-026) is what bounds how fast an anonymous caller can generate these; the service-wide sustained
+ceiling is 1 request/second.
+
+> We are deliberately **not** printing a dollar figure here. The billing data for this project is not
+> exported to BigQuery, so any per-request cost we wrote down would be an estimate dressed up as a
+> measurement — the exact failure mode this project's audit history is about. The reproducible
+> quantity is the call count above; multiply it by current Vertex AI Flash pricing for your region.
+
 **Authentication is a shared demo passcode, not an identity provider.** See ADR-013 / ADR-025 and the
 *Stated scope* note in the Security section below — token *scoping* is enforced, token *issuance* is
 deliberately open so a judge can open the portals without a GCP identity or an OAuth flow.
 
 ---
 
-## 5. Security & Threat Model
+## 6. Security & Threat Model
 
 * **Dedicated Service Account (`eduagent-sa`):** Exactly 5 granular IAM roles: `datastore.user`, `pubsub.editor`, `aiplatform.user`, `cloudtrace.agent`, and `logging.logWriter`. Zero Owner/Editor credentials.
 * **Gmail Least-Privilege AST Gate:** OAuth scope restricted to `gmail.compose` only. AST parser check (`tests/test_gmail_mcp_never_sends.py`) fails build if `.send()` is ever written. Human teacher compose-and-send action is the sole transmission path.
@@ -384,7 +420,7 @@ deliberately open so a judge can open the portals without a GCP identity or an O
 
 ---
 
-## 6. ADK Eval Suite & Empirical Verification
+## 7. ADK Eval Suite & Empirical Verification
 
 ### 4-Layer Deterministic Evaluation Results
 
@@ -412,6 +448,40 @@ To eliminate false-positive test cases, benchmarks were subjected to intentional
 | --- | --- |
 | Strip persona anchoring logic in `nodes/debate.py` | 4/4 Persona Fidelity tests **FAIL** |
 | Remove measured scoring artifact `learning_outcome_measured.json` | 4/4 Learning Outcome tests **FAIL** |
+| Revert `client_key()` to the first `X-Forwarded-For` hop (ADR-026) | Rate-limit key test **FAILS** |
+| Restore cache-first reads in `get_debate_session()` (ADR-027) | 2 multi-instance tests **FAIL** |
+| Re-cache every Firestore read into `_sessions` | Dict-growth bound test **FAILS** |
+| Remove both `claim_reflection()` gates (ADR-022) | 4 reflection-integrity tests **FAIL** |
+| Remove the `/api/parent-note` rate limiter (ADR-017) | Flood test **FAILS** |
+| Let teacher login fall back to the student passcode (ADR-025) | Password-separation test **FAILS** |
+| Report `volatile` trends as `stagnant` (ADR-023) | Trend-classification test **FAILS** |
+
+Each row was produced by breaking the production code on purpose, running the suite, observing the
+listed failure, and restoring the file — not by reasoning about what *should* fail.
+
+### Test Suite Coverage
+
+274 tests, **86% statement coverage** over `src/eduagent` (measured 2026-08-26, not estimated):
+
+```bash
+pip install pytest-cov
+pytest --cov=src/eduagent --cov-report=term -q
+# TOTAL   2157 statements   292 missed   86%
+```
+
+Coverage is reported rather than gated, and the weak spots are named rather than averaged away:
+
+| Module | Coverage | Why |
+| --- | :---: | --- |
+| `integrations/sheets_mcp.py` | 31% | Google Sheets API client. The covered part is the one that matters — `append_audit_row()` is the only exported write, enforcing append-only. The rest is auth/client plumbing exercised only against the live API. |
+| `memory/firestore_memory.py` | 39% | Firestore client wrapper. The *logic* it wraps is `memory/student_profile.py` (**99%**), kept as pure functions precisely so it can be tested without a database. |
+| `integrations/gmail_mcp.py` | 52% | Same shape. The security-critical property is not covered by line coverage at all but by an AST test that fails the build if `.send()` is ever written (ADR-001). |
+
+The modules carrying the decisions a judge would want verified are the well-covered ones:
+`nodes/ocr.py` 100%, `nodes/persona_selector.py` 100%, `graph/tier1_pipeline.py` 100%,
+`memory/student_profile.py` 99%, `nodes/debate.py` 98%, `nodes/scorer.py` 97%,
+`nodes/validator.py` 95%, `rate_limit.py` 94%, `interactive.py` 92%, `api.py` 92%,
+`memory/firestore_session.py` 90%.
 
 ### Empirical Pedagogical Outcomes
 
@@ -420,7 +490,7 @@ To eliminate false-positive test cases, benchmarks were subjected to intentional
 
 ---
 
-## 7. Multimodal Ingestion Evidence
+## 8. Multimodal Ingestion Evidence
 
 The multimodal OCR pipeline (`nodes/ocr.py`) was evaluated on **12 real-world handwritten essay samples** (`eval/test_images/`) encompassing varied handwriting styles, cursive, pencil, cross-outs, and uneven lighting:
 
@@ -432,6 +502,6 @@ Reproduce with: `python scripts/demo_real_handwriting_ocr.py`
 
 ---
 
-## 8. License
+## 9. License
 
 Distributed under the **MIT License**. See `LICENSE` for details.
