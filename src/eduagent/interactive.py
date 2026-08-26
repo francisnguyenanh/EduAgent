@@ -55,6 +55,21 @@ session_id, carrying a 24h `expire_at` for TTL deletion, and torn down by
 end_debate_session(). Durability here buys request-to-request continuity, not
 long-term recall. Long-term memory remains `student_profiles`, written only
 through the profile-mutation path.
+
+SESSION LIFETIME AFTER SCORING (ADR-022, ĐỢT 15).
+
+complete_debate_session() used to delete the session as its last act. It no
+longer does: it marks the session `completed` and leaves it in place, because the
+metacognitive reflection step happens AFTER the debate finishes and the session
+is the only server-side record that the debate ever happened. Deleting it there
+is exactly what forced /api/debate/reflect to accept the student id, the essay
+and the fallacy from the client -- and therefore to accept a reflection with no
+debate behind it at all. api.py::submit_reflection() is what tears the session
+down now, and a student who never reflects just lets the 24h TTL collect it.
+
+A `completed` session is terminal: step_debate_turn() refuses to advance it
+regardless of turn count, so a debate whose score is already written into the
+student's profile cannot be re-opened and made to disagree with it.
 """
 
 from __future__ import annotations
