@@ -1,43 +1,43 @@
 # Memory A/B Experiment: Empirical Proof of Pedagogical Adaptation
 
-> **Evaluation Hypothesis:** Trí nhớ dài hạn (Long-Term Memory) không chỉ lưu trữ dữ liệu thụ động, mà **trực tiếp thay đổi quyết định sư phạm**, triệt tiêu can thiệp lặp vô ích và tiêm ngữ cảnh lịch sử vào cuộc tranh biện.
+> **Evaluation Hypothesis:** Long-Term Memory is not merely passive data storage; it **directly guides pedagogical decisions**, eliminates unproductive repetitive interventions, and injects longitudinal context into Socratic debates.
 
 ---
 
-## 1. Kết Quả Định Lượng Tổng Hợp (Summary Metrics)
+## 1. Summary Evaluation Metrics
 
-| Chỉ số Đánh Giá (Metric) | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: eduagent (Trí Nhớ Dài Hạn) | Ý Nghĩa Sư Phạm |
+| Metric | Branch A: Stateless Baseline (No Memory) | Branch B: eduagent (Long-Term Memory) | Pedagogical Impact |
 |---|:---:|:---:|---|
-| **Chuỗi Persona Can Thiệp** | `skeptic → skeptic → nitpicker` | `skeptic → expander → nitpicker` | Nhánh B tự động thích ứng luân phiên persona khi phát hiện điểm yếu cũ |
-| **Số lần can thiệp lặp bế tắc (Repeated Stagnant Interventions)** | **1 lần** (Lặp Skeptic) | **0 lần** (0% lặp) | Loại bỏ tình trạng hỏi cùng 1 góc nhìn khiến học sinh nản lòng |
-| **Tiêm Ngữ Cảnh Điểm Yếu Cũ vào Prompt** | **0/3 bài** (0%) | **2/3 bài** (100% khi có lịch sử) | Agent nhắc nhở học sinh về lỗi đã gặp ở bài trước |
-| **Nhận diện Xu hướng Điểm số (Score Trend)** | `insufficient_data` (Mù lịch sử) | `improving` (Nhận diện chính xác) | Cung cấp dữ liệu cho giáo viên can thiệp kịp thời |
-| **Intervention Priority Index (Sau 3 Bài)** | **0.0** (Đánh giá cô lập) | **1.5** (Tổng hợp đa chiều) | Giáo viên biết chính xác học sinh nào cần hỗ trợ |
+| **Intervention Persona Sequence** | `skeptic → skeptic → nitpicker` | `skeptic → expander → nitpicker` | Branch B adapts and rotates personas upon detecting recurring weaknesses |
+| **Repeated Stagnant Interventions** | **1 occurrence** (Repeated Skeptic) | **0 occurrences** (0% repetition) | Eliminates repetitive questioning angles that cause student fatigue |
+| **Prior Weakness Context Injected into Prompt** | **0/3 essays** (0%) | **2/3 essays** (100% when history exists) | Agent references historical patterns to help student overcome persistent blindspots |
+| **Score Trend Identification** | `insufficient_data` (History-blind) | `improving` (Accurately identified) | Equips teachers with actionable trajectory data for timely intervention |
+| **Intervention Priority Index (After 3 Essays)** | **0.0** (Isolated evaluation) | **1.5** (Multi-dimensional synthesis) | Accurately flags which students require urgent classroom attention |
 
 ---
 
-## 2. Chi Tiết Tiến Trình Từng Bài Luận (Essay Trajectory Breakdown)
+## 2. Longitudinal Essay Trajectory Breakdown
 
-### 📝 Bài Luận 1: `Essay 1: EVs are Bad (Unsourced Claims)`
-* **Nội dung:** Bài viết thiếu hoàn toàn dẫn chứng về xe điện, lập luận cảm tính.
-* **Nhánh A (No Memory):** Chọn `skeptic` (The Skeptic). Không có lịch sử.
-* **Nhánh B (Memory ON):** Chọn `skeptic` (The Skeptic). Ghi nhận điểm yếu ban đầu: `unsupported claim`.
+### 📝 Essay 1: `EVs are Bad (Unsourced Claims)`
+* **Content:** Essay lacks empirical evidence regarding electric vehicles, relying on emotional assertions.
+* **Branch A (No Memory):** Selects `skeptic` (The Skeptic). No prior history.
+* **Branch B (Memory ON):** Selects `skeptic` (The Skeptic). Stores initial diagnosis in profile: `unsupported claim`.
 
-### 📝 Bài Luận 2: `Essay 2: EV Battery Failures (Persistent Weakness)`
-* **Nội dung:** Học sinh vẫn mắc lỗi thiếu dẫn chứng, lấy ví dụ cá nhân (anecdotal evidence) để khái quát hóa.
-* **Nhánh A (No Memory):** Tiếp tục chọn `skeptic` (The Skeptic) một cách máy móc. **Không nhận ra học sinh đang kẹt ở điểm yếu này**.
-* **Nhánh B (Memory ON):** Nhận diện học sinh vừa dùng Skeptic ở bài 1, tự thích ứng chuyển sang `expander` (The Expander) để tiếp cận từ góc độ phản biện đối lập.
-* **Prompt Injection (Nhánh B):**
+### 📝 Essay 2: `EV Battery Failures (Persistent Weakness)`
+* **Content:** Student continues to lack evidence, citing personal anecdotes to make broad generalizations.
+* **Branch A (No Memory):** Mechanically selects `skeptic` again. **Fails to recognize that the student is stuck on this weakness**.
+* **Branch B (Memory ON):** Detects that Skeptic was used in Essay 1; applies streak-breaking algorithm to rotate to `expander` (The Expander) to probe from a complementary perspective.
+* **Context Injected into LLM Prompt (Branch B):**
   > *"This student has previously struggled with: unsupported claim, hasty generalization, anecdotal evidence. If this essay repeats one of these patterns, consider probing it directly..."*
 
-### 📝 Bài Luận 3: `Essay 3: Battery Recycling (Evidence Added, Hasty Generalization)`
-* **Nội dung:** Học sinh đã biết trích dẫn nghiên cứu Stanford 2025 (Evidence tăng vọt từ 1 lên 8 điểm), nhưng phạm lỗi khái quát hóa vội vàng (hasty generalization).
-* **Nhánh A (No Memory):** Chọn `nitpicker`. Không biết rằng học sinh vừa có bước tiến lớn về dẫn chứng.
-* **Nhánh B (Memory ON):** Chọn `nitpicker` (The Nitpicker) tập trung rèn tính chặt chẽ logic. Nhận diện `score_trend: improving`.
+### 📝 Essay 3: `Battery Recycling (Evidence Added, Hasty Generalization)`
+* **Content:** Student successfully cites a Stanford 2025 study (Evidence score surges from 1 to 8), but makes a hasty generalization.
+* **Branch A (No Memory):** Selects `nitpicker`. Unaware that the student made significant progress in evidence retrieval.
+* **Branch B (Memory ON):** Selects `nitpicker` (The Nitpicker) to refine logical tightness. Evaluates longitudinal trajectory as `score_trend: improving`.
 
 ---
 
-## 3. Kết Luận Kiến Trúc (Architectural Conclusion)
+## 3. Architectural Takeaways
 
-1. **Proof of Adaptive Partnership:** eduagent đã chứng minh tính năng cốt lõi của *Collaborative Partner*: agent **học từ tương tác quá khứ** để điều chỉnh phương pháp sư phạm thay vì hoạt động như một chatbot stateless trả lời từng lượt đơn lẻ.
-2. **Deterministic Governance:** Toàn bộ quá trình chọn persona và tính toán Priority Index hoàn toàn **deterministic (ZERO LLM-as-judge)**, bảo đảm 100% khả năng tái lập và minh bạch kiểm toán.
+1. **Empirical Proof of Adaptive Partnership:** `eduagent` demonstrates the defining characteristic of a *Collaborative Partner*: the agent **adapts from past interactions** to adjust its pedagogical strategy rather than functioning as a stateless chatbot responding in isolation.
+2. **Deterministic Governance:** Persona routing and Priority Index calculations remain completely **deterministic (ZERO LLM-as-judge)**, guaranteeing 100% reproducibility and auditability.

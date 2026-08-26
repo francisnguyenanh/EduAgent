@@ -1,6 +1,6 @@
-# Technical Blog Draft (Bonus Stage Three, +0.2đ)
+# Technical Blog Draft (Bonus Stage Three)
 
-> Đăng lên Medium/Dev.to. Ghi rõ "written for the All Things Agentic Hackathon" ngay đầu bài, để public. Chỉnh giọng văn/độ dài tuỳ ý — đây là khung nội dung kỹ thuật đầy đủ đã có sẵn bằng chứng thật, không phải claim suông.
+> Publish on Medium/Dev.to with "written for the All Things Agentic Hackathon" at the top of the post. Adjust length and style as desired—this draft provides a complete, evidence-backed technical narrative.
 
 **Title:** *Building a Socratic Debate Agent That Refuses to Give Answers — Lessons from ADK2, Gemini, and a Production-Minded Architecture*
 
@@ -14,7 +14,7 @@ Most AI writing tools optimize for making the student's essay better. We optimiz
 
 ## Architecture: deterministic-first, LLM only where reasoning is actually required
 
-[Nhúng sơ đồ Mermaid từ README.md mục 2 vào đây]
+*(Embed Mermaid flowchart from README.md Section 2 here)*
 
 Every piece of logic that didn't need LLM reasoning — the Challenge Validator, the Persona Selector, the Class Aggregator's priority ranking, the fallacy clustering — is a plain Python function, zero LLM calls, fully unit-testable and auditable. A teacher asking "why is student A ranked above student B?" always has a traceable, deterministic answer.
 
@@ -83,7 +83,7 @@ To stand out in the *Collaborative Partner* track, we had to prove that our memo
 
 None of these findings came from reading documentation more carefully — they came from actually running the system against real Gmail accounts, real blurry photos, real Cloud Run deployments, and treating every "should work" assumption as something to verify, not assume. That discipline is, we'd argue, the actual differentiator between a demo and a system.
 
-*Repo, architecture diagram, and full ADR log: `[link tới GitHub repo]`.*
+*Repo, architecture diagram, and full ADR log: [https://github.com/francisnguyenanh/EduAgent](https://github.com/francisnguyenanh/EduAgent).*
 
 ---
 

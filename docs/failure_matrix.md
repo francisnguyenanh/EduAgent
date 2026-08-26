@@ -1,62 +1,61 @@
 # Production Failure Matrix: Resilience & Graceful Degradation
 
-> **Architectural Guarantee:** Không có bất kỳ lỗi đơn lẻ nào (Single Point of Failure) từ mạng, quota LLM, cơ sở dữ liệu hay dữ liệu đầu vào người dùng có thể làm sập toàn bộ hệ thống eduagent.
+> **Architectural Guarantee:** No single point of failure (SPOF)—whether network partition, LLM rate limits, database transient errors, or hostile user input—can crash the `eduagent` platform.
 >
-> **Một ngoại lệ CÓ CHỦ ĐÍCH (ĐỢT 13):** thành phần #14 (Session Signing Key) **không** giảm cấp — nó làm tiến trình chết hẳn. Vì nếu khoá ký token là chuỗi công khai trong repo thì "hệ thống vẫn chạy" chính là kịch bản tệ nhất, không phải kịch bản an toàn. Giảm cấp đúng ở mọi nơi khác; ở đây fail-fast mới là đúng.
+> **Intentional Exception (Audit Wave 13):** Component #14 (Session Signing Key) **does not degrade**; it terminates the process immediately (fail-fast). Running with a public default signing key in production is the worst possible failure mode, not a safe state. Graceful degradation applies everywhere else; here, fail-fast is the correct security posture.
 
 ---
 
-## 1. Bảng Ma Trận 15 Thành Phần & Cơ Chế Phục Hồi (Failure Matrix)
+## 1. 15-Component Failure & Recovery Matrix
 
-| # | Thành Phần Hệ Thống (Component) | Điều Kiện Lỗi (Trigger Condition) | Mức Độ (Severity) | Cơ Chế Tự Phục Hồi & Giảm Cấp (Mitigation / Degradation) | Trạng Thái Trả Về (Fallback Behavior) | Thuộc Tính Kiểm Toán (Trace Span / Log) |
+| # | System Component | Trigger Condition | Severity | Self-Healing & Graceful Degradation | Fallback Behavior | Trace Attribute / Log Audit |
 |:---:|---|---|:---:|---|---|---|
-| **1** | **Intake & Sanitizer** | Prompt injection attempt (`Ignore instructions`, `<system> tags`) | High | Regex scanning & boundary stripping | Loại bỏ 100% token độc hại, giữ nguyên văn bản bài luận | `eduagent.sanitizer.blocked_patterns` |
-| **2** | **OCR Handwriting Engine** | Ảnh mờ / viết tay không đọc được / OCR confidence thấp; **hoặc latency cao** | Medium | 2 lần transcribe độc lập + so `difflib` (ADR-007), confidence bị hạ xuống `low` khi 2 bản lệch nhau; timeout multimodal 60s (ADR-009) và cap 10MB base64. **Đo thật (ĐỢT 15):** ảnh 958 KB → OCR **22.5s**, cả luồng `start-with-image` **24.2s**; Cloud Run request timeout **300s** ⇒ headroom ~12x, **không** phải rủi ro 504 như một review ngoài dự đoán. Rủi ro thật là 24s chết lặng khi quay video — xử lý bằng kịch bản (`docs/video_script.md`), không phải bằng config | Bản đọc confidence thấp vẫn cho tranh biện nhưng gắn cờ `ocr.degraded` cho UI, và ở luồng batch thì park vào `pending_essays` (ADR-008) | `eduagent.ocr.confidence_score` |
-| **3** | **LLM Gateway (Gemini API)** | HTTP 429 Rate Limit / Quota Exceeded / Vertex AI Outage | Critical | Exponential backoff (3 retries) + Fallback sang Canned Persona Prompts | Sử dụng ngân hàng câu hỏi chuẩn sư phạm theo từng Persona | `eduagent.llm.status = "degraded"` |
-| **4** | **Independent Validator** | Model cố tình tiết lộ đáp án (Answer Leak) | High | Chặn lập tức, kích hoạt vòng lặp sinh lại (Regeneration Loop up to 2 retries) | Cung cấp câu hỏi Socratic canned nếu quá số lần thử | `eduagent.validator.leak_detected = true` |
-| **5** | **Persona Selector** | Học sinh bị kẹt 3 bài liên tiếp cùng 1 Persona không tiến bộ | Medium | Loại trừ Persona cũ khỏi danh sách ứng viên (Streak Breaking Algorithm) | Tự động chuyển giao sang Persona đối lập (e.g. Skeptic -> Expander) | `eduagent.persona.streak_broken = true` |
-| **6** | **Metacognitive Reflection** | LLM phân tích hiệu chỉnh luận điểm bị lỗi cú pháp JSON | Low | Fallback parser & Default Growth Attribution | Ghi nhận hoàn thành tự hiệu chỉnh, cộng điểm chuẩn (+0.5) | `eduagent.reflection.fallback_used = true` |
-| **7** | **Firestore Database Client** | Mất kết nối Firestore / GAPIC encoding bug | High | URL quote patch + Fallback In-Memory Cache | Phục vụ đọc/ghi từ Local RAM Cache, cảnh báo log giám sát | `eduagent.firestore.status = "in_memory_fallback"` |
-| **8** | **Distributed Session Store** | Cloud Run scale đa instance / Container restart đột ngột | Medium | **Firestore là nguồn sự thật**; cache in-process chỉ được tin trong **3 giây** (`_CACHE_FRESHNESS_SECONDS`). Firestore sập → serve bản cache cũ (mất phiên vì hạ tầng chớp nháng tệ hơn state cũ vài giây). TTL policy trên `expire_at` **đã ACTIVE thật** trên GCP | Khôi phục trạng thái tranh biện từ `debate_sessions/{id}` | `eduagent.session.restored = true` |
-| **9** | **Priority Ranking Engine** | Học sinh mới chưa có lịch sử bài luận | Low | Quy ước `score_trend = "insufficient_data"`, trọng số suy giảm = 0 | Xếp hạng dựa trên điểm yếu hiện tại, phân định hòa bằng `student_id` | `eduagent.priority.insufficient_data = true` |
-| **10** | **Teacher Digest Synthesizer** | Gemini heavy model bị gián đoạn khi tổng hợp báo cáo | Medium | Fallback template rendering từ bảng xếp hạng tất định | Xuất báo cáo cấu trúc đầy đủ danh sách học sinh & 3-step mini-lesson | `eduagent.digest.degraded_mode = true` |
-| **11** | **Pub/Sub Event Ingestion** | Delivery trùng lặp sự kiện `essay.evaluated` | Medium | Firestore Idempotency Lease Lock (`events/{event_id}`) | Bỏ qua sự kiện trùng, trả về HTTP 200 `status: duplicate_skipped` | `eduagent.event.duplicate_skipped = true` |
-| **12** | **API Rate Limiter** (ĐỢT 13, ADR-017) | Vòng lặp `curl` vào endpoint tranh biện public → cạn quota Vertex AI (cost-DoS) | High | Token bucket theo IP (`rate_limit.py`): burst 10 / 1 req mỗi 5s cho debate, burst 5 / 1 mỗi 10s cho login. Key lấy từ **hop đầu** của `X-Forwarded-For` (hop sau do attacker cung cấp) | HTTP `429` + header `Retry-After`; caller bị từ chối **vẫn tích luỹ token**, không bị khoá vĩnh viễn | `client_key`, `path` trong log `Rate limit exceeded` |
-| **13** | **Student Endpoint Authorization** (ĐỢT 13, ADR-018) | Người gọi bất kỳ POST `student_id` tuỳ ý → ghi bẩn hồ sơ học sinh khác, làm lệch bảng xếp hạng giáo viên | Critical | `_verify_student_auth()`: token `role=student` chỉ hành động thay chính mình; `class_id` phải khớp; `/turn` suy quyền sở hữu từ session (không từ request) và **xác thực trước khi tra session** để không thành existence oracle | `401` (thiếu/giả token) · `403` (sai học sinh / sai lớp) · `400` (`student_id` không tách được class) | `_verify_student_auth` raise HTTPException |
-| **14** | **Session Signing Key** (ĐỢT 13, ADR-016) | Deploy lên Cloud Run mà quên set `EDUAGENT_SESSION_SECRET` → ký token bằng khoá công khai trong repo | Critical | **Fail-fast, không degrade**: `_resolve_session_secret()` phát hiện `K_SERVICE` và raise `InsecureConfigurationError` → container không boot. Đây là trường hợp duy nhất trong hệ thống cố tình **KHÔNG** giảm cấp — chạy tiếp với khoá công khai tệ hơn là không chạy | Revision không nhận traffic; log nêu đúng lệnh cần chạy | `InsecureConfigurationError` tại import time |
-| **15** | **Credential Delivery** (ĐỢT 14, ADR-020) | Deploy nhồi credential vào env var thường → Cloud Run lưu **cleartext** trong revision spec, `gcloud run services describe` in ra nguyên văn refresh token | Critical | Cả 3 credential mount qua `--update-secrets` (chỉ còn con trỏ `valueFrom.secretKeyRef`). **3 lớp chặn hồi quy:** (1) `_preflight_secrets()` từ chối deploy nếu thiếu secret, in đúng lệnh cần chạy; (2) hard gate AST `tests/test_deploy_never_inlines_secrets.py`; (3) check `doctor.py` soi **revision đã deploy** và báo FAIL nếu còn credential cleartext | Deploy bị chặn trước khi chạy; hoặc doctor báo FAIL kèm hướng dẫn redeploy + rotate | `check_no_plaintext_credentials_on_cloud_run` |
+| **1** | **Intake & Sanitizer** | Prompt injection attempt (`Ignore instructions`, `<system>` tags, role hijack) | High | Regex scanning & boundary tag stripping | 100% malicious command tokens stripped; pure essay text preserved safely | `eduagent.sanitizer.blocked_patterns` |
+| **2** | **OCR Handwriting Engine** | Blurred image / illegible handwriting / low OCR confidence; **or high latency** | Medium | Dual independent transcription passes + `difflib` cross-validation (ADR-007); confidence downgraded to `low` on divergence; 60s multimodal timeout (ADR-009) and 10MB base64 cap. **Measured latency (Audit Wave 15):** 958 KB image → OCR **22.5s**, entire `start-with-image` flow **24.2s**; Cloud Run request timeout **300s** (12x headroom). | Low-confidence OCR proceeds to debate with `ocr.degraded` UI flag; batch processing parks essay in `pending_essays` (ADR-008) | `eduagent.ocr.confidence_score` |
+| **3** | **LLM Gateway (Gemini API)** | HTTP 429 Rate Limit / Quota Exceeded / Vertex AI Outage | Critical | Exponential backoff with jitter (3 retries) + Fallback to canned Socratic persona prompts | Serves pedagogically sound canned Socratic questions calibrated per persona | `eduagent.llm.status = "degraded"` |
+| **4** | **Independent Validator** | Model attempts to leak answers / corrections | High | Immediate interception; triggers regeneration loop (up to 2 retries) | Injects canned Socratic probing question if max retries exceeded | `eduagent.validator.leak_detected = true` |
+| **5** | **Persona Selector** | Student stagnant on same persona for 3+ consecutive essays without improvement | Medium | Excludes historical persona from candidate pool (Streak Breaking Algorithm) | Automatically rotates to complementary persona (e.g. Skeptic -> Expander) | `eduagent.persona.streak_broken = true` |
+| **6** | **Metacognitive Reflection** | LLM thesis revision analysis yields malformed JSON | Low | Resilient fallback parser & default growth attribution | Records self-correction completion, awards standard progress points (+0.5) | `eduagent.reflection.fallback_used = true` |
+| **7** | **Firestore Database Client** | Firestore network drop / transient GAPIC encoding error | High | URL quote patch + in-memory fallback cache | Serves reads/writes from local RAM cache, logs monitoring alert | `eduagent.firestore.status = "in_memory_fallback"` |
+| **8** | **Distributed Session Store** | Cloud Run multi-instance scaling / container sudden restart | Medium | **Firestore is source of truth**; in-process cache trusted only for **3 seconds** (`_CACHE_FRESHNESS_SECONDS`). If Firestore down → serve cached snapshot. Firestore TTL policy on `expire_at` is ACTIVE. | Restores full debate state seamlessly from `debate_sessions/{id}` | `eduagent.session.restored = true` |
+| **9** | **Priority Ranking Engine** | New student with no prior essay history | Low | Sets `score_trend = "insufficient_data"`, decay weight = 0 | Ranks based on current essay weakness; breaks ties deterministically via `student_id` | `eduagent.priority.insufficient_data = true` |
+| **10** | **Teacher Digest Synthesizer** | Gemini heavy model unavailable during batch digest generation | Medium | Fallback deterministic Jinja2/string template rendering | Generates fully structured report with student ranking table & 3-step lesson plan | `eduagent.digest.degraded_mode = true` |
+| **11** | **Pub/Sub Event Ingestion** | Duplicate delivery of `essay.evaluated` event | Medium | Firestore Idempotency Lease Lock (`events/{event_id}`) | Skips duplicate processing; returns HTTP 200 `status: duplicate_skipped` | `eduagent.event.duplicate_skipped = true` |
+| **12** | **API Rate Limiter** (Audit Wave 13, ADR-017) | `curl` loop hammering public debate endpoint → Vertex AI quota depletion (cost-DoS) | High | Per-IP token bucket (`rate_limit.py`): burst 10 / 1 req per 5s for debate; burst 5 / 1 per 10s for login. Key taken from client hop of `X-Forwarded-For` | Returns HTTP `429` + `Retry-After` header; rejected callers continue token accumulation without permanent lockout | `client_key`, `path` in `Rate limit exceeded` logs |
+| **13** | **Student Endpoint Authorization** (Audit Wave 13, ADR-018) | Arbitrary caller POSTs arbitrary `student_id` → corrupts another student profile & skews teacher ranking | Critical | `_verify_student_auth()`: `role=student` token acts only for own `user_id`; `class_id` must match; `/turn` derives ownership from session and **verifies before session lookup** to avoid existence oracle | `401` (missing/forged token) · `403` (mismatched student/class) · `400` (invalid student ID format) | `_verify_student_auth` raises HTTPException |
+| **14** | **Session Signing Key** (Audit Wave 13, ADR-016) | Deployed to Cloud Run without setting `EDUAGENT_SESSION_SECRET` → tokens signed with repo default key | Critical | **Fail-fast, zero degradation**: `_resolve_session_secret()` detects `K_SERVICE` and raises `InsecureConfigurationError` → container fails boot. Running with a public secret is strictly prohibited | Revision refuses traffic; logs exact remediation command | `InsecureConfigurationError` at import time |
+| **15** | **Credential Delivery** (Audit Wave 14, ADR-020) | Inlining credentials into plain environment variables → Cloud Run stores cleartext in revision spec (`gcloud run services describe` prints refresh tokens) | Critical | Mount all credentials via `--update-secrets` (`valueFrom.secretKeyRef`). **3 defense layers:** (1) `_preflight_secrets()` rejects deploy if secret missing; (2) AST test `tests/test_deploy_never_inlines_secrets.py`; (3) `doctor.py` inspects live deployed revision for cleartext tokens | Deploy blocked pre-flight; or doctor reports FAIL with redeploy + secret rotation instructions | `check_no_plaintext_credentials_on_cloud_run` |
 
 ---
 
-## 2. Phân Tích Kịch Bản Giảm Cấp Điển Hình (Degradation Case Studies)
+## 2. Graceful Degradation Case Studies
 
-### 🛡️ Kịch bản 1: LLM Gateway ngắt kết nối hoàn toàn (Total LLM Outage)
-* **Kỳ vọng:** Học sinh vẫn tiếp tục phiên tranh luận, giáo viên vẫn nhận được danh sách học sinh cần can thiệp.
-* **Thực thi thực tế:**
-  1. `debate.py` phát hiện `LLMGenerationError`, kích hoạt `_PERSONA_FALLBACK_QUESTIONS` theo từng Persona (`skeptic`, `devils_advocate`, `nitpicker`, `expander`).
-  2. `priority_engine.py` (100% Python thuần túy, ZERO LLM) vẫn tính toán chính xác chỉ số Intervention Priority Index.
-  3. `digest.py` kích hoạt `_fallback_digest`, gửi email/bảng điều khiển với đầy đủ dữ liệu ưu tiên và giáo án 15 phút.
+### 🛡️ Scenario 1: Total LLM Gateway Outage
+* **Expectation:** Students can still continue their Socratic debate; teachers still receive a deterministic class intervention ranking.
+* **Execution:**
+  1. `debate.py` catches `LLMGenerationError` and triggers `_PERSONA_FALLBACK_QUESTIONS` mapped to the active persona (`skeptic`, `devils_advocate`, `nitpicker`, `expander`).
+  2. `priority_engine.py` (100% pure Python, ZERO LLM dependency) deterministically calculates the Intervention Priority Index without interruption.
+  3. `digest.py` triggers `_fallback_digest`, delivering dashboard insights with complete priority rankings and actionable 15-minute mini-lesson plans.
 
-### 🔒 Kịch bản 2: Tấn công Prompt Injection tinh vi qua OCR
-* **Kỳ vọng:** Kẻ tấn công chèn lệnh vô hiệu hóa quy tắc trong ảnh bài luận viết tay.
-* **Thực thi thực tế:**
-  1. Văn bản trích xuất từ OCR đi qua `intake.py::strip_injection_attempts`.
-  2. Toàn bộ các mẫu lệnh độc hại (`Ignore instructions`, `<system>`, role hijack) bị bóc tách và ghi nhật ký cảnh báo an ninh.
-  3. Văn bản đã làm sạch được đóng gói trong thẻ phân định `<student_essay>` trước khi đưa vào prompt.
-
----
-
-### 🔑 Kịch bản 3: Deploy thiếu secret / credential bị phơi cleartext (ĐỢT 14)
-* **Kỳ vọng:** không thể deploy ra một revision vừa chạy được vừa để lộ credential.
-* **Thực thi thực tế:**
-  1. `scripts/deploy_to_cloud_run.py::_preflight_secrets()` kiểm cả 3 secret **trước** khi gọi `gcloud run deploy`; thiếu bất kỳ cái nào → `sys.exit(1)` kèm đúng lệnh `gcloud secrets create` cần chạy.
-  2. Nếu ai đó bỏ preflight và nhồi credential vào env dict → `tests/test_deploy_never_inlines_secrets.py` (AST, không phải grep) làm **fail build**. Đã verify bằng sabotage test: tái tạo lỗi cũ → test FAIL đúng.
-  3. Nếu một revision đã deploy vẫn còn credential cleartext (ví dụ deploy bằng lệnh tay) → `scripts/doctor.py` soi revision **thật** và báo **FAIL** kèm khuyến nghị redeploy **và rotate**, vì chuyển chỗ lưu không vô hiệu hoá giá trị đã bị phơi.
-* **Ghi chú trung thực:** cả 3 lớp này được thêm *sau khi* lỗ hổng đã live và do **người ngoài** phát hiện, không phải ta. Đó chính là lý do chúng tồn tại: cùng một lớp lỗi đã lọt qua ĐỢT 12 (sửa đúng 1 secret đang bàn, để lại 2 credential khác), nên biện pháp đúng không phải "cẩn thận hơn" mà là một cái check chạy mà không cần ta nhớ.
+### 🔒 Scenario 2: Complex Multimodal Prompt Injection via OCR
+* **Expectation:** An attacker embeds prompt override instructions within a handwritten essay image.
+* **Execution:**
+  1. Transcribed text from OCR flows into `intake.py::strip_injection_attempts`.
+  2. All malicious instruction patterns (`Ignore previous instructions`, `<system>`, role hijacking) are stripped and logged to security telemetry.
+  3. The sanitized essay is wrapped in protective boundary delimiters `<student_essay>` prior to prompt assembly.
 
 ---
 
-## 3. Tuyên Bố Độ Tin Cậy Sẵn Sàng Vận Hành (Production Readiness Declaration)
+### 🔑 Scenario 3: Missing Secrets or Cleartext Credential Exposure (Audit Wave 14)
+* **Expectation:** Prevent deploying or operating any revision that leaks credentials in plaintext.
+* **Execution:**
+  1. `scripts/deploy_to_cloud_run.py::_preflight_secrets()` validates all 3 secrets in Secret Manager **before** invoking `gcloud run deploy`; any missing secret causes immediate `sys.exit(1)` with the exact `gcloud secrets create` command needed.
+  2. If an engineer bypasses preflight and passes inline tokens → `tests/test_deploy_never_inlines_secrets.py` (AST validation) fails the build. Sabotage-tested and verified.
+  3. If a deployed revision contains cleartext credentials (e.g. manual CLI deployment) → `scripts/doctor.py` inspects the active Cloud Run spec and reports **FAIL** alongside instructions to redeploy and rotate the exposed secrets.
+
+---
+
+## 3. Production Readiness Declaration
 
 ```
 [System Health Audit]

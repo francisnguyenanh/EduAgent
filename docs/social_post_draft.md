@@ -1,8 +1,8 @@
-# Social Post Draft (Bonus Stage Three, +0.2đ)
+# Social Post Draft (Bonus Stage Three)
 
-> Đăng trên X/LinkedIn, public, kèm hashtag bắt buộc `#AllThingsAgenticHackathon` + link demo. Chọn 1 trong 2 bản dưới tuỳ nền tảng (X ngắn, LinkedIn dài hơn) hoặc chỉnh giọng văn tuỳ ý.
+> Post on X/LinkedIn (public) with the mandatory hashtag `#AllThingsAgenticHackathon` + demo link. Choose between the two templates below or adapt the tone as needed.
 
-## X (bản chính thức — 273/280 ký tự, đã tính link rút gọn t.co)
+## X (Official Version — 273/280 chars, including t.co short links)
 
 > Built an AI that won't give students answers — it debates them instead.
 >
@@ -13,17 +13,17 @@
 >
 > #AllThingsAgenticHackathon
 
-**Cách đăng:**
-1. Đăng nhập X, bấm "Post".
-2. Copy nguyên văn khối trên (giữ đúng xuống dòng — nó tạo nhịp đọc, X không tự xuống dòng cho bạn).
-3. Thay 2 link nếu cần: dòng demo dùng URL Cloud Run thật, dòng repo dùng URL GitHub thật (đều đã điền đúng ở trên, chỉ cần xác nhận repo đang **Public**).
-4. **Không gõ tay hashtag riêng** — cứ để `#AllThingsAgenticHackathon` y như trong bài, gõ liền không dấu cách mới ăn thành thẻ.
-5. Đăng ở chế độ public (mặc định của tài khoản public đã là public — không cần chỉnh gì thêm trừ khi tài khoản bạn đặt "Protected posts").
-6. Copy link bài đăng vừa lên (bấm vào timestamp của post → copy URL từ address bar) để dán vào form Devpost.
+**Posting Instructions:**
+1. Log in to X, click "Post".
+2. Copy the text block above verbatim (preserve line breaks for readability).
+3. Verify the two links: the live Cloud Run URL and the public GitHub repo URL.
+4. Keep the exact hashtag `#AllThingsAgenticHackathon`.
+5. Post publicly.
+6. Copy the direct link to the published post (click the timestamp → copy URL) to submit on Devpost.
 
-**Nếu muốn thread dài hơn** (X cho đăng nhiều tweet nối tiếp, không giới hạn 280 mỗi cái nếu bạn có Premium, hoặc cứ tách thành 2-3 tweet nối "🧵"): dùng bản LinkedIn dưới, cắt thành 2 đoạn.
+---
 
-## LinkedIn (dài hơn, không giới hạn ký tự chặt)
+## LinkedIn (Expanded Long-form Post)
 
 > "Using AI to teach students not to depend on AI" — that's the one-line philosophy behind eduagent, my submission for the All Things Agentic Hackathon (Collaborative Partner track).
 >

@@ -1,9 +1,9 @@
 # Devpost Submission Draft — eduagent
 
 > [!NOTE]
-> **Hướng dẫn sử dụng:**
-> File này chứa toàn bộ các trường thông tin cần điền trên cổng nộp bài Devpost. Bạn chỉ cần copy-paste nội dung tương ứng vào từng ô nhập liệu trên website. 
-> Trước khi nộp, hãy cập nhật các liên kết thực tế (Video demo link, GitHub repo link, LinkedIn post link).
+> **Instructions for Use:**
+> This file contains all required fields for the Devpost submission portal. Copy and paste the corresponding sections directly into the Devpost submission form.
+> Before submitting, update the placeholder links with your live URLs (Demo video, GitHub repo, LinkedIn/X post).
 
 ---
 
@@ -86,7 +86,7 @@ We built eduagent as a new system around Google ADK and GCP services:
 
 ## Evaluation Methodology (how to read our numbers)
 
-| | |
+| Metric / Dimension | Implementation Detail |
 |---|---|
 | Production cognitive scorer | **Gemini** (`gemini-3.5-flash`) |
 | Evaluation harness | **Deterministic** (regex/assertions, zero LLM) |
@@ -106,10 +106,10 @@ We do not use an LLM to judge whether our system passed its safety and behaviora
 ---
 
 ## 5. "Try it out" links
-- **GitHub Repository:** `[Link tới GitHub repo của bạn]`
+- **GitHub Repository:** `https://github.com/francisnguyenanh/EduAgent`
 - **Live Web Demo:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
   * **Shared Passcode:** `eduagent2026` (Used for both Student & Teacher logins)
-  * **Student Portal:** ID `c1_stu01` (or any custom ID like `c1_judge01`) | Passcode: `eduagent2026`
+  * **Student Portal:** ID `c1_stu01` (or custom e.g. `c1_judge01`) | Passcode: `eduagent2026`
   * **Teacher Portal:** ID `c1_teacher` | Passcode: `eduagent2026`
   * *Note on Sandbox Mode:* The selected portal button determines the user's role (Student vs Teacher). You can select Student Portal and log in with any custom ID matching `<class_id>_<name>` (e.g., `c1_judge_david`) using passcode `eduagent2026`. This spins up an isolated test student profile in Firestore which dynamically links to the Teacher Portal roster and priority matrix.
 - **Live Cloud Run Service (API Check):** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/health-check`
@@ -117,28 +117,28 @@ We do not use an LLM to judge whether our system passed its safety and behaviora
 ---
 
 ## 6. Project Media
-- `README_architecture_diagram.png` (Ảnh sơ đồ cấu trúc hệ thống vẽ bằng Mermaid)
-- `student_debate_interface.png` (Ảnh minh họa giao diện học sinh nộp bài và tranh biện)
-- `teacher_dashboard_analytics.png` (Ảnh minh họa dashboard giáo viên, priority ranking và fallacy clusters)
-- `gmail_digest_draft_inbox.png` (Ảnh chụp bản thảo email tự động tạo trong Gmail)
-- `eval_report_v2.md` (Báo cáo kết quả kiểm thử tự động của ADK Eval Suite)
-- `experiment_memory_ab.md` (Báo cáo thực nghiệm chứng minh tác dụng của Memory)
-- `learning_outcome_eval.md` (Báo cáo định lượng sự tiến bộ nhận thức của học sinh)
+- `README_architecture_diagram.png` (Mermaid architectural flowchart)
+- `student_debate_interface.png` (Student submission and Socratic debate UI)
+- `teacher_dashboard_analytics.png` (Teacher dashboard with priority ranking and fallacy clusters)
+- `gmail_digest_draft_inbox.png` (Automated Gmail digest draft snapshot)
+- `eval_report_v2.md` (ADK Eval Suite automated report)
+- `experiment_memory_ab.md` (Memory A/B empirical proof report)
+- `learning_outcome_eval.md` (Empirical learning outcome evaluation)
 
 ---
 
 ## 7. Video Demo Link
-`[Link video YouTube hoặc Vimeo của bạn sau khi upload công khai]`
+`[Insert YouTube / Vimeo video URL here]`
 
 ---
 
 ## 8. Additional Info (For Judges & Organizers)
 
-* **Submitter country of residence:** `[Quốc gia của bạn, ví dụ: Vietnam]`
+* **Submitter country of residence:** Vietnam
 * **Which Category are you submitting to?** Collaborative Partner
-* **If submitting on behalf of an Organization, what is the Organization name?** `[Để trống hoặc điền tên công ty nếu chọn Startup Prize]`
+* **If submitting on behalf of an Organization, what is the Organization name?** `[Leave blank if individual / hobbyist]`
 * **What date did you start this project?** 08-03-2026
-* **URL to your public or private code repo:** `[Link GitHub repo]` (Nếu repo private, bảo đảm đã add collab cho: `testing@devpost.com` và `cloudhackathons@google.com`)
+* **URL to your public or private code repo:** `https://github.com/francisnguyenanh/EduAgent`
 * **Did you add Reproducible Testing instructions to your README?** Yes
 * **Hosted project URL if available:** `https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app`
 * **Testing instructions:**
@@ -147,17 +147,17 @@ We do not use an LLM to judge whether our system passed its safety and behaviora
      * Login as Student using ID `c1_stu01` (or any custom `c1_<name>` like `c1_judge_david`) and Passcode `eduagent2026` to try Socratic debate with OCR, presets, or Google Doc link.
      * Login as Teacher using ID `c1_teacher` and Passcode `eduagent2026` to view class analytics, priority index table with SVG sparklines, parent update notes, and configuration settings.
   2. To run local unit & integration tests, ensure Google Application Default Credentials (ADC) are configured, then execute:
-     `pytest tests/ -q`
+     `pytest tests/ -q -m "not e2e"`
   3. To run the diagnostic doctor check, execute:
      `python scripts/doctor.py`
   4. To verify the event-driven aggregator subscriber, simulate a Pub/Sub event locally:
      `python scripts/demo_tier1_run.py` (which publishes to Firestore and Pub/Sub), and monitor the output in Gmail Drafts.
   5. The Cloud Run service at the hosted URL acts as a secure internal Pub/Sub Push endpoint (`POST /`). A GET call to `/health-check` will return `{"status":"ok"}`.
 * **Which Google SDK did you use?** Google GenAI SDK, Google Cloud SDK, Google ADK (Agent Development Kit).
-* **Which Google Cloud Service(s) did you use?** Cloud Run, Firestore, Pub/Sub, Cloud Logging, Cloud Trace, Artifact Registry, Cloud Build.
-* **Architecture diagram:** `[Upload file ảnh sơ đồ kiến trúc hệ thống, ví dụ: assets/architecture_diagram.png]`
-* **If opting-in to win the Startup Prize, please provide the name of your incorporated organization:** `[Để trống nếu là hobbyist]`
-* **If opting-in to win the Startup Prize, what is your corporate email address?** `[Để trống nếu là hobbyist]`
+* **Which Google Cloud Service(s) did you use?** Cloud Run, Firestore, Pub/Sub, Cloud Logging, Cloud Trace, Artifact Registry, Cloud Build, Secret Manager.
+* **Architecture diagram:** `[Upload assets/architecture_diagram.png]`
+* **If opting-in to win the Startup Prize, please provide the name of your incorporated organization:** `[Leave blank if individual]`
+* **If opting-in to win the Startup Prize, what is your corporate email address?** `[Leave blank if individual]`
 * **Which Google AI Models did you use?** Gemini 3.5 Flash (for OCR, summarization, and debate loops) and Gemini 3.7 Flash (for teacher digest synthesis).
-* **Link to a piece of content (blog, podcast, video) for bonus points:** `[Link bài viết LinkedIn của bạn về dự án]` (Lưu ý: bài viết cần ghi rõ được viết cho mục đích tham gia hackathon này)
-* **Link to a social media post for bonus points:** `[Link bài đăng chia sẻ trên LinkedIn/X kèm hashtag #AllThingsAgenticHackathon]`
+* **Link to a piece of content (blog, podcast, video) for bonus points:** `[Insert published technical blog URL]`
+* **Link to a social media post for bonus points:** `[Insert published X / LinkedIn post URL with hashtag #AllThingsAgenticHackathon]`

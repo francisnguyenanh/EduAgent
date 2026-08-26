@@ -5,9 +5,9 @@
 
 ---
 
-## 🥇 The Golden Path (ĐỢT 11/12) — ONE story, told identically everywhere
+## 🥇 The Golden Path — ONE story, told identically everywhere
 
-Video, Devpost, README and slides all follow **this single flow**, in this order. If an artifact tells a different story, the artifact is wrong, not this list.
+Video, Devpost, README and slides all follow **this single flow**, in this order:
 
 ```
 handwritten photo → OCR (self-consistency cross-check) → weak evidence detected
@@ -23,7 +23,7 @@ Two lines worth putting on screen as text, because they land harder read than he
 * *"We don't trust the model's own confidence score."* (during the OCR beat)
 * *"The agent doesn't replace the teacher or the student's thinking. It makes both more scalable."* (closing)
 
-**⏱️ Latency budget — measured, not estimated (ĐỢT 15).** The image path is the slowest thing in the demo. Measured on a real 958 KB handwritten photo against Vertex AI:
+**⏱️ Latency budget — measured, not estimated (Audit Wave 15).** The image path is the slowest thing in the demo. Measured on a real 958 KB handwritten photo against Vertex AI:
 
 | Step | Measured |
 |---|---|
@@ -57,7 +57,7 @@ timeline
 
 ### 🎬 Scene 1: The Problem & The Paradigm Shift (0:00 - 0:40)
 * **Visual:** Split screen. Left side: standard chatbot generating a ready-made essay (label: *Passive Consumer*). Right side: eduagent logo and dashboard (label: *Autonomous Collaborative Partner*).
-* **Voiceover (English/Vietnamese):**
+* **Voiceover:**
   > *"Generative AI in classrooms today suffers from a fundamental paradox: instead of teaching students how to think, it does the thinking for them. Students submit prompts; AI spits out answers.*  
   > *Meet **eduagent** — an autonomous, adaptive Collaborative Partner built on Google Cloud and Gemini that **refuses to write the essay**. Instead, it acts as a relentless Socratic adversary, challenging logical fallacies, tracking long-term cognitive growth across weeks, and autonomously synthesizing class-wide insights for teachers."*
   > (Say "adaptive" or "autonomous," not "multi-agent" — personas are routed within one ADK `Workflow` of `FunctionNode`s, `src/eduagent/graph/tier1_pipeline.py`, not separate agent instances. "Multi-agent" invites a "where are the agents?" question we can't answer well.)
@@ -73,7 +73,7 @@ timeline
     > *"This student has previously struggled with: unsupported claim. Probing broader context..."*
 * **Visual 3 (1:25 - 1:45):** **Metacognitive Reflection Node**.
   - Binh submits a revised thesis statement based on the debate.
-  - The Scorer evaluates the cognitive delta — **read the delta the screen actually shows.** ⚠️ Do NOT say "2/10 to 8/10, +6.0": those were hand-typed constants in an earlier version of the evaluation script, not measured values (ĐỢT 12 NHÓM 1). Live scoring of a short revised thesis typically lands in the low single digits in absolute terms; the honest framing is *"the delta is positive on the axis the persona targeted"*, and the measured mean across our 8 benchmark scenarios is **+2.75**, not +5.62. If you want a number on screen here, run `scripts/evaluate_learning_outcomes.py` beforehand and show `docs/learning_outcome_eval.md`.
+  - The Scorer evaluates the cognitive delta — **read the delta the screen actually shows.** ⚠️ Do NOT say "2/10 to 8/10, +6.0": those were hand-typed constants in an earlier version of the evaluation script, not measured values (Audit Wave 12). Live scoring of a short revised thesis typically lands in the low single digits in absolute terms; the honest framing is *"the delta is positive on the axis the persona targeted"*, and the measured mean across our 8 benchmark scenarios is **+2.75**, not +5.62. If you want a number on screen here, run `scripts/evaluate_learning_outcomes.py` beforehand and show `docs/learning_outcome_eval.md`.
 
 ---
 
@@ -91,7 +91,7 @@ timeline
 ### 🎬 Scene 4: Architectural Discipline & Empirical Evaluation (2:45 - 3:30)
 * **Visual 1 (2:45 - 3:05):** Architecture Diagram & Google Cloud Trace.
   - Show live Google Cloud Run deployment (`asia-southeast1`), Firestore Memory, Pub/Sub Event Ingestion, and W3C Trace context propagation across nodes.
-  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the 10-check report land on screen. It is a single command that shows the deployed revision is healthy, the Firestore TTL policy is ACTIVE, and no credential is stored in cleartext. If you'd rather say one sentence than show a table: *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."* ⚠️ Only show this **after** redeploying — on the current revision that check reports FAIL, which is the opposite of the point. (Do NOT say "sub-250ms" on camera — that number is from a `time.sleep()` simulation script, not measured Gemini latency; see `docs/trace_evidence.md` caveat. If a real Cloud Trace screenshot is captured before recording, use the real number instead — otherwise just show the span hierarchy/order, no latency claim.)
+  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the 10-check report land on screen. It is a single command that shows the deployed revision is healthy, the Firestore TTL policy is ACTIVE, and no credential is stored in cleartext. If you'd rather say one sentence than show a table: *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."*
 * **Visual 2 (3:05 - 3:20):** **4-Layer Deterministic ADK Eval Suite — 50/50 deterministic test cases passed**.
   - Show terminal output of `scripts/run_eval_suite.py --strict`:
     1. Safety & Security (15/15)
