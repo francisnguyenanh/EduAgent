@@ -1,5 +1,5 @@
-# eduagent — Tài liệu Toàn diện cho NotebookLM
-> Tổng hợp kiến trúc, triết lý thiết kế, kết quả thực nghiệm và kỹ thuật của dự án **eduagent**
+# EduAgent — Tài liệu Toàn diện cho NotebookLM
+> Tổng hợp kiến trúc, triết lý thiết kế, kết quả thực nghiệm và kỹ thuật của dự án **EduAgent**
 > Dùng để tạo slide trình bày trong video demo hackathon và nộp bài.
 
 ---
@@ -12,11 +12,13 @@
 - Lớp học quá đông (40+ học sinh / giáo viên).
 - Giáo viên không có thời gian phản hồi sâu sắc, cá nhân hóa cho từng học sinh.
 - Các công cụ AI hiện tại (ChatGPT, Gemini trần...) đang làm hỏng học sinh bằng cách **đưa thẳng đáp án (Answer Machine)** → học sinh copy-paste thay vì tự suy nghĩ.
+- Những học sinh cần sự hỗ trợ nhiều nhất lại thường là những em ở **vùng nông thôn, trường thiếu giáo viên** — không phải những em vốn đã được học ở môi trường đầy đủ điều kiện. Khoảng cách địa lý không nên là rào cản tiếp cận một người bạn đồng hành tư duy thực sự.
 
 **Hệ quả nguy hiểm:**
 - Học sinh học cách "nhờ AI làm bài hộ" chứ không học cách "lập luận".
 - Kỹ năng tư duy độc lập, phân tích logic bị thui chột.
 - Giáo viên hoàn toàn mất khả năng theo dõi học sinh nào đang thực sự "kẹt" tư duy.
+
 
 ### 1.2 Triết lý cốt lõi của dự án
 
@@ -31,14 +33,21 @@
 
 | Thông tin | Chi tiết |
 |-----------|----------|
-| **Tên dự án** | eduagent — Collaborative Partner Socratic Mentor |
+| **Tên dự án** | EduAgent — Collaborative Partner Socratic Mentor |
 | **Hackathon** | All Things Agentic Hackathon (Google Cloud) |
 | **Track** | Collaborative Partner |
 | **Submission Period** | 3/8/2026 – 31/8/2026 |
 | **Live Demo** | https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/ |
 | **Demo Passcode** | `eduagent2026` |
 
----
+### 1.4 Sứ mệnh tiếp cận công bằng
+
+**Triết lý cốt lõi:** AI được tạo ra trong đám mây — nhưng sức mạnh của nó không nên bị giới hạn bởi địa lý. Mỗi học sinh, dù ở thành thị hay vùng nông thôn xa xôi, đều xứng đáng có **một người bạn đồng hành thực sự kích thích tư duy** — không phải một cỗ máy đưa đáp án sẵn.
+
+- **Công bằng tiếp cận:** EduAgent không phân biệt học sinh thành thị hay nông thôn — chỉ cần kết nối internet, mọi em đều có thể tiếp cận phương pháp Socratic chất lượng cao.
+- **Không thay thế giáo viên:** hệ thống khuếch đại năng lực của giáo viên vốn đã quá tải, không thay thế họ. Giáo viên vẫn là người ra quyết định cuối cùng.
+- **Mục tiêu sư phạm:** **Đừng trao cho mỗi học sinh một đáp án. Hãy trao cho mỗi học sinh một lý do để tư duy.** Đây là cái cược mà kiến trúc này đặt ra.
+
 
 ## PHẦN 2: KIẾN TRÚC HỆ THỐNG — 2 TẦNG EVENT-DRIVEN
 
@@ -106,7 +115,7 @@ Hệ thống đánh giá sự tiến bộ của học sinh trên biểu đồ m�
 
 Chứng minh bằng thực nghiệm định lượng trên chuỗi 3 bài luận liên tiếp của học sinh "Bình" mắc lỗi lập luận lặp lại:
 
-| Chỉ số So Sánh | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: eduagent (Trí Nhớ Dài Hạn) |
+| Chỉ số So Sánh | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: EduAgent (Trí Nhớ Dài Hạn) |
 |---|---|---|
 | **Chuỗi Persona Can Thiệp** | `skeptic → skeptic → nitpicker` (Lặp bế tắc) | `skeptic → expander → nitpicker` (Luân chuyển thích ứng) |
 | **Can thiệp lặp bế tắc** | **1 lần** (Hỏi cùng góc nhìn gây nản lòng) | **0 lần** (Thích ứng 100%) |
@@ -252,7 +261,7 @@ Hệ thống có **21 ADR**, ghi đầy đủ trong `README.md` mục 4 (đó l�
 
 Để đảm bảo tính trung thực đối với ban giám khảo hackathon:
 - **Nguyên văn đóng góp mới:**
-  > *"Sự đóng góp mới của eduagent KHÔNG chỉ là một chatbot tranh luận Socratic. Điểm đột phá nằm ở **Kiến trúc Tác nhân 2 tầng Event-Driven** kết hợp Trí nhớ thích ứng dài hạn của Học sinh và Bảng điều khiển Sư phạm tất định của Giáo viên, cùng Vòng lặp tự hiệu chỉnh Metacognitive giúp đo lường bước nhảy nhận thức."*
+  > *"Sự đóng góp mới của EduAgent KHÔNG chỉ là một chatbot tranh luận Socratic. Điểm đột phá nằm ở **Kiến trúc Tác nhân 2 tầng Event-Driven** kết hợp Trí nhớ thích ứng dài hạn của Học sinh và Bảng điều khiển Sư phạm tất định của Giáo viên, cùng Vòng lặp tự hiệu chỉnh Metacognitive giúp đo lường bước nhảy nhận thức."*
 - **Sẵn sàng mã nguồn:** 100% mã nguồn mở bản quyền MIT/Apache, không phụ thuộc thư viện đóng độc quyền.
 
 ---
@@ -262,10 +271,13 @@ Hệ thống có **21 ADR**, ghi đầy đủ trong `README.md` mục 4 (đó l�
 ### Slide 1: The Problem — Trợ lý AI đang làm hại tư duy
 - Gemini trần hoạt động như một "máy đưa đáp án" (Answer Machine).
 - Học sinh copy-paste thay vì học lập luận; giáo viên không có thời gian theo dõi sâu.
+- Mở đầu video: *"AI was born in the cloud. But its power shouldn't be limited by geography. Every student, rural or urban, deserves a partner that makes them think."* — câu dẫn dắt chuyển từ hình ảnh server/cloud sang lớp học thực tế.
 
-### Slide 2: The Vision — eduagent: Collaborative Thinking Partner
+### Slide 2: The Vision — EduAgent: Collaborative Thinking Partner
 - *"Using AI to teach students how NOT to depend on AI."*
 - Agent không làm hộ bài, chỉ chất vấn Socratic theo các persona chuyên môn sâu.
+- **Triết lý hành động:** *"Đừng trao cho mỗi học sinh một đáp án. Hãy trao cho mỗi học sinh một lý do để tư duy."*
+
 
 ### Slide 3: 2-Tier Event-Driven Architecture
 - Tầng 1: Per-Student Adaptive Pipeline (ADK2 Workflow).
@@ -297,4 +309,4 @@ Hệ thống có **21 ADR**, ghi đầy đủ trong `README.md` mục 4 (đó l�
 - Google Sheets audit log tự động ghi nhận khi học sinh hoàn thành.
 
 ---
-*Tài liệu được cập nhật đồng bộ với mã nguồn và kết quả thực nghiệm mới nhất của dự án eduagent — All Things Agentic Hackathon 2026.*
+*Tài liệu được cập nhật đồng bộ với mã nguồn và kết quả thực nghiệm mới nhất của dự án EduAgent — All Things Agentic Hackathon 2026.*

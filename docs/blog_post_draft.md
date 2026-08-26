@@ -10,7 +10,8 @@
 
 ## The problem with "helpful" AI tutors
 
-Most AI writing tools optimize for making the student's essay better. We optimized for making the *student* better — which meant building an agent whose job is to challenge, not correct. That single framing decision drove almost every architecture choice below.
+Most AI writing tools optimize for making the student's essay better. We optimized for making the *student* better — which meant building an agent whose job is to challenge, not correct. That single framing decision drove almost every architecture choice below. And the students who need this most are often in classrooms with the least support — not the ones already well-served by abundant tutors and resources.
+
 
 ## Architecture: deterministic-first, LLM only where reasoning is actually required
 
@@ -74,7 +75,7 @@ Worth noting what the good fix cost: nothing. Mounting the secrets via `--update
 ## Designing for Measurable Pedagogical Outcomes (Empirical Proof)
 
 To stand out in the *Collaborative Partner* track, we had to prove that our memory-driven adaptation actually improves student outcomes:
-1. **Memory A/B Experiment:** We ran a student through 3 consecutive essays with recurring reasoning flaws. In Branch A (Stateless), the agent kept repeating the same persona and questions (a frustrating pedagogical dead-end). In Branch B (eduagent Persistent Memory), the agent dynamically rotated personas based on past progress and proactively injected historical context (e.g., *"In your last essay on this topic, you lacked evidence..."*). 
+1. **Memory A/B Experiment:** We ran a student through 3 consecutive essays with recurring reasoning flaws. In Branch A (Stateless), the agent kept repeating the same persona and questions (a frustrating pedagogical dead-end). In Branch B (EduAgent Persistent Memory), the agent dynamically rotated personas based on past progress and proactively injected historical context (e.g., *"In your last essay on this topic, you lacked evidence..."*). 
 2. **Learning Outcome Delta Measurement:** we push 8 controlled thesis pairs (a weak thesis and its Socratically-revised form) through the *real* production path — `summarize_essay()` then `score_essay()` against Vertex AI — and record the per-axis delta. The scorer sees one text at a time, never the Socratic probe, and is never told which text is the revision, so it can't infer that a higher score is expected. Measured result: the targeted axis improved in **7 of 8 scenarios**, mean **+2.75 points** on the targeted axis and **+2.05** across all four.
 
    This number replaced a **+5.62** we had been quoting, and the story behind that swap is the same lesson as Finding #3. The `+5.62` came from a script whose `before_scores` and `after_scores` were hand-typed literals; it did the subtraction and printed the mean of 16 integers we had chosen ourselves. No essay was scored. No model was called. The report even claimed "independent re-scoring" for behaviour that did not exist anywhere in the code. Rewiring it to the real scorer cost us half the headline number and one of the eight scenarios — and that is the version worth publishing. Note also what the honest number *doesn't* claim: n = 8 author-written thesis pairs, not 8 students, with no control group. It measures whether the scorer detects the improvement each persona targets. It is not evidence about real classroom learning gains.
@@ -82,6 +83,8 @@ To stand out in the *Collaborative Partner* track, we had to prove that our memo
 ## Closing
 
 None of these findings came from reading documentation more carefully — they came from actually running the system against real Gmail accounts, real blurry photos, real Cloud Run deployments, and treating every "should work" assumption as something to verify, not assume. That discipline is, we'd argue, the actual differentiator between a demo and a system.
+
+Don't give every student an answer. Give every student a reason to think. That's the bet this architecture makes.
 
 *Repo, architecture diagram, and full ADR log: `[link tới GitHub repo]`.*
 

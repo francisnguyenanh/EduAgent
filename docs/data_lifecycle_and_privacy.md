@@ -1,6 +1,6 @@
 # Student Data Lifecycle & Privacy Threat Model
 
-> **Core Commitment:** eduagent được thiết kế theo nguyên tắc **Privacy by Design**, tham chiếu các tiêu chuẩn bảo vệ dữ liệu giáo dục (FERPA & COPPA) làm kim chỉ nam thiết kế, đảm bảo dữ liệu học sinh không bị dùng để huấn luyện mô hình thương mại và có kiểm soát phân quyền chống rò rỉ chéo giữa các lớp học.
+> **Core Commitment:** EduAgent được thiết kế theo nguyên tắc **Privacy by Design**, tham chiếu các tiêu chuẩn bảo vệ dữ liệu giáo dục (FERPA & COPPA) làm kim chỉ nam thiết kế, đảm bảo dữ liệu học sinh không bị dùng để huấn luyện mô hình thương mại và có kiểm soát phân quyền chống rò rỉ chéo giữa các lớp học.
 >
 > **Lưu ý minh bạch:** Đây là các cân nhắc kiến trúc theo hướng privacy-by-design, KHÔNG phải chứng nhận pháp lý tuân thủ FERPA/COPPA — dự án prototype hackathon này chưa qua rà soát pháp lý/compliance chính thức.
 
@@ -40,7 +40,7 @@ flowchart LR
 
 ## 3. Mô Hình Đe Dọa An Ninh (STRIDE Threat Model)
 
-| Mối Đe Dọa (Threat) | Kịch Bản Tấn Công (Attack Vector) | Giải Pháp Phòng Ngự Của eduagent (Mitigation Architecture) |
+| Mối Đe Dọa (Threat) | Kịch Bản Tấn Công (Attack Vector) | Giải Pháp Phòng Ngự Của EduAgent (Mitigation Architecture) |
 |---|---|---|
 | **S - Spoofing** *(Giả mạo danh tính)* | Kẻ xấu giả mạo học sinh hoặc giáo viên để gửi bài/đọc điểm | Token HMAC-SHA256 (`auth.py`), payload gắn chặt `user_id`/`class_id`/`role` + `exp`. Khoá ký **bắt buộc** đến từ Secret Manager khi deploy: `auth.py::_resolve_session_secret()` khiến tiến trình **từ chối khởi động** nếu phát hiện đang chạy trên Cloud Run (`K_SERVICE`) mà `EDUAGENT_SESSION_SECRET` vẫn là giá trị demo đã commit, hoặc ngắn hơn 32 ký tự. Xem ADR-016. |
 | **T - Tampering** *(Chỉnh sửa dữ liệu)* | Học sinh A ghi đè hồ sơ / điểm của học sinh B qua API | Chấm điểm độc lập ở Node Scorer phía server + xếp hạng tất định; **và** `server.py::_verify_student_auth()` buộc token `role=student` chỉ được nộp cho đúng `user_id` của mình (`/api/debate/{start,start-with-image,start-with-gdoc,turn,reflect}`). Với `/turn` — payload chỉ có `session_id` — quyền sở hữu được suy ra từ `student_id`/`class_id` lưu trong chính session, không từ request. Xem ADR-018. |
@@ -57,7 +57,7 @@ flowchart LR
 
 ## 4. Privacy & Regulatory Considerations (Cân Nhắc Bảo Mật & Pháp Lý — KHÔNG phải Compliance Declaration)
 
-1. **Không sử dụng dữ liệu học sinh để huấn luyện:** eduagent sử dụng Google Vertex AI / Gemini Enterprise API với cấu hình **Zero Data Retention** cho mục đích huấn luyện mô hình nền tảng.
+1. **Không sử dụng dữ liệu học sinh để huấn luyện:** EduAgent sử dụng Google Vertex AI / Gemini Enterprise API với cấu hình **Zero Data Retention** cho mục đích huấn luyện mô hình nền tảng.
 2. **Không quảng cáo & không bán dữ liệu:** 100% dữ liệu chỉ phục vụ mục đích sư phạm nội bộ nhà trường.
 3. **Quyền riêng tư minh bạch:** Giáo viên và phụ huynh có thể kiểm tra bảng phân tích lý do can thiệp bất kỳ lúc nào.
 4. **Ranh giới trung thực:** Mục này mô tả các cân nhắc thiết kế (privacy-by-design), không phải một chứng nhận tuân thủ pháp lý FERPA/COPPA chính thức — điều đó đòi hỏi rà soát pháp lý ngoài phạm vi kiến trúc kỹ thuật của một dự án hackathon.

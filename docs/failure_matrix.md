@@ -1,6 +1,6 @@
 # Production Failure Matrix: Resilience & Graceful Degradation
 
-> **Architectural Guarantee:** Không có bất kỳ lỗi đơn lẻ nào (Single Point of Failure) từ mạng, quota LLM, cơ sở dữ liệu hay dữ liệu đầu vào người dùng có thể làm sập toàn bộ hệ thống eduagent.
+> **Architectural Guarantee:** Không có bất kỳ lỗi đơn lẻ nào (Single Point of Failure) từ mạng, quota LLM, cơ sở dữ liệu hay dữ liệu đầu vào người dùng có thể làm sập toàn bộ hệ thống EduAgent.
 >
 > **Một ngoại lệ CÓ CHỦ ĐÍCH (ĐỢT 13):** thành phần #14 (Session Signing Key) **không** giảm cấp — nó làm tiến trình chết hẳn. Vì nếu khoá ký token là chuỗi công khai trong repo thì "hệ thống vẫn chạy" chính là kịch bản tệ nhất, không phải kịch bản an toàn. Giảm cấp đúng ở mọi nơi khác; ở đây fail-fast mới là đúng.
 

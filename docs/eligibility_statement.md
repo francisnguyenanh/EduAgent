@@ -1,6 +1,6 @@
 # Hackathon Eligibility & Originality Boundary Statement
 
-> **Submission Certification:** Dự án **eduagent** được phát triển hoàn chỉnh cho cuộc thi Hackathon, tuân thủ 100% quy định về tính nguyên bản (Originality), minh bạch kiến trúc và bản quyền mã nguồn mở.
+> **Submission Certification:** Dự án **EduAgent** được phát triển hoàn chỉnh cho cuộc thi Hackathon, tuân thủ 100% quy định về tính nguyên bản (Originality), minh bạch kiến trúc và bản quyền mã nguồn mở.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Nhằm đảm bảo tính minh bạch tuyệt đối đối với ban giám khảo, chúng tôi làm rõ ranh giới kiến trúc và các đóng góp hoàn toàn mới trong đợt phát triển này:
 
-| Hạng Mục (Area) | Kiến Trúc Đã Có Trước Đây (Prior Art / Baseline) | Đóng Góp Hoàn Toàn Mới Của eduagent (New Contribution) |
+| Hạng Mục (Area) | Kiến Trúc Đã Có Trước Đây (Prior Art / Baseline) | Đóng Góp Hoàn Toàn Mới Của EduAgent (New Contribution) |
 |---|---|---|
 | **Mô Hình Tương Tác** | Chatbot một lượt (Single-turn QA / Answer Generator) | **Autonomous Socratic Debate Loop (3 turns)** với 4 Persona sư phạm chuyên sâu và quy tắc không tiết lộ đáp án (Zero-Answer-Leak). |
 | **Trí Nhớ Tác Nhân** | Stateless (Mỗi phiên là một khởi tạo trống) | **Persistent Long-Term Memory (Firestore)**: Đột biến hồ sơ học sinh qua nhiều tuần, theo dõi chuỗi kẹt persona, tính toán độ dốc điểm số. |

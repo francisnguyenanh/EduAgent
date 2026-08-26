@@ -12,7 +12,7 @@
 
 ## LinkedIn (dài hơn)
 
-> "Using AI to teach students not to depend on AI" — that's the one-line philosophy behind eduagent, my submission for the All Things Agentic Hackathon (Collaborative Partner track).
+> "Using AI to teach students not to depend on AI" — that's the one-line philosophy behind EduAgent, my submission for the All Things Agentic Hackathon (Collaborative Partner track).
 >
 > Instead of correcting a student's essay, it challenges it: 4 adversarial Socratic personas (Skeptic, Devil's Advocate, Nitpicker, Expander), an independent zero-LLM validator that blocks any answer-leak before the student sees it, and a memory system that makes the debate get sharper as the system learns a student's persistent weaknesses across sessions.
 >

@@ -6,7 +6,7 @@
 
 ## 1. Kết Quả Định Lượng Tổng Hợp (Summary Metrics)
 
-| Chỉ số Đánh Giá (Metric) | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: eduagent (Trí Nhớ Dài Hạn) | Ý Nghĩa Sư Phạm |
+| Chỉ số Đánh Giá (Metric) | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: EduAgent (Trí Nhớ Dài Hạn) | Ý Nghĩa Sư Phạm |
 |---|:---:|:---:|---|
 | **Chuỗi Persona Can Thiệp** | `skeptic → skeptic → nitpicker` | `skeptic → expander → nitpicker` | Nhánh B tự động thích ứng luân phiên persona khi phát hiện điểm yếu cũ |
 | **Số lần can thiệp lặp bế tắc (Repeated Stagnant Interventions)** | **1 lần** (Lặp Skeptic) | **0 lần** (0% lặp) | Loại bỏ tình trạng hỏi cùng 1 góc nhìn khiến học sinh nản lòng |
@@ -39,5 +39,5 @@
 
 ## 3. Kết Luận Kiến Trúc (Architectural Conclusion)
 
-1. **Proof of Adaptive Partnership:** eduagent đã chứng minh tính năng cốt lõi của *Collaborative Partner*: agent **học từ tương tác quá khứ** để điều chỉnh phương pháp sư phạm thay vì hoạt động như một chatbot stateless trả lời từng lượt đơn lẻ.
+1. **Proof of Adaptive Partnership:** EduAgent đã chứng minh tính năng cốt lõi của *Collaborative Partner*: agent **học từ tương tác quá khứ** để điều chỉnh phương pháp sư phạm thay vì hoạt động như một chatbot stateless trả lời từng lượt đơn lẻ.
 2. **Deterministic Governance:** Toàn bộ quá trình chọn persona và tính toán Priority Index hoàn toàn **deterministic (ZERO LLM-as-judge)**, bảo đảm 100% khả năng tái lập và minh bạch kiểm toán.
