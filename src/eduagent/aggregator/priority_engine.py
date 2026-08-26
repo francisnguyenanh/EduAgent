@@ -71,6 +71,12 @@ def compute_priority(profile: dict, *, now: datetime, common_fallacy_set: set[st
 
     score_trend = profile.get("score_trend", "insufficient_data")
     decline_component = PRIORITY_WEIGHTS.score_decline * (1 if score_trend == "declining" else 0)
+    # ĐỢT 15 #3: before "volatile" existed, a student whose score collapsed for
+    # one essay and recovered was classified "stagnant" and contributed exactly
+    # 0 here -- ranked identically to a student holding a steady score. The trend
+    # classifier now separates the two (student_profile.py::_score_trend) and
+    # this term is what makes that visible in the teacher's ordering.
+    volatility_component = PRIORITY_WEIGHTS.score_volatility * (1 if score_trend == "volatile" else 0)
 
     essay_history = profile.get("essay_history", [])
     if essay_history:
@@ -89,13 +95,14 @@ def compute_priority(profile: dict, *, now: datetime, common_fallacy_set: set[st
     shared = student_weaknesses & common_fallacy_set
     shared_component = PRIORITY_WEIGHTS.shared_fallacy_weight * len(shared)
 
-    total = stuck_component + decline_component + inactivity_component + shared_component
+    total = stuck_component + decline_component + volatility_component + inactivity_component + shared_component
 
     return {
         "total": round(total, 2),
         "breakdown": {
             "stuck_streak": round(stuck_component, 2),
             "score_decline": round(decline_component, 2),
+            "score_volatility": round(volatility_component, 2),
             "inactivity": round(inactivity_component, 2),
             "shared_fallacy": round(shared_component, 2),
         },

@@ -171,14 +171,50 @@ def test_persist_failure_still_returns_feedback_to_the_student():
     assert result["degraded"] is False
 
 
-def test_completion_tears_the_session_down():
+def test_completion_leaves_the_session_in_a_terminal_reflection_only_state():
+    """ĐỢT 15 #2 changed this: completion used to delete the session outright.
+
+    It cannot, because the metacognitive reflection happens AFTER completion and
+    is the only thing that proves a debate took place -- deleting the record here
+    is exactly what forced /api/debate/reflect to trust the client. So the
+    session survives, flagged `completed`, and it must be genuinely terminal:
+    no further turn may be taken on it.
+    """
     sid = _start_session("sess-p7")
     with patch("eduagent.interactive.score_essay", return_value=_GOOD_SCORE):
         interactive.complete_debate_session(
             sid, persist_essay_result=lambda **kw: None, publish_event=lambda **kw: None, run_publish_in_thread=False
         )
-    with pytest.raises(interactive.UnknownSessionError):
-        interactive.get_debate_session(sid)
+
+    session = interactive.get_debate_session(sid)
+    assert session["completed"] is True
+    assert session["completed_at"]
+    assert not session.get("has_reflected")
+
+    with pytest.raises(interactive.DebateSessionComplete):
+        interactive.step_debate_turn(sid, "one more?")
+
+
+def test_claim_reflection_is_single_use():
+    """The score-farming guard: one finished debate, one growth bonus."""
+    sid = _start_session("sess-p8")
+    with patch("eduagent.interactive.score_essay", return_value=_GOOD_SCORE):
+        interactive.complete_debate_session(
+            sid, persist_essay_result=lambda **kw: None, publish_event=lambda **kw: None, run_publish_in_thread=False
+        )
+
+    claimed = interactive.claim_reflection(sid)
+    assert claimed["student_id"] == "c1_stu01"
+    assert claimed["has_reflected"] is True
+
+    with pytest.raises(interactive.ReflectionAlreadySubmitted):
+        interactive.claim_reflection(sid)
+
+
+def test_claim_reflection_rejects_an_unfinished_debate():
+    sid = _start_session("sess-p9")
+    with pytest.raises(interactive.DebateNotComplete):
+        interactive.claim_reflection(sid)
 
 
 def test_default_seams_are_offline_under_pytest():

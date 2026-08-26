@@ -33,9 +33,13 @@ from eduagent.aggregator.digest_store import get_class_settings, set_class_setti
 from eduagent.aggregator.priority_engine import compute_priority, rank_students
 from eduagent.auth import LoginError, LoginRequest, login as auth_login
 from eduagent.interactive import (
+    DebateNotComplete,
     DebateSessionComplete,
+    ReflectionAlreadySubmitted,
     UnknownSessionError,
+    claim_reflection,
     complete_debate_session,
+    end_debate_session,
     get_debate_session,
     record_student_reply,
     start_debate_session,
@@ -412,12 +416,33 @@ def parent_note(payload: ParentNoteRequest) -> dict:
 
 
 class DebateReflectionRequest(BaseModel):
-    student_id: str
-    class_id: str = "c1"
-    original_fallacy: str = "Unspecified reasoning gap"
-    original_claim: str = ""
+    """ĐỢT 15 #2/#4: carries only the session_id and the new claim.
+
+    It used to also accept `student_id`, `class_id`, `original_fallacy`,
+    `original_claim` and `language` straight from the client, with no link to
+    any debate. Two separate holes came out of that single design mistake:
+
+      1. Score farming -- `POST /api/debate/reflect` with a made-up claim
+         credited `growth_bonus` and `breakthrough_count` to a profile without
+         any essay or debate ever having happened. The endpoint was
+         authenticated (ADR-018), so a student could not farm *someone else's*
+         profile, but nothing stopped them farming their own in a loop, which
+         is worse for the product: the metacognitive metric the teacher reads
+         stopped meaning "this student revised their thinking".
+      2. Prompt injection -- `original_claim` and `original_fallacy` went into
+         the Gemini prompt unsanitized while only `revised_claim` was cleaned,
+         violating ADR-012's layered-sanitization rule at the one endpoint
+         nobody re-checked after ADR-012 was written.
+
+    Both close with the same change, which is why they are one fix: every field
+    the prompt and the profile write need now comes from the server's own
+    session record (`interactive.claim_reflection()`), so there is nothing left
+    for a caller to forge and nothing new to sanitize -- the essay was already
+    sanitized at intake, before it was ever stored.
+    """
+
+    session_id: str
     revised_claim: str
-    language: str = "en"
 
 
 _REFLECTION_SCHEMA = {
@@ -441,20 +466,42 @@ _REFLECTION_SCHEMA = {
 
 
 def submit_reflection(payload: DebateReflectionRequest) -> dict:
-    """ĐỢT 7: Metacognitive Self-Correction Loop. Evaluates the student's
+    """DOT 7: Metacognitive Self-Correction Loop. Evaluates the student's
     post-debate revised claim, rewards cognitive growth into their Firestore
-    profile, and returns encouraging constructive feedback."""
+    profile, and returns encouraging constructive feedback.
+
+    ĐỢT 15 #2/#4: everything except the revised claim itself is read off the
+    server's session record -- see DebateReflectionRequest for the two holes
+    that closes. The reflection is claimed (and the session marked spent) BEFORE
+    the LLM call, so a slow Gemini response cannot be double-submitted into two
+    growth bonuses; the session is torn down after the profile write, which is
+    the real end of the debate flow.
+    """
     if len(payload.revised_claim) > MAX_STUDENT_REPLY_CHARS:
         raise ValueError(f"Revised claim too long (max {MAX_STUDENT_REPLY_CHARS} chars)")
 
-    sanitized_revised, _ = strip_injection_attempts(payload.revised_claim)
+    session = claim_reflection(payload.session_id)
+
+    student_id = session.get("student_id", "")
+    class_id = session.get("class_id") or "c1"
+    original_claim = session.get("essay_text", "")
+    fallacies = (session.get("summary") or {}).get("fallacies_draft") or []
+    original_fallacy = fallacies[0] if fallacies else "Unspecified reasoning gap"
+
+    sanitized_revised, matches = strip_injection_attempts(payload.revised_claim)
+    if matches:
+        _logger.warning(
+            "Sanitized prompt injection attempt from revised claim",
+            extra={"matches": matches, "session_id": payload.session_id},
+        )
     from eduagent.config import GEMINI
     from eduagent.llm import LLMGenerationError, generate_json
-    from eduagent.skills.language import detect_language, language_instruction
+    from eduagent.skills.language import language_instruction
 
-    detected_lang = detect_language(sanitized_revised + " " + payload.original_claim)
-    lang = payload.language if payload.language in ("vi", "en") and payload.language != "en" else detected_lang
-
+    # The session already recorded the language detected from the essay at start
+    # time -- re-detecting it from the revision would let one short reply flip
+    # the language of feedback mid-flow.
+    lang = session.get("language") or detect_language(sanitized_revised)
 
     system_instruction = (
         "You are an expert Socratic reasoning coach evaluating a student's post-debate self-correction. "
@@ -464,8 +511,8 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
         f"{language_instruction(lang)}"
     )
     prompt = (
-        f"Original Weakness/Fallacy Identified: {payload.original_fallacy}\n"
-        f"Original Context/Claim: <student_essay>{payload.original_claim}</student_essay>\n"
+        f"Original Weakness/Fallacy Identified: {original_fallacy}\n"
+        f"Original Context/Claim: <student_essay>{original_claim}</student_essay>\n"
         f"Student's Revised Claim: <student_reply>{sanitized_revised}</student_reply>"
     )
 
@@ -490,25 +537,26 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
             else "Your revised claim has been recorded and reflects thoughtful growth."
         )
 
-
     # Record into student profile transactional memory
     try:
         from eduagent.memory.firestore_memory import apply_reflection_result
 
         apply_reflection_result(
-            student_id=payload.student_id,
+            student_id=student_id,
             reflection_text=sanitized_revised,
-            original_fallacy=payload.original_fallacy,
+            original_fallacy=original_fallacy,
             resolved=resolved,
             growth_bonus=growth_bonus,
             timestamp=datetime.now(timezone.utc).isoformat(),
-            class_id=payload.class_id or "c1",
+            class_id=class_id,
         )
     except Exception:
-        _logger.exception("Failed to persist student reflection for student_id=%s", payload.student_id)
+        _logger.exception("Failed to persist student reflection for student_id=%s", student_id)
+
+    end_debate_session(payload.session_id)
 
     return {
-        "student_id": payload.student_id,
+        "student_id": student_id,
         "resolved": resolved,
         "growth_bonus": growth_bonus,
         "feedback": feedback,
@@ -538,6 +586,8 @@ __all__ = [
     "parent_note",
 
     "UnknownSessionError",
+    "DebateNotComplete",
+    "ReflectionAlreadySubmitted",
     "DebateSessionComplete",
     "LoginError",
 ]

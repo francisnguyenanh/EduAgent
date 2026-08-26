@@ -34,6 +34,18 @@ SECRET_ENV_VARS = {
 }
 
 
+def _gcloud() -> str:
+    """Absolute path to the gcloud launcher. Same ĐỢT 15 #5 Windows fix as
+    scripts/doctor.py::_gcloud_executable(): on Windows gcloud is `gcloud.cmd`,
+    so the bare string "gcloud" made subprocess.run() raise FileNotFoundError."""
+    import shutil
+
+    resolved = shutil.which("gcloud") or shutil.which("gcloud.cmd")
+    if resolved is None:
+        sys.exit("[FAIL] gcloud CLI not found on PATH. Install the Google Cloud SDK, then re-run this script.")
+    return resolved
+
+
 def _preflight_secrets() -> None:
     """Verifies every required secret exists BEFORE deploying.
 
@@ -49,7 +61,7 @@ def _preflight_secrets() -> None:
     missing = []
     for env_var, secret_name in SECRET_ENV_VARS.items():
         probe = subprocess.run(
-            ["gcloud", "secrets", "describe", secret_name, f"--project={PROJECT_ID}"],
+            [_gcloud(), "secrets", "describe", secret_name, f"--project={PROJECT_ID}"],
             capture_output=True,
             text=True,
         )
@@ -109,7 +121,7 @@ def main():
 
     try:
         cmd = [
-            "gcloud", "run", "deploy", "eduagent-class-aggregator",
+            _gcloud(), "run", "deploy", "eduagent-class-aggregator",
             "--source", str(ROOT),
             "--region", "asia-southeast1",
             "--service-account", "eduagent-sa@project-4fc36103-f4ca-49f6-883.iam.gserviceaccount.com",

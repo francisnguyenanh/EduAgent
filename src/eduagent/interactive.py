@@ -61,6 +61,8 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime as _dt
+from datetime import timezone as _tz
 
 import logging
 from eduagent.config import VALIDATOR
@@ -85,6 +87,16 @@ class UnknownSessionError(KeyError):
 
 class DebateSessionComplete(ValueError):
     pass
+
+
+class DebateNotComplete(ValueError):
+    """Raised when a post-debate action (currently only the metacognitive
+    reflection) is attempted on a session that has not finished its turns."""
+
+
+class ReflectionAlreadySubmitted(ValueError):
+    """Raised on a second reflection for the same session. ĐỢT 15 #2: one debate
+    earns at most one growth bonus, and this is the flag that enforces it."""
 
 
 from eduagent.memory.firestore_session import delete_session as _firestore_delete_session
@@ -193,6 +205,31 @@ def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
     turns.append(new_turn)
     _firestore_save_session(session_id, session)
     return new_turn
+
+
+def claim_reflection(session_id: str) -> dict:
+    """Atomically-enough claims the one reflection a finished debate is entitled
+    to, and returns the session it belongs to.
+
+    ĐỢT 15 #2/#4: this is the single place that decides a reflection is
+    legitimate, so the caller never has to trust the request body for *any* of
+    it. It rejects a session that has not finished (`DebateNotComplete`) and a
+    session whose reflection was already spent (`ReflectionAlreadySubmitted`),
+    and it writes `has_reflected` BEFORE the caller runs its LLM evaluation --
+    a double-clicked "Submit Revised Claim" must not be able to bank two growth
+    bonuses while the first request is still waiting on Gemini.
+    """
+    session = get_debate_session(session_id)
+    if not session.get("completed"):
+        raise DebateNotComplete(
+            f"Session {session_id!r} has {len(session.get('turns', []))} turn(s) and is not finished -- "
+            "a reflection is only meaningful after the debate it reflects on."
+        )
+    if session.get("has_reflected"):
+        raise ReflectionAlreadySubmitted(f"Session {session_id!r} has already recorded its reflection.")
+    session["has_reflected"] = True
+    _firestore_save_session(session_id, session)
+    return session
 
 
 def record_student_reply(session_id: str, student_reply: str) -> None:
@@ -313,7 +350,21 @@ def complete_debate_session(
         except Exception:
             _logger.exception("Failed to persist interactive debate results to Firestore for student %s", student_id)
 
-    end_debate_session(session_id)
+    # ĐỢT 15 #2: this used to call end_debate_session() here, which deleted the
+    # only server-side record that the debate had ever happened -- and the
+    # metacognitive reflection step comes AFTER completion. That is precisely why
+    # /api/debate/reflect had to accept student_id/original_claim from the client,
+    # and therefore why it could be called with no debate behind it at all.
+    #
+    # So the session now survives completion in a terminal, reflection-only state.
+    # It cannot be advanced (step_debate_turn already refuses once turns ==
+    # max_debate_turns) and it is not long-term memory: it keeps the same 24h
+    # `expire_at` TTL, and submit_reflection() tears it down for real once the
+    # reflection lands. A student who never reflects just lets the TTL collect it.
+    session["completed"] = True
+    session["completed_at"] = _dt.now(_tz.utc).isoformat()
+    _firestore_save_session(session_id, session)
+
     return {
         "scores": scores,
         "rationale": rationale,

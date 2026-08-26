@@ -76,6 +76,7 @@ class PriorityWeights:
     """Weights for the Intervention Priority Index (Phase 3, deterministic).
 
     Priority = w1*stuck_streak + w2*score_decline + w3*inactivity_days + w4*shared_fallacy_weight
+              + w5*score_volatility
 
     Chosen so that a student stuck on the same persona for 3+ essays without
     improvement (w1) outweighs a single missed submission (w3) — persistent
@@ -89,6 +90,12 @@ class PriorityWeights:
     score_decline: float = 2.5
     inactivity_days: float = 1.0
     shared_fallacy_weight: float = 1.5
+    # ĐỢT 15 #3: a score that collapsed and recovered inside the trend window
+    # (score_trend == "volatile"). Weighted BELOW score_decline on purpose: an
+    # unstable student needs a look, but a student on a sustained downward slope
+    # needs it more, and the two are mutually exclusive by construction (a
+    # volatile verdict is only reachable when the slope is inside the flat band).
+    score_volatility: float = 1.5
 
 
 @dataclass(frozen=True)

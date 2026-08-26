@@ -58,6 +58,11 @@ def draft_parent_note(*, student_name: str, reason: dict, language: str = "en") 
         facts.append(f"has repeated the same type of debate challenge {reason['stuck_streak_count']} times without a breakthrough yet")
     if reason.get("score_trend") == "declining":
         facts.append("has seen scores dip over their last few essays")
+    # ĐỢT 15 #3: phrased as unevenness, not decline -- "volatile" means the
+    # scores swung and recovered, so telling a parent their child is slipping
+    # would be false.
+    if reason.get("score_trend") == "volatile":
+        facts.append("has had one noticeably weaker essay among otherwise steady work")
     if reason.get("inactivity_days", 0) >= 14:
         facts.append(f"hasn't submitted an essay in {reason['inactivity_days']} days")
     if reason.get("shared_fallacies"):
