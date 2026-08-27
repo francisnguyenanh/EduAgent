@@ -2810,3 +2810,115 @@ tính năng nửa vời"*.
       **Đổi lại: +0.2 điểm và một luận điểm kiến trúc mạnh hơn hiện tại.**
       ⚠️ Lưu ý: ảnh hưởng beat OCR trong video (hiện đo 22.5s). Phải đo lại độ trễ sau khi đổi.
 - [ ] ~~Veo / Lyria / Imagen~~ — **khuyến nghị bỏ.** Lý do ở trên.
+
+---
+
+## ĐỢT 23 — TASK CHO NGÀY MAI (28/08): ADR-028 — Gemma 4 làm lượt OCR thứ hai
+
+> **Mục tiêu kép:** (1) làm cross-check của ADR-007 mạnh lên thật sự, (2) +0.2 điểm bonus model.
+> Toàn bộ dữ kiện dưới đây **đã kiểm chứng ở ĐỢT 22** — không cần dò lại từ đầu.
+
+### Dữ kiện đã chốt (đừng mất thời gian dò lại)
+
+```
+Model ID   : gemma-4-26b-a4b-it-maas
+Location   : global          <-- CHỈ chạy ở global. us-central1 trả 400 FAILED_PRECONDITION
+Client     : genai.Client(vertexai=True, project=..., location="global")
+Xác nhận   : gọi thật -> 'OK'; đọc ảnh chữ tay 983KB -> transcribe chính xác
+```
+
+**Ba cái bẫy đã biết:**
+
+1. ❌ **Gemma KHÔNG tuân thủ `response_schema`.** Xin `{resolved, reason}` → trả `{"answer": ...}`.
+   Không sao cho việc này (OCR so bằng `difflib` trên text thô), nhưng **đừng** dựa vào schema.
+2. ⚠️ **MaaS dùng chung capacity → `429 RESOURCE_EXHAUSTED "The request queue is full."`**
+   Gặp thật 1 lần rồi 5/5 OK sau đó. Bắt buộc coi là **best-effort**, phải có fallback.
+3. ⚠️ `gemma3`/`gemma4`/`shieldgemma2` (không có hậu tố `-maas`) trả **404** — đó là Model Garden
+   cần tự deploy endpoint GPU. **Đừng đụng vào.**
+
+### Vì sao làm (giữ nguyên câu này cho ADR và cho Q&A)
+
+ADR-007 chạy **cùng một model hai lần**. Bắt được nhiễu ngẫu nhiên, **không** bắt được lỗi hệ thống:
+nếu Gemini Vision đọc sai theo cùng một kiểu ở cả hai lượt — đúng tình huống ADR-007 tự mô tả
+(*"self-report confidence: high while transcribing completely unrelated, fabricated content"*) — thì
+hai lượt **cùng sai giống nhau** và cross-check báo "đồng thuận". Lượt hai chạy **model khác họ** làm
+hai lỗi **không còn tương quan**. Đây là **nâng cấp luận điểm sẵn có**, không phải tính năng mới —
+đó là bài kiểm tra mà mọi việc làm-vì-điểm-thưởng phải vượt qua.
+
+### Các bước thi công
+
+- [ ] **1. `src/eduagent/config.py`** — thêm `gemma_model: str = os.getenv("EDUAGENT_GEMMA_MODEL", "gemma-4-26b-a4b-it-maas")`.
+      Để env var override được, giống `flash_model`/`heavy_model` (ADR-002).
+
+- [ ] **2. `src/eduagent/llm.py`** — hàm gọi Gemma. **Không** tái dụng client Gemini hiện tại nếu nó
+      bị ghim location khác; Gemma **bắt buộc** `location="global"`.
+      Giữ nguyên kỷ luật sẵn có: timeout 60s cho ảnh (ADR-009), retry/backoff, raise `LLMGenerationError`.
+
+- [ ] **3. `src/eduagent/nodes/ocr.py::transcribe_essay_image()`** — lượt hai đổi sang Gemma:
+      ```python
+      first  = _transcribe_once(...)                    # Gemini Vision (giữ nguyên)
+      second, cross_model = _transcribe_second_opinion(...)   # Gemma; fallback -> Gemini
+      ```
+      **Fallback bắt buộc:** Gemma lỗi/429 → chạy `_transcribe_once()` như cũ, và **ghi lại** lượt hai
+      thực tế dùng model nào. **Không được** để lỗi Gemma chặn việc nộp bài (nguyên tắc degrade sẵn có).
+
+- [ ] **4. Trả ra tín hiệu quan sát được** — thêm `cross_check_model` vào dict kết quả OCR
+      (`"gemma-4-26b-a4b-it-maas"` hoặc `"gemini-fallback"`). Lý do: ĐỢT 16 đã tốn công diệt 11 trace
+      attribute bịa — tín hiệu mới phải **grep được thật**, và nó cũng chính là **bằng chứng tích hợp
+      Gemma** để trưng cho giám khảo.
+
+- [ ] **5. Test** (bắt buộc có sabotage — ADR-019):
+      - Gemma và Gemini **bất đồng** → `confidence` bị hạ xuống `low` (hành vi ADR-007 giữ nguyên)
+      - Gemma ném `LLMGenerationError`/429 → **vẫn transcribe được**, `cross_check_model == "gemini-fallback"`
+      - Sabotage: ép lượt hai dùng lại Gemini → test cross-model phải **đỏ**
+
+- [ ] **6. Hồi quy chất lượng thật — KHÔNG được bỏ qua:**
+      ```bash
+      python scripts/demo_real_handwriting_ocr.py     # 12 ảnh thật trong eval/test_images/
+      ```
+      README §8 đang công bố **9 high / 1 medium / 2 low**. Nếu phân bố xấu đi → **revert**, đừng chữa.
+      Nếu đổi → **cập nhật README §8 theo số mới**, đừng để số cũ.
+
+- [ ] **7. ĐO LẠI ĐỘ TRỄ — đây là chỗ dễ quên nhất và nó nằm trong video:**
+      `docs/video_script.md` đang ghi **22.5s** (OCR) và **24.2s** (toàn bộ `start-with-image`), đo ở
+      Wave 15. Thêm một lời gọi model khác **sẽ đổi con số này**. Đo lại trên service đã deploy, rồi
+      sửa cả bảng latency lẫn phần "24 giây dead air" trong script. Ngân sách video là 240s — nếu
+      OCR vượt ~30s thì phải tính lại cách kể beat đó.
+
+- [ ] **8. Tài liệu** — `README.md` (ADR-028 vào bảng + phần chi tiết + §8 nếu số đổi),
+      `docs/failure_matrix.md` (dòng **2** OCR: nêu fallback khi Gemma 429),
+      `docs/For_notebookLM.md`, `PROJECT_WIKI.md` mục 12.
+      **Và `docs/devpost_submission_draft.md`** — khai model phụ để được tính +0.2, kèm câu giải thích
+      *tại sao* dùng Gemma (không phải "để lấy điểm").
+
+- [ ] **9. Deploy + kiểm chứng live:**
+      ```bash
+      python scripts/deploy_to_cloud_run.py
+      python scripts/doctor.py            # kỳ vọng: 10 PASS / 1 WARN / 0 FAIL
+      python scripts/smoke_live.py        # kỳ vọng: 13/13 (ghi vào zz9, KHÔNG đụng c1)
+      curl -s $URL/api/demo/sample-ocr-image | ...   # rồi chạy start-with-image thật, xem cross_check_model
+      ```
+
+- [ ] **10. Điều kiện HUỶ BỎ (quyết trước, đừng quyết lúc đang mệt):**
+      revert nếu **bất kỳ** điều nào xảy ra — chất lượng OCR trên 12 ảnh xấu đi; độ trễ
+      `start-with-image` vượt ~35s; hoặc tỉ lệ 429 của Gemma cao tới mức fallback chạy thường xuyên
+      (khi đó "tích hợp Gemma" thành tuyên bố sai — tệ hơn là không tích hợp).
+
+### ❌ KHÔNG làm: Veo / Lyria / Imagen
+
+Imagen **không tồn tại** trong project (đã kiểm mọi location). Chỉ còn Veo (video) + Lyria (nhạc),
+không cách nào hợp lý trong app tranh luận văn nghị luận. Tiêu chí Innovation **40%** trừ điểm nặng
+hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
+
+---
+
+## CHỐT — việc bạn tự làm trước khi nộp (đã ghi nhận, TODO sẽ không nhắc lại)
+
+| # | Việc | Quyết định của bạn | Ghi chú rủi ro |
+|---|---|---|---|
+| 1 | Repo PRIVATE | ✅ Sẽ đổi **public** trước khi nộp | 🔴 Stage One pass/fail. **Đừng quên** — trượt vòng đầu bất kể code tốt cỡ nào. Đã xác nhận git history sạch secret (ĐỢT 16) nên đổi public an toàn |
+| 2 | `assets/architecture_diagram.png` | ✅ Sẽ tạo sau khi review xong | 🔴 Mục **bắt buộc** theo §6. Diagram mermaid đã có sẵn ở README §2 — chỉ cần export |
+| 3 | Push commit | ✅ Bạn tự commit/push | Giám khảo đọc GitHub, không đọc máy bạn |
+| 4 | Blog + social post | ⏳ Chưa làm | +0.2 mỗi cái. Bản nháp đã có: `docs/blog_post_draft.md`, `docs/social_post_draft.md`. Nhớ hashtag `#AllThingsAgenticHackathon` và câu "viết cho hackathon này" |
+
+**Deadline: 31/08/2026 17:00 PT.** Hạn xin credit $150: **28/08 12:00 PT**.
