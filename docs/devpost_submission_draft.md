@@ -182,7 +182,7 @@ We do not use an LLM to judge whether our system passed its safety and behaviora
 - **If opting-in to win the Startup Prize, please provide the name of your incorporated organization:** `[Leave blank if individual]`
 - **If opting-in to win the Startup Prize, what is your corporate email address?** `[Leave blank if individual]`
 - **Which Google AI Models did you use?** Gemini 3.5 Flash (for OCR, summarization, and debate loops) and Gemini 3.7 Flash (for teacher digest synthesis).
-- **Link to a piece of content (blog, podcast, video) for bonus points:** `[Insert published technical blog URL]`
+- **Link to a piece of content (blog, podcast, video) for bonus points:** https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p
 - **Link to a social media post for bonus points:** `[Insert published X / LinkedIn post URL with hashtag #AllThingsAgenticHackathon]`
 
 ---

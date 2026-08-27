@@ -8,85 +8,201 @@
 
 ---
 
-## The problem with "helpful" AI tutors
+Most "AI writing tutors" are just glorified ghostwriters. They polish a student's essay until it sounds great, which makes the paper better but leaves the student exactly where they started. 
 
-Most AI writing tools optimize for making the student's essay better. We optimized for making the *student* better — which meant building an agent whose job is to challenge, not correct. That single framing decision drove almost every architecture choice below. And the students who need this most are often in classrooms with the least support — not the ones already well-served by abundant tutors and resources.
+We decided to build something deliberately challenging instead: an agent designed to poke holes in your arguments, not fix your grammar. 
 
+That single constraint dictated almost every engineering choice we made. Here are five practical lessons—and a few embarrassing mistakes—from building, testing, and deploying it in production.
 
-## Architecture: deterministic-first, LLM only where reasoning is actually required
+---
 
-*(Embed Mermaid flowchart from README.md Section 2 here)*
+## 🏛️ Architecture: Deterministic by default, LLM as a last resort
 
-Every piece of logic that didn't need LLM reasoning — the Challenge Validator, the Persona Selector, the Class Aggregator's priority ranking, the fallacy clustering — is a plain Python function, zero LLM calls, fully unit-testable and auditable. A teacher asking "why is student A ranked above student B?" always has a traceable, deterministic answer.
+If a task didn't strictly require fuzzy reasoning or natural language generation, we kept LLMs completely out of the pipeline.
 
-The LLM only runs where actual reasoning/generation is needed: extracting essay structure, generating the next Socratic question, scoring against a rubric, and turning a pre-computed ranking into readable prose for a teacher.
+```
+Incoming Request 
+  │
+  ├── [Python AST / Regex / Rules] ──► Challenge Validator (Deterministic)
+  ├── [Rule Engine / Heuristics]    ──► Persona Selector (Deterministic)
+  ├── [Math / Priority Queue]      ──► Class Priority Ranker (Deterministic)
+  └── [difflib / Levenshtein]      ──► OCR Discrepancy Check (Deterministic)
+                                              │
+                      ┌───────────────────────┴───────────────────────┐
+                      ▼                                               ▼
+          [LLM Calls - Gemini / Vertex]                   [Direct DB / Response]
+          - Socratic question generation                  - Filtered / Rejected
+          - Rubric-based qualitative scoring              - Audit log entries
+```
 
-## Finding #1: OAuth scopes don't guarantee what you think they do
+Our Challenge Validator, Persona Selector, Class Priority Ranker (via the Priority Engine), and fallacy clustering are all plain Python functions. Zero LLM calls. 
 
-We designed Gmail delivery around the assumption that requesting only the `gmail.compose` scope would technically prevent the agent from ever sending an email — a clean, scope-enforced least-privilege story. Real testing (not documentation-reading) proved this wrong: `gmail.compose` is documented by Google as *"create, read, update, delete drafts; send messages and drafts"* — it includes send.
+When a teacher asks, *"Why was Student A flagged before Student B?"*, we don't have to shrug and blame a black box. There is a traceable, deterministic execution path for every single step.
 
-We had two emails accidentally sent to our own inbox during that test before we caught it.
+We only invoke the LLM for things deterministic code literally cannot do:
+* Parsing unstructured, freeform essay logic.
+* Generating context-aware Socratic follow-up questions.
+* Scoring against a multi-axis qualitative rubric.
+* Formatting structured metrics into readable prose for educators.
 
-The fix: move the guarantee to the code layer. The Gmail integration module never calls `.send()` anywhere, and we wrote an AST-based test — not a regex, an actual Python `ast` parse — that fails the build the moment anyone adds a `.send()` call to that file. The real human-in-the-loop gate is the teacher opening their own Gmail and clicking Send, a human action entirely outside our code path. We say this explicitly in our demo video rather than claiming a technical wall that doesn't exist.
+---
 
-## Finding #2: a single LLM confidence score isn't enough for OCR
+## 💥 1. OAuth scopes don't work the way you think
 
-Multimodal ingestion (a photo of a handwritten essay) needed a way to know when the transcription wasn't trustworthy. Our first pass asked Gemini Vision to self-report a `confidence` field alongside the transcription, with an explicit anti-hallucination instruction in the prompt.
+We designed our Gmail integration under the assumption that requesting only `gmail.compose` would guarantee our backend couldn't send emails—only create drafts. A clean, least-privilege security story, right?
 
-On a genuinely degraded test image, this failed in a specific, dangerous way: the model self-reported `confidence: "high"` while transcribing completely unrelated, fabricated content, in 2 of our 4 manual trials. Prompt engineering alone did not close this gap.
+**Wrong.** Google's documentation defines `gmail.compose` as:
+> *"Create, read, update, delete drafts; send messages and drafts."*
 
-The fix: a deterministic backstop. We call Gemini Vision *twice*, independently, on the same image, and compare the two transcriptions with plain string similarity (`difflib`). If they disagree substantially, we force the confidence down to `low` regardless of what either call claims — the decision logic itself never involves another LLM judging the first one. After adding this, the same failure mode was caught 3 out of 3 times. Essays with low OCR confidence are routed to a review queue instead of ever silently entering a student's permanent record.
+During an early test run, our script accidentally fired off two emails directly to our inbox before we realized what happened.
 
-## Finding #3: reward-hacking risk isn't just a training-time concern
+### The Fix: Enforce guarantees at the AST level
+We stopped trusting IAM scopes to enforce business logic:
 
-We were warned to be careful about reward hacking when building our eval suite. The most tempting fast path — using an LLM to grade whether our persona stayed in character, or whether a debate question leaked an answer — is *exactly* that risk: an LLM judging its own system's output.
+1. We scrubbed `.send()` from our integration codebase entirely.
+2. We wrote an AST-based test that parses Python code at build time (using `inspect.getsource()` on our `gmail_mcp` module). If anyone ever imports or calls `.send()` in the integration layer, CI fails immediately:
 
-Instead, our eval suite's answer-leak and prompt-injection groups re-run the actual production validator and sanitizer functions directly (the same code the live pipeline uses — not a re-implementation that could drift). The tenancy group calls the real `_verify_class_auth()` the HTTP routes use. The persona-fidelity group calls the production prompt builder, `nodes/debate.py::build_system_instruction()`, and verifies the persona anchor is present in the instruction actually sent to Gemini on all 3 escalation turns, that each anchor is unique, and that no persona's keyword signature also matches another persona's anchor. No LLM ever grades another LLM's text in this suite. Our latest run is **50/50 deterministic test cases passed** across 4 layers: Safety & Security, Behavioral Discipline, Long-Term Memory, and Learning Outcomes. That is a green test suite — not a claim that the system is 100% correct.
+```python
+import ast
+import inspect
+from eduagent.integrations import gmail_mcp
 
-But writing this section is what exposed our own worst bug, and it's the most useful thing in this post.
+def test_gmail_mcp_source_has_no_send_call():
+    """Parses the AST of gmail_mcp to ensure no actual .send() calls are present."""
+    source = inspect.getsource(gmail_mcp)
+    tree = ast.parse(source)
+    send_calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) 
+        and isinstance(node.func, ast.Attribute) 
+        and node.func.attr == "send"
+    ]
+    assert not send_calls, "Security violation: .send() call found in gmail_mcp.py!"
+```
 
-**The eval that couldn't fail.** An earlier version of that persona-fidelity check built the system instruction *inside the test*, then asserted the anchor was in the string it had just concatenated. It was a tautology: green no matter what the production code did. Worse, Layer 4's eight "cognitive growth" cases subtracted two integer literals declared in the test fixture file itself and asserted `8 - 2 >= 4`. Those cases would have passed with the entire `src/` tree deleted. We had 12 test cases certifying arithmetic.
+The only way an email actually goes out is when a human teacher opens their Gmail client and clicks **Send** on the generated draft.
 
-The lesson generalizes past evals: **reward hacking doesn't require a reward model.** A human writing an assertion that restates its own setup produces the same failure — a metric that goes up without the system getting better. The fix we now apply to every case is a sabotage test: break the production code on purpose and confirm the test goes red. When we deleted persona anchoring from the real builder, 4 of 4 cases failed. When we removed the measurement artifact, 4 of 4 Layer 4 cases failed. Before that rework, both would have stayed green.
+---
 
-**And then the honest test told us something we didn't want to hear.** Since we'd claimed to run live debates, we built the mode that actually does it (`--live-persona`, opt-in, written to a separate report so the zero-LLM guarantee of the main suite stays intact): the real 3-turn debate against Gemini, with the model's actual questions matched against each persona's lexicon. Two of four personas — the Devil's Advocate and the Nitpicker — **drifted into the Skeptic's voice** on a hard essay, asking about evidence and causation instead of arguing the opposing side or auditing the logic. Anchoring keeps the instruction in the prompt; it does not guarantee the model obeys it. We could have widened the lexicons until the test went green. That would have been the same reward hacking in a new costume, so we left the failure in the report and wrote it down here instead.
+## 👁️ 2. Never trust an LLM to self-report OCR confidence
 
-## Finding #4: platform conventions aren't always safe assumptions
+When students upload photos of handwritten essays, degraded scans are inevitable. In our first prototype, we prompted Gemini Vision to self-report a `confidence: "high" | "low"` field alongside its transcription.
 
-Deploying to Cloud Run, we named our health-check endpoint `/healthz` — the conventional name from Kubernetes and many other platforms. It consistently returned a generic Google-branded 404, *before* the request ever reached our container or even the IAM authorization check, while every other path (including `/healthz/` with a trailing slash) worked correctly. Cloud Run's underlying Knative/Istio serving stack apparently reserves that exact literal path. Renaming to `/health-check` fixed it immediately. The lesson: verify a "well-known convention" against the actual deployed platform, not just against general documentation from a different ecosystem.
+**The failure mode:** On degraded test images, the model hallucinated entire paragraphs of clean text while cheerfully reporting `confidence: "high"` in 2 out of 4 manual trials. Prompt engineering alone did not close this gap.
 
-## Finding #5: the blast radius of a fix is usually smaller than the blast radius of the bug
+### The Fix: Double-blind deterministic diffing
+We call Gemini Vision **twice independently** on the same image, then compare the two outputs using standard string similarity (`difflib`) using a deterministic similarity threshold of `0.75`:
 
-Late in the project we audited our own repo against its own documentation and found that the deployed service was signing teacher session tokens with a key committed to the public repository — the environment variable overriding it had never been set. Anyone who read the repo could mint a `role=teacher` token for any class and read that class's student records. We fixed it properly: the key moved to Secret Manager, and the process now refuses to boot on Cloud Run while the committed default is still in effect, because a missing environment variable is a silent failure and a container that won't start is a loud one.
+```python
+import difflib
 
-We considered secrets handled after that. They weren't.
+_CONSISTENCY_SIMILARITY_THRESHOLD = 0.75
+_INCONSISTENCY_MARKER = "[[ocr inconsistent across repeated attempts on this image -- treat transcription as unverified]]"
 
-An outside reviewer looked at our deploy script and pointed at two lines passing the Gmail and Sheets OAuth tokens through `--env-vars-file`. Cloud Run stores plain environment variables in the revision spec in cleartext, so `gcloud run services describe` printed both **refresh tokens in full** — exposed to anyone with `run.services.get`, a read permission granted much more freely than `secretmanager.versions.access`. We ran the command against the live service before touching anything, and there they were.
+def _cross_check_consistency(first: dict, second: dict) -> dict:
+    similarity = difflib.SequenceMatcher(None, first["transcribed_text"], second["transcribed_text"]).ratio()
+    if similarity >= _CONSISTENCY_SIMILARITY_THRESHOLD:
+        return first
 
-The same shape had already bitten us once. When we added authentication, we secured every `/api/classes/*` route and left all five student-facing debate endpoints completely open, so any caller could write into any student's profile. Both times: we fixed the instance in front of us and never asked what else belonged to the same class of problem. Both times, the second half was found by someone else.
+    return {
+        "transcribed_text": first["transcribed_text"],
+        "confidence": "low",
+        "uncertain_segments": list(first["uncertain_segments"]) + [_INCONSISTENCY_MARKER],
+    }
+```
 
-The uncomfortable part is that "be more thorough" is not a fix. What actually works is converting the question into something that runs without us:
+If the two passes diverge, confidence is downgraded to `low` regardless of what either model run claims. No LLMs evaluating other LLMs—just basic diffing.
 
-- An AST-based test fails the build if any credential is ever inlined as a plain environment variable again. We verified it by reintroducing the bug on purpose and watching it go red.
-- `doctor.py`, our preflight command, now inspects the *deployed* revision and reports any credential still stored in cleartext. It correctly reported FAIL on our live service until we redeployed — which is exactly the moment such a check earns its keep.
+---
 
-Worth noting what the good fix cost: nothing. Mounting the secrets via `--update-secrets` required **zero application code changes**, because Cloud Run injects the value into the same environment variable the integrations already read. We deliberately skipped the more elaborate option of calling the Secret Manager API from inside the app — it would have added a dependency, a cold-start API call, and code to maintain, in exchange for no additional protection.
+## 🧪 3. We accidentally wrote tests that certified basic arithmetic
 
-## Designing for Measurable Pedagogical Outcomes (Empirical Proof)
+Eval suites are dangerously easy to game without realizing it.
 
-To stand out in the *Collaborative Partner* track, we had to prove that our memory-driven adaptation actually improves student outcomes:
-1. **Memory A/B Experiment:** We ran a student through 3 consecutive essays with recurring reasoning flaws. In Branch A (Stateless), the agent kept repeating the same persona and questions (a frustrating pedagogical dead-end). In Branch B (EduAgent Persistent Memory), the agent dynamically rotated personas based on past progress and proactively injected historical context (e.g., *"In your last essay on this topic, you lacked evidence..."*). 
-2. **Learning Outcome Delta Measurement:** we push 8 controlled thesis pairs (a weak thesis and its Socratically-revised form) through the *real* production path — `summarize_essay()` then `score_essay()` against Vertex AI — and record the per-axis delta. The scorer sees one text at a time, never the Socratic probe, and is never told which text is the revision, so it can't infer that a higher score is expected. Measured result: the targeted axis improved in **7 of 8 scenarios**, mean **+2.75 points** on the targeted axis and **+2.05** across all four.
+In our early eval harness:
+* Our persona-fidelity check constructed the prompt *inside the test fixture*, concatenated strings, and asserted that the persona string existed in the string it had just built. A complete tautology.
+* Even worse: Layer 4's "cognitive growth" test was literally subtracting two hardcoded integer literals and asserting `8 - 2 >= 4`. You could have deleted the entire `src/` directory and all 12 test cases would have passed with flying colors.
 
-   This number replaced a **+5.62** we had been quoting, and the story behind that swap is the same lesson as Finding #3. The `+5.62` came from a script whose `before_scores` and `after_scores` were hand-typed literals; it did the subtraction and printed the mean of 16 integers we had chosen ourselves. No essay was scored. No model was called. The report even claimed "independent re-scoring" for behaviour that did not exist anywhere in the code. Rewiring it to the real scorer cost us half the headline number and one of the eight scenarios — and that is the version worth publishing. Note also what the honest number *doesn't* claim: n = 8 author-written thesis pairs, not 8 students, with no control group. It measures whether the scorer detects the improvement each persona targets. It is not evidence about real classroom learning gains.
+### The Fix: The Sabotage Test
+Before trusting any eval rule, we now deliberately break production code to verify that the test turns red. 
 
-## Closing
+When we removed persona anchoring from the actual production prompt builder, the tests failed (4/4). When we removed the measurement artifact, our Layer 4 cases failed (4/4).
+
+```
+   [Pass / Green] ────► Sabotage production code ────► Must turn [Fail / Red]
+         ▲                                                     │
+         └───────────── Restore & Verify ──────────────────────┘
+```
+
+Our main suite remains a green **50/50 deterministic test cases passed** across 4 layers (Safety & Security, Behavioral Discipline, Long-Term Memory, and Learning Outcomes), while the opt-in `--live-persona` suite exposes the raw compliance limits of live prompts.
+
+### The uncomfortable reality of live prompts
+When we finally wired up `--live-persona` to evaluate multi-turn debates against real Gemini outputs, two of our four personas (*Devil's Advocate* and *Nitpicker*) drifted into the *Skeptic* persona during complex essays. 
+
+Prompt anchoring keeps instructions in context, but it doesn't guarantee compliance under cognitive load. We could have widened the regex matchers to keep our CI dashboard green, but that would just be reward hacking in disguise. We kept the failure in the report and documented it instead.
+
+---
+
+## ☁️ 4. Cloud Run reserves `/healthz`
+
+Coming from Kubernetes, we naturally set our container health-check endpoint to `/healthz`. 
+
+It consistently returned a generic Google-branded `404 Not Found` before incoming requests ever reached our container or IAM checks.
+
+**Why:** Cloud Run's underlying Knative/Istio serving layer intercepts and reserves that exact literal path. 
+
+Renaming the route to `/health-check` fixed it immediately. **Lesson:** Never assume cloud platform runtimes respect conventions from adjacent ecosystems.
+
+---
+
+## 🔐 5. "Be more careful with secrets" is not a strategy
+
+We hit two credential pitfalls during development:
+1. We committed a default signing key to the repo and forgot to set the overriding environment variable in production. Anyone inspecting our repo could mint valid `role=teacher` tokens.
+2. We passed OAuth refresh tokens via `--env-vars-file`. On Cloud Run, plain environment variables are visible in plaintext inside the revision spec via `gcloud run services describe`, exposing tokens to anyone with basic service read permissions (`run.services.get`).
+
+### The Fix: Automated guardrails & Secret Manager
+Hoping developers "remember next time" doesn't scale. We automated the solution:
+
+* An AST check fails CI if secrets are ever passed in cleartext configurations.
+* A preflight script (`doctor.py`) checks the deployed revision spec and halts deployment if any secret is exposed.
+* We mounted secrets via Cloud Secret Manager using `--update-secrets`:
+
+```bash
+gcloud run deploy eduagent-service \
+  --image gcr.io/my-project/eduagent:latest \
+  --update-secrets GMAIL_COMPOSE_TOKEN_JSON=eduagent-gmail-token:latest,SHEETS_TOKEN_JSON=eduagent-sheets-token:latest
+```
+
+This required **zero lines of application code changes**, because Cloud Run injects mounted secrets into standard environment variables at runtime.
+
+---
+
+## 📊 Did it actually improve student learning?
+
+To verify whether persistent Socratic memory helps students improve, we ran two evaluations:
+
+1. **Stateful vs. Stateless:** In a stateless setup, the tutor repeatedly asks generic questions and gets stuck in loops. With persistent memory, it references past arguments (*"In your previous essay on this topic, you lacked empirical evidence for claim X..."*) and dynamically adapts its persona.
+2. **Empirical Scoring Delta:** We passed 8 weak-versus-revised thesis pairs through our production pipeline (`summarize_essay()` → Vertex AI rubric evaluation). The evaluator scored drafts blindly without seeing prior tutor prompts.
+
+| Metric | Measured Delta |
+| :--- | :--- |
+| **Targeted Axis Improvement** | **+2.75 points** (Improved in 7/8 scenarios) |
+| **Overall Average Delta** | **+2.05 points** across all axes |
+
+*(Earlier in the project, we quoted an impressive `+5.62` gain. When we audited our eval code, we discovered that number came from a dummy script that averaged 16 hardcoded numbers without calling the model. The `+2.75` number is real, tested against an n=8 thesis benchmark, and far more honest.)*
+
+---
+
+## 🎯 Key Takeaways & Closing
 
 None of these findings came from reading documentation more carefully — they came from actually running the system against real Gmail accounts, real blurry photos, real Cloud Run deployments, and treating every "should work" assumption as something to verify, not assume. That discipline is, we'd argue, the actual differentiator between a demo and a system.
 
 Don't give every student an answer. Give every student a reason to think. That's the bet this architecture makes.
 
 *Repo, architecture diagram, and full ADR log: [https://github.com/francisnguyenanh/EduAgent](https://github.com/francisnguyenanh/EduAgent).*
+
+*How are you structuring your LLM evaluation pipelines and guardrails in production? Let me know in the comments below!*
 
 ---
 

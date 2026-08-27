@@ -55,7 +55,7 @@
 > Acting on the Wave 14 note capped this submission at **5.4/6.0** and led us to decline extra-model
 > work on the belief it scored nothing. `grep -rniE "gemma|veo|lyria|imagen" src/ scripts/` returns
 > zero, so **0.6 points — 10% of the maximum — is currently unclaimed.**
-- [ ] **Technical Blog Post:** Publish the article from `docs/blog_post_draft.md` on Medium/Dev.to (or LinkedIn Article) publicly, including the statement: *"Written for the All Things Agentic Hackathon"* (+0.2 pts).
+- [x] **Technical Blog Post:** Published at https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p (+0.2 pts).
 - [ ] **Social Media Post:** Publish a project summary with demo link on LinkedIn or X with hashtag `#AllThingsAgenticHackathon` (+0.2 pts).
 - [ ] **Additional Google AI models (+0.2 each, max +0.6):** currently **0 integrated**. Any genuine
       integration counts — the rules name Gemma, Veo and Lyria as examples. Candidates that fit this
@@ -73,7 +73,7 @@
 > essay-debate app?" and hears "for bonus points" costs more on the 40% Innovation criterion than
 > the 0.2 is worth.
 - [ ] **Models Disclosed:** `gemini-3.5-flash` (default) and `gemini-3.7-flash` (heavy model for Teacher Digest). Declared accurately under technologies used.
-- [ ] Add blog and social post links to the Devpost form.
+- [/] Add blog and social post links to the Devpost form (Blog added, pending social post).
 
 ## 6. Freeze Resources After Submission Deadline
 - [ ] **Submit early:** Submit at least 24 hours ahead of the final deadline: **August 31 at 5:00 PM PT**.

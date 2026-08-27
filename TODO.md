@@ -2919,6 +2919,6 @@ hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
 | 1 | Repo PRIVATE | ✅ Sẽ đổi **public** trước khi nộp | 🔴 Stage One pass/fail. **Đừng quên** — trượt vòng đầu bất kể code tốt cỡ nào. Đã xác nhận git history sạch secret (ĐỢT 16) nên đổi public an toàn |
 | 2 | `assets/architecture_diagram.png` | ✅ Sẽ tạo sau khi review xong | 🔴 Mục **bắt buộc** theo §6. Diagram mermaid đã có sẵn ở README §2 — chỉ cần export |
 | 3 | Push commit | ✅ Bạn tự commit/push | Giám khảo đọc GitHub, không đọc máy bạn |
-| 4 | Blog + social post | ⏳ Chưa làm | +0.2 mỗi cái. Bản nháp đã có: `docs/blog_post_draft.md`, `docs/social_post_draft.md`. Nhớ hashtag `#AllThingsAgenticHackathon` và câu "viết cho hackathon này" |
+| 4 | Blog + social post | ⏳ Đang làm | +0.2 mỗi cái. Đã đăng blog (https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p), chưa đăng social |
 
 **Deadline: 31/08/2026 17:00 PT.** Hạn xin credit $150: **28/08 12:00 PT**.
