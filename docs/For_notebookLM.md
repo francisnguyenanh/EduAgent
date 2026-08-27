@@ -80,7 +80,7 @@ TIER 2: Class Aggregator & Teacher Co-Pilot
 | Node | Implementation Type | Function |
 |---|---|---|
 | **intake** | FunctionNode (deterministic) | Ingests input, detects format (text/image/gdoc), routes execution |
-| **multimodal_ocr** | FunctionNode (Gemini Vision) | Transcribes handwriting verbatim with dual-pass self-consistency validation |
+| **multimodal_ocr** | FunctionNode (Gemini Vision + Gemma 4) | Transcribes handwriting verbatim, then re-transcribes with a different model family and compares the two with `difflib` (cross-model consistency check, ADR-028) |
 | **sanitizer** | FunctionNode (regex) | Guards against prompt injection; enforces payload size limits |
 | **summarizer** | FunctionNode (Gemini Flash) | Extracts claims and structures fallacy taxonomy |
 | **persona_selector** | FunctionNode (deterministic) | Selects debate persona based on score trajectory and newly diagnosed flaws |
@@ -162,7 +162,7 @@ Empirical validation across a controlled 3-essay trajectory for student "Binh" e
 
 ### 5.1 Dual-Pass OCR Self-Consistency Check
 - **Issue:** Vision models can hallucinate plausible text from blurry photos while self-reporting "high" confidence.
-- **Solution:** Transcribe twice independently; compute `difflib` similarity ratio. If diverged, downgrade confidence to `low` and park in `pending_essays` review queue without polluting student profile records (ADR-007, ADR-008).
+- **Solution:** Transcribe twice independently — first pass Gemini Vision, second pass **Gemma 4** so the two errors are uncorrelated — and compute a `difflib` similarity ratio on the raw texts, using a threshold calibrated separately for cross-model (0.50) vs same-model (0.75) comparison. If diverged, downgrade confidence to `low` and park in `pending_essays` review queue without polluting student profile records (ADR-007, ADR-008, ADR-028).
 
 ### 5.2 Automated 15-Minute Actionable Mini-Lesson Plan
 - Triggered when $\ge 2$ distinct students exhibit a shared fallacy pattern (`priority_engine.MIN_STUDENTS_FOR_COMMON_FALLACY = 2`):
@@ -200,7 +200,7 @@ Zero LLM-as-judge dependency to eliminate reward-hacking loops. Output validated
 * **ADR-004:** English taxonomy persistence in `fallacies_draft` for deterministic persona matching.
 * **ADR-005 / ADR-015:** Durable Firestore session storage with 3-second bounded in-memory cache.
 * **ADR-006:** Zero LLM-as-judge deterministic evaluation harness.
-* **ADR-007:** Dual-pass OCR self-consistency cross-check with `difflib`.
+* **ADR-007:** Dual-pass OCR self-consistency cross-check with `difflib` (extended cross-*model* by ADR-028).
 * **ADR-008:** Routing degraded OCR to `pending_essays` to protect profile integrity.
 * **ADR-009:** 60s multimodal API timeout accommodating complex vision payloads.
 * **ADR-010:** Reusing Pub/Sub `event_id` as `digest_id` for idempotent dedup.

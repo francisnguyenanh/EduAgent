@@ -2,7 +2,7 @@
 
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-Vertex_AI_%7C_Cloud_Run_%7C_Firestore-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/)
 [![Google ADK2](https://img.shields.io/badge/Framework-Google_ADK2-34A853?logo=google&logoColor=white)](https://github.com/google/agent-development-kit)
-[![Models](https://img.shields.io/badge/Models-Gemini_3.5_Flash_%7C_3.7_Flash-EA4335?logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
+[![Models](https://img.shields.io/badge/Models-Gemini_3.5_%7C_3.7_Flash_%7C_Gemma_4-EA4335?logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
 [![Eval Suite](https://img.shields.io/badge/ADK_Eval_Suite-50%2F50_Passed-0F9D58?logo=pytest&logoColor=white)](eval/results/eval_report.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -92,7 +92,7 @@ paragraph is the authoritative English statement of the boundary). Track: **Coll
 flowchart TD
     subgraph T1["TIER 1 — Per-Student Adaptive Socratic Pipeline (ADK2 Graph Workflow)"]
         direction TB
-        IN["Intake\n(FunctionNode)"] -->|route: image| OCR["Multimodal OCR\n(Gemini Vision, dual-pass cross-check)"]
+        IN["Intake\n(FunctionNode)"] -->|route: image| OCR["Multimodal OCR\n(Gemini Vision + Gemma 4 cross-model check)"]
         IN -->|route: text| SAN["Sanitizer\n(FunctionNode, anti-injection regex)"]
         OCR --> SAN
         SAN --> SUM["Summarizer\n(FunctionNode → Gemini Flash)"]
@@ -230,7 +230,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 | **ADR-004** | Bilingual Expression Layer | Pedagogical | Keeps internal fallacy tags in English for regex routing; translates only user-facing prompts. |
 | **ADR-005** | Distributed Session Store | Architecture | Superseded by ADR-015 (migrated from in-process dict to Firestore). |
 | **ADR-006** | Zero LLM-as-Judge Evals | Evaluation | Replaces subjective LLM graders with deterministic regex and string assertions. |
-| **ADR-007** | Dual-Pass OCR Verification | Multimodal | Dual Vision transcription passes with `difflib` string comparison to catch hallucinations. |
+| **ADR-007** | Dual-Pass OCR Verification | Multimodal | Two independent transcription passes compared with `difflib` to catch hallucinations a model self-reports as confident. Extended cross-*model* by ADR-028. |
 | **ADR-008** | OCR Failure Isolation | Data Integrity | Routes low-confidence OCR to review queue (`pending_essays`), protecting student records. |
 | **ADR-009** | Multimodal Latency Cap | Resilience | Configures 60s timeout for vision calls vs. 30s for text prompts to accommodate payloads. |
 | **ADR-010** | Event Idempotency Keying | Data Integrity | Pins `digest_id = event_id` to prevent duplicate digest records upon Pub/Sub redelivery. |
@@ -251,9 +251,10 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 | **ADR-025** | Teacher Token Issuance Gate | Security | Separates teacher login from the public demo passcode, closing the issuance half of ADR-016. |
 | **ADR-026** | Trust Only the Proxy's Hop | Security | Rate-limit key comes from the **last** `X-Forwarded-For` entry; earlier hops are caller-supplied and forgeable. |
 | **ADR-027** | One Cache, Not Two | State | Session reads go to Firestore first; a second unbounded in-process cache had shadowed ADR-015's 3s bound. |
+| **ADR-028** | Cross-*Model* OCR Check | Multimodal | The cross-check's second pass runs **Gemma 4**, not a second Gemini call — two passes of one model share one blind spot. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-027)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-028)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
 
@@ -270,7 +271,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 ### ADR-007: Dual-Pass OCR Self-Consistency Cross-Check
 
 * **Context:** Vision models can self-report "high" confidence while hallucinating text on blurred images.
-* **Decision:** Run Gemini Vision twice independently and compare outputs with `difflib.SequenceMatcher`. If similarity drops below threshold, downgrade confidence to `low`.
+* **Decision:** Transcribe the image twice independently and compare the two texts with `difflib.SequenceMatcher`. If similarity drops below the threshold, downgrade confidence to `low` — never upgrade. ADR-028 later moved the second pass to a different model family, and the comparison runs on **raw** text: Wave 25 tried normalising first and measurement showed it scoring three legible images *worse*, so it was reverted (the reasoning is recorded in `nodes/ocr.py` beside the thresholds).
 * **Rejected Alternative:** Trusting model self-reported confidence scores.
 
 ### ADR-015: Durable Firestore Sessions with Bounded Read Cache
@@ -329,9 +330,16 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 * **Decision:** Reads go to Firestore first; `_sessions` is a fallback for when no durable store is configured at all (local runs, pytest), distinguished by `store_is_authoritative()`. That distinction cuts both ways: when Firestore authoritatively reports no such document, the local copy is *dropped* rather than trusted, so a session another instance tore down after a reflection (ADR-022) cannot be resurrected. Three tests now cover the outer layer, verified to fail when cache-first is restored.
 * **Rejected Alternative:** Adding a freshness timestamp to `_sessions` — a second bounded cache in front of a bounded cache, which is the shape that caused this. Preferring the durable store removes the class of bug instead of re-tuning it.
 
+### ADR-028: A Second Opinion Is Only Worth Having From Someone Else
+* **Context:** ADR-007 does not trust a Vision model's self-reported confidence, so it transcribes each image **twice** and compares the two texts with `difflib`. But both passes were the *same model*, which catches random sampling noise and is blind to systematic error: if Gemini Vision resolves an ambiguous stroke wrong the same way twice — the exact failure ADR-007 documents, where the model self-reports `high` while transcribing fabricated content — the comparison sees two identical wrong strings and reports consensus. Measured on `notes_socialmedia.jpg`: two Gemini passes agreed at **0.781** (above the 0.75 cut, so ADR-007 waved it through) while the same image scored **0.294** against a different model family. The same-model check could not see it.
+* **Decision:** The second pass runs **Gemma 4** (`gemma-4-26b-a4b-it-maas`), a different model family, on the same `global` Vertex AI endpoint and the same credentials — no new infrastructure, region, or key. Gemma is Model-as-a-Service on shared capacity, so `429 request queue is full` is routine (**4 of 10** raw calls during integration testing); `llm.py` retries 429 specifically — the one place in that module where a 4xx is retryable, because unlike a malformed request it succeeds seconds later — and if it still fails, the node falls back to the original same-model second pass and records `cross_check_model: "gemini-fallback"`. A busy shared queue never blocks a student's submission.
+* **The part that was nearly a silent regression:** shipping this with ADR-007's inherited **0.75** threshold made things *worse*, not better. Two different models transcribe the same page but differ on punctuation, line breaks, and where each draws the line between guessing and writing `[[unclear]]`. Measured across the 12 real samples: legible images score **0.989–1.000** same-model but only **0.729–0.998** cross-model — so 0.75 sits *inside* the cross-model legible cluster and fired on readable essays (`tilted_essay_grading` 0.729, `stu_stuck_messy` 0.756), parking them in `pending_essays` where they would never be debated. Unreadable images score **0.265–0.294** cross-model, so the two thresholds are now separate constants and the cross-model cut is **0.50**, sitting in the middle of a wide empty band. Honest limit: both numbers are fitted on the same 12 images they are evaluated against, with no held-out set. The defensible claim is "0.75 is measurably wrong for cross-model comparison", not "0.50 is optimal".
+* **Measured cost, contemporaneous A/B** (same code, same session, toggled by `EDUAGENT_OCR_CROSS_CHECK_GEMMA`): mean per-image OCR **7.30s → 8.82s (+21%)**; confidence distribution **identical** (10 high / 0 medium / 2 low both ways); Gemma reached on **12/12** images with **0** fallbacks.
+* **Rejected Alternative:** Gemma as a second judge for the `/reflect` verdict — Wave 22 measured that Gemma ignores `response_schema` (asked for `{resolved, reason}`, returned `{"answer": ...}`), and a growth bonus written into a student's permanent record must not rest on defensive parsing. OCR cross-check compares raw strings and needs no schema at all, which is why it is the integration this model actually supports. Also rejected: Veo and Lyria — a video or music model in an essay-debate app is a bonus-point bolt-on, and the 40% Innovation criterion punishes that harder than 0.2 rewards it.
+
 </details>
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26) — see `TODO.md` and `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26); ADR-028 from the Wave 24 pre-submission audit (2026-08-27) — see `TODO.md` and `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
 
 ---
 
@@ -422,6 +430,35 @@ deliberately open so a judge can open the portals without a GCP identity or an O
 * **Credential Secret Mounting (ADR-020):** Secrets are mounted via Secret Manager references (`secretKeyRef`), avoiding cleartext in revision specs. Enforced via AST build checks and preflight deployment blocks.
 * **Secret Hygiene:** Environment templates, JSON keys, and keys directories are strictly gitignored and verified clean via regex log scans.
 
+### Failure behaviour is enumerated, not assumed
+
+All **20** externally-dependent components — Gemini, Gemma, Firestore, Pub/Sub, the Gmail and Sheets
+MCP clients, OCR, the session store, the priority engine — carry a documented trigger condition,
+degrade path, fallback behaviour, and a **grep-able observable signal in the source**, so a claimed
+mitigation can be checked rather than believed. One deliberate exception proves the rule: component
+#14, the session signing key, **does not degrade** — it terminates the process at boot, because
+running production on a public default key is the worst possible state, not a safe one.
+
+→ Full matrix: [`docs/failure_matrix.md`](docs/failure_matrix.md)
+
+### Data lifecycle
+
+What is stored, where, for how long, and what is never stored — plus a data-classification matrix and
+a STRIDE threat model. The 24h retention on debate sessions is not a comment in the code: sessions
+write an explicit `expire_at` and a **GCP TTL policy on that field is ACTIVE**, verified on the live
+project by `scripts/doctor.py::check_firestore_ttl_policy` rather than assumed from the schema.
+
+→ Full document: [`docs/data_lifecycle_and_privacy.md`](docs/data_lifecycle_and_privacy.md)
+
+### Telemetry structure
+
+The OpenTelemetry span tree produced by the `@traced_node` decorator across the graph
+(root → intake → sanitizer → summarizer → persona → debate → scorer → aggregator) is exported to
+[`docs/trace_evidence.md`](docs/trace_evidence.md). ⚠️ **Read that file as structural proof only —
+its millisecond figures are produced by timed sleep stubs, not by live Gemini calls, and the file
+says so at the top.** For real latencies, submit an essay on the live deployment and read Cloud
+Trace in the Google Cloud Console (see [`docs/gcp_evidence_checklist.md`](docs/gcp_evidence_checklist.md)).
+
 ---
 
 ## 7. ADK Eval Suite & Empirical Verification
@@ -465,12 +502,12 @@ listed failure, and restoring the file — not by reasoning about what *should* 
 
 ### Test Suite Coverage
 
-274 tests, **86% statement coverage** over `src/eduagent` (measured 2026-08-26, not estimated):
+309 tests, **88% statement coverage** over `src/eduagent` (measured 2026-08-27, not estimated):
 
 ```bash
 pip install pytest-cov
 pytest --cov=src/eduagent --cov-report=term -q
-# TOTAL   2157 statements   292 missed   86%
+# TOTAL   2193 statements   265 missed   88%
 ```
 
 Coverage is reported rather than gated, and the weak spots are named rather than averaged away:
@@ -482,7 +519,8 @@ Coverage is reported rather than gated, and the weak spots are named rather than
 | `integrations/gmail_mcp.py` | 52% | Same shape. The security-critical property is not covered by line coverage at all but by an AST test that fails the build if `.send()` is ever written (ADR-001). |
 
 The modules carrying the decisions a judge would want verified are the well-covered ones:
-`nodes/ocr.py` 100%, `nodes/persona_selector.py` 100%, `graph/tier1_pipeline.py` 100%,
+`resilience.py` 100%, `nodes/ocr.py` 100%, `nodes/persona_selector.py` 100%, `graph/tier1_pipeline.py` 100%,
+`aggregator/idempotency.py` 95%, `server.py` 92%,
 `memory/student_profile.py` 99%, `nodes/debate.py` 98%, `nodes/scorer.py` 97%,
 `nodes/validator.py` 95%, `rate_limit.py` 94%, `interactive.py` 92%, `api.py` 92%,
 `memory/firestore_session.py` 90%.
@@ -506,6 +544,10 @@ Most recent full run (**2026-08-27**, Audit Wave 24):
   (dense shorthand notes; correctly routed to `pending_essays` rather than scored)
 
 Reproduce with: `python scripts/demo_real_handwriting_ocr.py`
+
+Each sample's second transcription pass runs **Gemma 4**, not a second Gemini call (ADR-028); the
+returned `cross_check_model` field records which model actually produced it, so a Gemma outage is
+visible rather than silent.
 
 > **Read this as a distribution, not a constant.** The confidence label is the output of ADR-007's
 > dual-pass `difflib` cross-check over two *generative* transcription passes, so borderline samples

@@ -27,6 +27,26 @@ class GeminiConfig:
     use_vertexai: bool = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "True").lower() != "false"
     vertex_location: str = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
 
+    # ADR-028: a DIFFERENT model family for the OCR cross-check's second pass.
+    # ADR-007 runs the same model twice, which catches random noise but not a
+    # systematic misread -- if Gemini Vision resolves a stroke wrong the same
+    # way on both passes, difflib sees two identical strings and reports
+    # consensus on a wrong transcription. Gemma is a separate family, so the
+    # two errors are uncorrelated.
+    gemma_model: str = os.getenv("EDUAGENT_GEMMA_MODEL", "gemma-4-26b-a4b-it-maas")
+    # PINNED, not env-derived: Gemma 4 MaaS is served ONLY from the `global`
+    # endpoint (us-central1 returns 400 FAILED_PRECONDITION "is only available
+    # via global endpoint"; the bare `gemma3`/`gemma4` ids are Model Garden
+    # entries needing a self-deployed GPU endpoint and return 404). Inheriting
+    # `vertex_location` would silently break the cross-check the moment anyone
+    # sets GOOGLE_CLOUD_LOCATION to a region.
+    gemma_location: str = "global"
+    # The revert switch. Set EDUAGENT_OCR_CROSS_CHECK_GEMMA=false to put the
+    # second pass back on Gemini with no code change -- the rollback path for
+    # ADR-028's abort conditions (quality regression, latency blowout, or a
+    # Gemma 429 rate high enough that "integrated with Gemma" stops being true).
+    ocr_cross_check_with_gemma: bool = os.getenv("EDUAGENT_OCR_CROSS_CHECK_GEMMA", "true").lower() != "false"
+
 
 @dataclass(frozen=True)
 class FirestoreConfig:

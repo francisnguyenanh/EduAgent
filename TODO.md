@@ -1085,7 +1085,7 @@ Bản review cho **Architectural Discipline 4.7/5.0** và **Demo & Production Re
 | **Innovation & Utility** | **40%** | Giảm tải thật cho giáo viên (auto-triage cả lớp), học sinh rèn tư duy không chép văn mẫu, ingest ảnh viết tay lộn xộn, data mutation (weakness taxonomy + fallacy clustering) | 1,2,3,6 | [x] đầy đủ bằng chứng thật, verify qua Vertex AI/Firestore thật ở từng phase |
 | **Architectural Discipline** | **30%** | Deterministic-first, Session vs Memory tách bạch, Validator độc lập zero-trust, idempotency + DLQ + retry, least-privilege OAuth, ADK Eval suite, ADR trong README | 1,2,3,4,5,7 | [x] đầy đủ, 11+ ADR trong README, eval suite 15/15, chaos test thật |
 | **Demo & Readiness** | **30%** | Video ≤4' unedited live, GCP console proof + Cloud Trace, README spin-up test từ máy sạch, architecture diagram | 4,7,8 | [ ] code/hạ tầng sẵn sàng 100%, nhưng video CHƯA quay/upload + screenshot GCP console CHƯA chụp (Phase 8, hành động người thật) |
-| **Stage Three Bonus** | **+0.4đ** | 1 technical blog (+0.2) + 1 social post có hashtag (+0.2) | 8 | [ ] nội dung đã soạn sẵn (`docs/blog_post_draft.md`, `docs/social_post_draft.md`), CHƯA đăng |
+| **Stage Three Bonus** | **+0.4đ** | 1 technical blog (+0.2) + 1 social post có hashtag (+0.2) | 8 | [x] Đã đăng blog & social post (X: https://x.com/EikiTomobe/status/2092985071435395283) |
 
 ---
 
@@ -1210,8 +1210,8 @@ Review dự đoán *"Gemini Vision OCR có thể dẫn đến **504 Deadline Exc
 
 ### [P3] Tối Đa Hóa Điểm Thưởng (Bonus Points Strategy -> Target 6.0/6.0)
 - [ ] **Google AI Integration (+0.2 - +0.6)**: Hiện đang dùng Gemini qua Vertex AI. Có thể cân nhắc thêm node dịch vụ Gemma2 chạy qua inference endpoint để đánh giá hoặc re-rank fallacy offline. 
-- [ ] **Technical Blog Post (+0.2)**: Nhanh chóng publish bản thảo `docs/blog_post_draft.md` lên Dev.to/Medium.
-- [ ] **Social Media Release (+0.2)**: Publish `docs/social_post_draft.md` lên X/LinkedIn với hashtag `#AllThingsAgenticHackathon`.
+- [x] **Technical Blog Post (+0.2)**: Published at https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p.
+- [x] **Social Media Release (+0.2)**: Published on X (https://x.com/EikiTomobe/status/2092985071435395283).
 
 ## 5. Code Refactoring Snips (Mã Nguồn Thay Thế / Bổ Sung Trực Tiếp)
 
@@ -2919,7 +2919,7 @@ hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
 | 1 | Repo PRIVATE | ✅ Sẽ đổi **public** trước khi nộp | 🔴 Stage One pass/fail. **Đừng quên** — trượt vòng đầu bất kể code tốt cỡ nào. Đã xác nhận git history sạch secret (ĐỢT 16) nên đổi public an toàn |
 | 2 | `assets/architecture_diagram.png` | ✅ Sẽ tạo sau khi review xong | 🔴 Mục **bắt buộc** theo §6. Diagram mermaid đã có sẵn ở README §2 — chỉ cần export |
 | 3 | Push commit | ✅ Bạn tự commit/push | Giám khảo đọc GitHub, không đọc máy bạn |
-| 4 | Blog + social post | ⏳ Đang làm | +0.2 mỗi cái. Đã đăng blog (https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p), chưa đăng social |
+| 4 | Blog + social post | ✅ Xong | +0.2 mỗi cái. Đã đăng blog (https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p) & đăng social (https://x.com/EikiTomobe/status/2092985071435395283) |
 
 **Deadline: 31/08/2026 17:00 PT.** Hạn xin credit $150: **28/08 12:00 PT**.
 
@@ -2942,7 +2942,7 @@ hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
 | 3 | Ghi chú bonus sai (+0.4) | Cần xác nhận đã sửa | ✅ **ĐÃ XÁC NHẬN GIẢI QUYẾT.** `submission_checklist.md:43` nay là *"up to **+1.0 Points**"* kèm nguyên văn điều lệ +0.2/model, tối đa +0.6 | `grep -n -i bonus docs/submission_checklist.md` |
 | 4 | ADR-028 Gemma làm OCR lượt hai | Chưa thực thi | 🔴 **VẪN CHƯA CÓ.** `grep -rniE "gemma" src/ scripts/ tests/` → **rỗng**. README chỉ liệt ADR-001…ADR-027, không có ADR-028. **+0.2 bonus vẫn chưa lấy** | `grep -rniE "gemma" src/ scripts/ tests/` · `grep -oE "ADR-0[0-9]{2}" README.md \| sort -u` |
 | 5 | `assets/architecture_diagram.png` | Chưa làm | 🔴 **VẪN THIẾU.** `assets/` chỉ có `gcp_evidence/` (18 ảnh) và `sample_essays/` | `ls -la assets/` |
-| 6 | Blog (+0.2) / Social (+0.2) | Blog xong, social chưa | ✅ **Blog XÁC NHẬN ĐẠT ĐIỀU LỆ** (chi tiết ở phần "đã đối chiếu" bên dưới — lần đầu kiểm bài đăng thật, không chỉ kiểm draft). 🔴 **Social vẫn chưa đăng** — `devpost_submission_draft.md:…` còn `[Insert published X / LinkedIn post URL…]` | `WebFetch` bài dev.to · `grep -n "social media post" docs/devpost_submission_draft.md` |
+| 6 | Blog (+0.2) / Social (+0.2) | ✅ Xong | ✅ **Blog & Social XÁC NHẬN ĐẠT ĐIỀU LỆ**. Social post đã đăng tại: https://x.com/EikiTomobe/status/2092985071435395283 | `WebFetch` bài dev.to · `grep -n "social media post" docs/devpost_submission_draft.md` |
 | 7 | Video demo | Chưa quay/upload | 🔴 **VẪN CHƯA.** `devpost_submission_draft.md` §7 = `[Insert YouTube / Vimeo video URL here]` | `sed -n '152,158p' docs/devpost_submission_draft.md` |
 | 8 | Diễn tập + `smoke_live.py` trước khi quay | Chưa làm | ✅ **Hệ thống sẵn sàng để diễn tập** (không phải "đã diễn tập"): `doctor.py` → **10 PASS / 1 WARN / 0 FAIL**; `smoke_live.py` → **13/13 PASS** trên revision live `eduagent-class-aggregator-00037-6h4` | `python scripts/doctor.py` · `python scripts/smoke_live.py` · `gcloud run services describe …` |
 
@@ -3205,13 +3205,13 @@ hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
 | Hạng mục | Số liệu |
 |---|---|
 | **Blocker Eligibility đang mở** | **4** — repo private (#bảng 1), disclosure vắng khỏi bài nộp (#1), thiếu "other data sources" (#2), thiếu architecture diagram (#5) |
-| Blocker Bonus đang mở | 2 — social post chưa đăng, Gemma/ADR-028 chưa thi công (#3) |
+| Blocker Bonus đang mở | 1 — Gemma/ADR-028 chưa thi công (#3) (Social post đã đăng) |
 | Blocker Demo đang mở | 1 — video chưa quay |
 | Finding mới đợt này | 10 (3 🔴 · 5 🟡 · 2 🟢) — **không có finding nào là bug code** |
 | Trạng thái hệ thống thật | `doctor.py` 10/1/0 · `smoke_live.py` 13/13 · revision live `eduagent-class-aggregator-00037-6h4` · 274 test xanh · coverage 86% khớp README tuyệt đối |
 | Còn lại tới deadline | **4 ngày** (31/08/2026 17:00 PT) |
-| Trần điểm thực tế **nếu nộp nguyên trạng hôm nay** | **5.2/6.0** (5.0 + 0.2 blog) — social chưa đăng, model phụ chưa có |
-| Trần điểm nếu làm xong social + ADR-028 | **5.4 → 5.6/6.0** |
+| Trần điểm thực tế **nếu nộp nguyên trạng hôm nay** | **5.4/6.0** (5.0 + 0.2 blog + 0.2 social) — model phụ chưa có |
+| Trần điểm nếu làm xong ADR-028 | **5.4 → 5.6/6.0** |
 
 **Nếu chỉ được chọn ĐÚNG MỘT việc: chuyển repo sang PUBLIC.** Không phải vì nó khó — nó mất 30 giây
 — mà vì nó là mục **pass/fail** duy nhất còn mở mà **không ai khác ngoài bạn làm được**, và vì
@@ -3349,7 +3349,7 @@ $ grep -rn "9 PASS" docs/                         -> chỉ còn dòng ghi lịch
 | — | **Chuyển repo sang PUBLIC** *(không có checkbox riêng — nằm ở bảng CHỐT cuối ĐỢT 23)* | 🔴 **Stage One pass/fail** | Bạn |
 | 438, 2494 | Export `assets/architecture_diagram.png` từ mermaid README §2 | 🔴 **Bắt buộc §6** | Bạn |
 | — | 3 ảnh UI cho Devpost §6 *(phát hiện ĐỢT 24 #5, chưa từng có checkbox)* | 🟡 | Bạn — chụp trong lúc diễn tập |
-| 1214 | Đăng social post (+0.2) | 🔴 Bonus | Bạn — draft sẵn ở `docs/social_post_draft.md` |
+| 1214 | Đăng social post (+0.2) | ✅ Xong | Đã đăng: https://x.com/EikiTomobe/status/2092985071435395283 |
 | 1071 | Quay unedited live execution | 🔴 Demo 30% | Bạn |
 | 1072 | Upload YouTube/Vimeo **public** | 🔴 | Bạn |
 | 2496 | Diễn tập + `smoke_live.py` ngay trước khi bấm ghi | 🟡 | Bạn |
@@ -3374,3 +3374,520 @@ buổi quay hoặc bỏ hẳn** — nó đổi độ trễ OCR mà kịch bản 
 Trong 46 ô, **không ô nào là bug code hay việc kỹ thuật tồn đọng**. Toàn bộ việc thật còn lại là
 **thao tác của người thật** (public repo → diagram → social → quay → nộp) cộng **một quyết định**
 (ADR-028). Dự án đã ở trạng thái xong-về-kỹ-thuật từ ĐỢT 20; mọi thứ sau đó là thủ tục nộp bài.
+
+---
+
+## ĐỢT 24 (thi công) — ADR-028: Gemma 4 làm lượt OCR thứ hai (2026-08-27) ✅ CODE + TEST XONG · ⏸️ CHƯA DEPLOY
+
+> Thi công theo kế hoạch 10 bước ĐỢT 23. Kết quả **khác kế hoạch ở một điểm quan trọng**: bản triển
+> khai đúng-theo-kế-hoạch **làm chất lượng OCR TỆ ĐI**, và chỉ phát hiện được vì có baseline đo trước.
+> Chi tiết ở mục "Suýt ship một hồi quy" bên dưới — đó là phần đáng đọc nhất của đợt này.
+
+### Trạng thái 10 bước ĐỢT 23
+
+| Bước | Trạng thái | Ghi chú |
+|---|---|---|
+| 1. `config.py` — `gemma_model` | ✅ | Thêm cả `gemma_location` **ghim cứng `"global"`** (không đọc env) và `ocr_cross_check_with_gemma` làm cần gạt revert |
+| 2. `llm.py` — hàm gọi Gemma | ✅ | `_gemma_client()` riêng + `generate_text_from_image()` trả **text thuần** (Gemma không tuân thủ `response_schema`) + retry **riêng cho 429** |
+| 3. `ocr.py` — lượt hai đổi sang Gemma | ✅ | `_transcribe_second_opinion()`, fallback bắt buộc về `_transcribe_once()` |
+| 4. Tín hiệu quan sát được | ✅ | `cross_check_model` trong dict kết quả + `ctx.state["ocr_cross_check_model"]`. Grep thật: `cross_check_model` 7 hit `src/`, `gemini-fallback` 2 hit — **không lặp lại 11 trace-attribute bịa của ĐỢT 12** |
+| 5. Test + sabotage | ✅ | **10 test mới**, **7 sabotage**, mỗi cái đỏ đúng test dự kiến |
+| 6. Hồi quy 12 ảnh thật | ✅ | Phân bố **giống hệt** baseline (10 high / 0 medium / 2 low) |
+| 7. Đo lại độ trễ | ✅ cục bộ / ⏸️ trên deployment | +21% cục bộ; **chưa đo trên Cloud Run** |
+| 8. Tài liệu | ✅ | README (ADR-028 + bảng + badge + mermaid + §8), `failure_matrix.md` dòng 2, `devpost_submission_draft.md` (§8 khai model + "How we built it" + Challenges + tag `gemma`), `video_script.md`, `submission_checklist.md` |
+| 9. Deploy + kiểm chứng live | ⏸️ **CHƯA LÀM** | Cần bạn duyệt — đây là thay đổi chạm vào service demo giám khảo đang dùng |
+| 10. Điều kiện huỷ bỏ | ✅ đã đánh giá | Không điều kiện nào bị chạm sau khi hiệu chỉnh ngưỡng — xem bảng dưới |
+
+### Suýt ship một hồi quy — và vì sao nó bị bắt
+
+Bản triển khai **đúng y kế hoạch ĐỢT 23** (đổi lượt hai sang Gemma, giữ nguyên mọi thứ khác) chạy
+xong cho ra **8 high / 1 medium / 3 low** — xấu hơn baseline. Điều tra ảnh bị tụt (`stu_stuck_messy`)
+cho thấy hai bản chép là **cùng một bài luận**, chỉ khác dấu câu, xuống dòng, và chỗ Gemma ghi
+`[[unclear]]` còn Gemini đoán. Similarity 0.646 < 0.75 → ép `low` → bài **bị đẩy vào `pending_essays`
+và không bao giờ được tranh biện**. Một bài đọc được, bị loại vì hai model viết dấu câu khác nhau.
+
+Nguyên nhân gốc: **ngưỡng 0.75 bị kế thừa mù quáng.** Nó được hiệu chỉnh cho so sánh *cùng-model*.
+Đo trên 12 ảnh thật:
+
+```
+                        ảnh đọc được          ảnh không đọc được
+same-model  (Gemini×2)  0.989 - 1.000         0.161
+cross-model (vs Gemma)  0.729 - 0.998         0.265 - 0.294
+```
+
+Với same-model, 0.75 nằm **rất xa dưới** cụm ảnh đọc được → cắt an toàn. Với cross-model, 0.75 nằm
+**BÊN TRONG** cụm đó → bắn nhầm vào bài đọc được (`tilted_essay` 0.729, `stu_stuck` 0.756). Hai phép
+đo có phân bố khác nhau; dùng chung một con số là **bug thật, không phải chuyện tinh chỉnh khẩu vị**.
+Sửa: tách thành hai hằng số, cross-model = **0.50**, nằm giữa dải trống rộng 0.294 → 0.729.
+
+**Giới hạn tự nhận:** cả hai con số đều fit trên chính 12 ảnh dùng để đánh giá, không có held-out set.
+Điều khẳng định được là *"0.75 sai cho cross-model"*, **không** phải *"0.50 là tối ưu"*.
+
+### Và đây là bằng chứng ADR-028 thật sự có tác dụng, không chỉ là lý thuyết
+
+`notes_socialmedia.jpg` — hai lượt Gemini tự đồng thuận với nhau ở **0.781**, tức **qua ngưỡng 0.75
+và ADR-007 cho đi thẳng**. Cùng ảnh đó, Gemini vs Gemma = **0.294**. Cross-check khác-model bắt được
+một bản chép không đáng tin mà cross-check cùng-model **vẫy tay cho qua**. Đây chính là ca mà ĐỢT 22
+mới chỉ lập luận trên giấy; nay có số đo.
+
+### Đo lường — A/B liền kề, cùng code, chỉ khác toggle
+
+`EDUAGENT_OCR_CROSS_CHECK_GEMMA` off/on, chạy sát nhau để loại nhiễu mạng theo thời điểm:
+
+| | Gemini×2 (off) | Gemini+Gemma (on) | Chênh |
+|---|---|---|---|
+| Độ trễ OCR trung bình / ảnh | **7.30s** | **8.82s** | **+1.52s (+21%)** |
+| Tổng 12 ảnh | 87.65s | 105.81s | +18.2s |
+| Phân bố confidence | 10 high / 0 med / 2 low | **10 high / 0 med / 2 low** | **không đổi** |
+| Gemma thực sự được dùng | — | **12/12 ảnh, 0 fallback** | — |
+
+⚠️ Con số +21% này **đo cục bộ**. Các lần chạy rời rạc trước đó dao động 6.24s–10.83s, nên độ nhiễu
+lớn; chỉ cặp A/B liền kề mới đáng trích dẫn. **Chưa đo trên Cloud Run.**
+
+**Tỉ lệ 429 của Gemma: 4/10 lời gọi thô** — đúng như ĐỢT 22 cảnh báo. Retry hấp thụ hết: 6/6 ảnh
+thành công khi thử, và 12/12 trong lần benchmark. `llm.py` retry 429 **chỉ ở đây**, không đổi chính
+sách chung (4xx của Gemini vẫn không retry — một request sai sẽ sai mãi; còn hàng đợi MaaS đầy thì
+vài giây sau là được).
+
+### Đối chiếu với 3 điều kiện HUỶ BỎ đã chốt trước ở ĐỢT 23
+
+| Điều kiện | Ngưỡng | Đo được | Kết |
+|---|---|---|---|
+| Chất lượng OCR 12 ảnh xấu đi | bất kỳ | phân bố **giống hệt** baseline | ✅ không chạm |
+| `start-with-image` vượt ~35s | 35s | +1.52s/ảnh cục bộ; **chưa đo trên deployment** | ⚠️ **chưa xác minh được** |
+| Tỉ lệ 429 cao tới mức fallback chạy thường xuyên | — | **0 fallback trên 12/12 ảnh** | ✅ không chạm |
+
+Điều kiện thứ hai là lý do mục 9 (deploy) chưa được làm: nó chỉ trả lời được **sau khi deploy**, và
+deploy là thao tác chạm vào service giám khảo đang dùng.
+
+### Test — 10 mới, 7 sabotage
+
+| Sabotage | Test đỏ |
+|---|---|
+| Ép lượt hai dùng lại Gemini | `..._populates_raw_input_on_success` (`gemma.call_count 0 != 1`), `..._downgrades_confidence...` |
+| Bỏ `except LLMGenerationError` (không fallback) | `test_gemma_outage_falls_back_to_same_model_second_pass_and_says_so` |
+| Bỏ guard chuỗi rỗng | `test_gemma_returning_empty_text_falls_back...` |
+| `gemma_location` đọc env thay vì ghim `global` | `test_gemma_location_is_pinned_global...` |
+| Cross-model quay lại ngưỡng 0.75 | `test_cross_model_and_same_model_use_different_thresholds`, `test_real_captured_pair_is_not_parked...` |
+| Cross-model hạ về 0.0 (vô hiệu hoá) | `test_cross_model_genuine_disagreement_still_downgrades` + 1 test cũ |
+| Bỏ retry 429 ở `llm.py` | `test_generate_text_from_image_retries_429_then_succeeds` |
+
+**Một test yếu của chính tôi bị sabotage bắt được.** `test_cross_model_stylistic_difference...` ban
+đầu dùng hai chuỗi tôi tự nghĩ ra — đo lại thì chúng similarity **0.921**, tức nằm ngoài dải
+0.50–0.75 mà nó tuyên bố bảo vệ, nên nó **vẫn xanh** khi ngưỡng bị đẩy về 0.75. Đã thay bằng **cặp
+text thật đã đo** từ `tilted_essay_grading.jpg` (similarity **0.709**), và sabotage lại thì nó đỏ.
+Đây đúng nguyên nhân gốc của 12 test chết ở ĐỢT 12: *một assertion kể lại chính setup của nó*.
+
+### Số liệu sau thi công
+
+```
+pytest -q -m "not e2e"                      -> 282 passed, 2 deselected   (trước: 272)
+pytest --cov=src/eduagent -q                -> 284 passed, TOTAL 2193 stmts, 293 missed, 87%
+                                               nodes/ocr.py 100%, llm.py 89%, config.py 100%
+scripts/run_eval_suite.py --strict          -> 50/50 passed (không vỡ)
+```
+
+README đã cập nhật theo số đo mới (274→284 test, 86%→87%, 2157→2193 statements).
+
+### CÒN LẠI — cần bạn quyết
+
+- [ ] 🔴 **Deploy lên Cloud Run.** Code đã ở repo và đã test, **nhưng revision live `00037-6h4` vẫn
+      chạy bản cũ**. Giám khảo mở URL hosted hiện **không** chạm vào Gemma. Chưa deploy thì +0.2 là
+      một tuyên bố khó bảo vệ.
+- [ ] 🔴 **Đo lại `start-with-image` trên service sau khi deploy** — con số duy nhất trong 3 điều
+      kiện huỷ bỏ chưa xác minh được, và nó nằm trong kịch bản video.
+- [ ] 🟡 Chạy lại `doctor.py` + `smoke_live.py` sau deploy.
+
+**Cần gạt revert nếu deploy xong thấy tệ:** `EDUAGENT_OCR_CROSS_CHECK_GEMMA=false` — quay lại lượt
+hai bằng Gemini, không cần sửa code, không cần rollback image. Đã có test chứng minh cần gạt này
+thật sự chặn được lời gọi Gemma chứ không chỉ đổi nhãn kết quả.
+
+---
+
+## ĐỢT 24 (thi công tiếp) — Tầng A coverage + đo thử `gemini-3.7-flash` cho OCR (2026-08-27)
+
+### Phần 1 — Tầng A: 25 test mới, 5 sabotage, coverage 87% → 88%
+
+| File test mới | Bảo vệ điều gì | Sabotage → đỏ |
+|---|---|---|
+| `test_idempotency.py` (5) | **Chống trùng Pub/Sub.** `claim_event()` nhánh `AlreadyExists` — Pub/Sub at-least-once nên nhánh này **chắc chắn chạy trong production**, mà trước đó **không có test nào**. Nó là thứ duy nhất chặn một message giao lại sinh ra digest thứ hai (tốn LLM) + Gmail draft thứ hai | `set()` thay `create()` → 4 đỏ · `except Exception` nuốt cả `ServiceUnavailable` → 2 đỏ |
+| `test_resilience_policy.py` (6) | Vị **predicate** quyết định cái gì đáng retry. Docstring của `resilience.py` tự nhận *"deliberately narrow"* nhưng `_is_retryable_http_error` chưa có test — không gì chặn nó nới ra retry 403 mãi mãi | Bỏ điều kiện `500 <= status < 600` → 2 đỏ |
+| `test_server_pubsub_oidc.py` (8) | ADR-014: `POST /` trên service `--allow-unauthenticated`. `smoke_live.py` chỉ chứng minh được ca "không có token → 401"; file này phủ ca **token Google hợp lệ nhưng của service account KHÁC** — token ký đúng vẫn có thể là của *bất kỳ ai có tài khoản Google* | Bỏ kiểm service account → 1 đỏ |
+| `test_server_degrade_routes.py` (6) | Các nhánh `except → 503/502` của route giáo viên. Ngoài mã lỗi, còn assert **không rò text exception nội bộ** ra client | Để exception nổ thẳng → 1 đỏ |
+
+```
+pytest -q -m "not e2e"       -> 307 passed  (trước Tầng A: 282)
+pytest --cov -q              -> 309 passed, TOTAL 2193 stmts, 265 missed, 88%
+   resilience.py       78% -> 100%
+   server.py           86% ->  92%
+   idempotency.py      57% ->  95%
+run_eval_suite --strict      -> 50/50 (không vỡ)
+```
+
+**Một quan sát trung thực về chính con số coverage.** Bốn test đầu (19 test, gồm cả 8 test OIDC) chỉ
+dịch được **10 dòng** — từ 293 xuống 283, làm tròn vẫn 87%. Lý do: các dòng đó **đã được cover sẵn**
+bởi test khác; cái 8 test kia thêm vào là **nhánh** và **ý nghĩa**, không phải dòng. Chỉ khi thêm
+`test_server_degrade_routes.py` (chạm vào các dòng `except` thật sự chưa ai đi qua) con số mới nhảy
+283 → 265.
+
+Đây là bằng chứng số cho luận điểm đã nêu: **line coverage đo "dòng nào được chạy", không đo "hành vi
+nào được bảo vệ".** Test "token của sai service account bị từ chối" gần như không tăng coverage nhưng
+là một trong những test giá trị nhất vừa viết. Ngược lại, ~130 dòng Tầng C sẽ tăng coverage nhiều
+nhất và bảo vệ ít nhất.
+
+### Phần 2 — Nâng OCR lên `gemini-3.7-flash` có cải thiện không? **KHÔNG. Đo rồi.**
+
+**Lần đo đầu bị vứt bỏ.** Chạy tuần tự 3.7 trên 12 ảnh → nổ `429 RESOURCE_EXHAUSTED` ngay ảnh đầu.
+Nhưng kiểm chứng lại thì **`gemini-3.5-flash` (bản đang chạy) lúc đó cũng mất 53s/lượt** và dính
+`ServerError` — Vertex đang suy giảm chung. **Mọi so sánh trong cửa sổ đó đều vô giá trị**, nên bỏ và
+đo lại bằng phép **so cặp đôi xen kẽ**: cùng một ảnh, gọi 3.5 rồi 3.7 liền nhau, để hai model chịu
+đúng cùng điều kiện nền tảng.
+
+| | `gemini-3.5-flash` (hiện tại) | `gemini-3.7-flash` |
+|---|---|---|
+| Thành công | **12/12** | **11/12** (1 lỗi) |
+| Độ trễ trung bình | **5.0s** | **26.0s** — **chậm hơn 5.2×** |
+| Confidence | 11 high / 1 medium | 10 high / 1 medium |
+| Chậm nhất | 11.2s | **85.6s** |
+
+**Không có cải thiện chất lượng nào, đổi lại chậm hơn 5 lần và thêm một lần hỏng.**
+
+**Vì sao đúng như dự đoán:** transcribe là **tác vụ tri giác, không phải suy luận** — và chính code đã
+đặt `thinking_budget=0` ở đây từ ĐỢT 3 vì lý do đó. Một model suy luận nặng hơn **không có chỗ để
+phát huy** trên việc chép lại đúng nét chữ. Phần sai còn lại của OCR là **chữ viết không đọc nổi**
+(2/12 ảnh là ghi chú tốc ký dày đặc), không phải model suy luận kém. Nơi hai model bất đồng nhiều
+nhất chính là 2 ảnh khó đó (0.408 / 0.514), tức **cả hai cùng bí**, không phải 3.7 thắng.
+
+**Và nó sẽ phá video:** 26s trung bình cho riêng lượt OCR thứ nhất, đỉnh 85.6s — vượt xa điều kiện
+huỷ bỏ ~35s cho cả luồng `start-with-image`.
+
+**Kết luận: KHÔNG đổi OCR sang 3.7.** Giữ `gemini-3.5-flash` cho lượt một.
+
+### Phần 3 — Rủi ro mới phát hiện (không nằm trong câu hỏi, nhưng ảnh hưởng buổi quay)
+
+Trong lúc đo, Vertex AI có một cửa sổ suy giảm thật: `gemini-3.5-flash` multimodal **3.1s → 53s**, kèm
+`ServerError` rải rác trên **cả** 3.5 và 3.7. Hệ thống xử lý đúng (retry 5xx rồi degrade), nhưng:
+
+- `gemini-3.7-flash` là **`heavy_model` của Teacher Digest** — đo được **1/4 lời gọi text hỏng**
+  trong cửa sổ đó.
+- Nếu buổi quay rơi trúng một cửa sổ như vậy, beat OCR có thể mất ~50s thay vì ~5s, và Gmail draft
+  có thể không sinh ra kịp.
+
+**Đề xuất cho buổi quay (không cần sửa code):** chạy `scripts/smoke_live.py` **ngay trước khi bấm
+ghi** — nó gọi thật toàn bộ luồng và sẽ lộ ngay nếu Vertex đang có vấn đề. Nếu 13/13 chậm bất thường,
+**hoãn buổi quay vài giờ** thay vì quay rồi phát hiện dead air 50 giây. Đây là lý do mục "diễn tập +
+smoke_live trước khi quay" đáng giữ nguyên mức 🟡 chứ không hạ xuống.
+
+---
+
+## ĐỢT 25 (Chuẩn bị nộp bài & Tối ưu OCR Cross-check)
+
+### Vấn đề kỹ thuật (Phát hiện từ pre-submission audit)
+Trong kiến trúc hiện tại ở `src/eduagent/nodes/ocr.py`, hệ thống so sánh văn bản giữa Gemini và Gemma bằng `difflib.SequenceMatcher` trên raw text. Tuy nhiên, hai model thường khác biệt về cách format (xuống dòng, khoảng trắng, ký hiệu) dù cùng đọc đúng một nội dung, dẫn đến `difflib` báo "inconsistent" giả (false positive). 
+
+### Các task cần thực hiện 🔴 (Bắt buộc trước khi submit)
+- [~] ~~**Chuẩn hóa OCR Output trước khi difflib**~~ — **ĐÃ THI CÔNG RỒI REVERT (review ĐỢT 25, 2026-08-28).**
+      Ý tưởng đúng, nhưng đo trên 12 cặp text thật thì bản đã ship **làm ngược lại mục tiêu của nó**.
+      Chi tiết + số đo ở mục "REVIEW ĐỢT 25" ngay bên dưới. Lý do kỹ thuật đã được ghi thẳng vào
+      `nodes/ocr.py` cạnh hai hằng số ngưỡng, để đợt sau không thử lại mà không đo.
+- [x] ✅ **Đồng bộ Narrative về OCR** — **GIỮ NGUYÊN, đây là việc đúng.** Bắt được `docs/For_notebookLM.md`
+      là file mà ĐỢT 24 đã **bỏ sót** khi thi công ADR-028. Chỉ gỡ các câu nói về "normalize text"
+      cho khớp với code sau khi revert (xem dưới).
+
+---
+
+## REVIEW ĐỢT 25 — thẩm định phần AI khác đã sửa (2026-08-28)
+
+> Review theo đúng quy tắc bất biến #1: **đo bằng lệnh thật, không đọc code suông.** Tôi còn giữ
+> nguyên 12 cặp `(text Gemini, text Gemma)` chụp được lúc thi công ADR-028, nên đánh giá được hàm
+> normalize trên **chính dữ liệu nó phải xử lý**, thay vì suy đoán.
+
+### ✅ Việc làm đúng — giữ lại
+
+**Đồng bộ tài liệu (task #2).** `docs/For_notebookLM.md` **chưa từng được cập nhật** ở ĐỢT 24 khi
+ADR-028 đổi lượt hai sang Gemma — bảng node và mục 5.1 vẫn mô tả "dual-pass self-consistency" của
+bản cũ. Đây là đúng class-1 (code làm một đằng, doc nói một nẻo) mà chính ĐỢT 24 đi săn, và tôi đã
+để lọt. Bắt được là việc thật.
+
+Ngoài ra: **307 test vẫn xanh, eval suite 50/50, sabotage ngưỡng vẫn làm đỏ đúng test.** Không phá vỡ
+lưới an toàn nào.
+
+### 🔴 Việc phải revert — `_normalize_text()` làm NGƯỢC LẠI điều nó định làm
+
+Mục tiêu ghi trong task: *"tránh phạt lỗi format giữa 2 model"*. Đo thật:
+
+| Ảnh | RAW | **NORM (bản đã ship)** | NORM + `autojunk=False` |
+|---|---|---|---|
+| `faded_essay_cellphones.jpg` | 0.927 | **0.812** 🔴 | 0.940 |
+| `messy_essay_videogames.jpg` | 0.949 | **0.794** 🔴 | 0.954 |
+| `neat_essay_homework.jpg` | 0.924 | **0.872** 🔴 | 0.967 |
+| `notes_socialmedia.jpg` *(xấu thật)* | 0.294 | 0.339 | **0.755** |
+| `stu_declining_unstructured.png` *(xấu thật)* | 0.265 | 0.270 | 0.531 |
+
+**3/12 ảnh ĐỌC ĐƯỢC bị tụt similarity** — tức tăng nguy cơ báo động giả, đúng thứ hàm này được viết
+ra để loại bỏ.
+
+**Nguyên nhân gốc: `autojunk` của `difflib.SequenceMatcher`.** Với chuỗi dài >200 ký tự, phần tử xuất
+hiện ở >1% chuỗi bị coi là "junk" và bị loại khỏi phép so. Sau khi `lower()` + gộp `\s+` thành một
+dấu cách, ký tự space áp đảo đủ để bị vứt, phá vỡ so khớp. Thiếu đúng một tham số `autojunk=False`.
+
+*(Ghi nhận: đây chính xác là cái bẫy đã làm thí nghiệm normalize của **tôi** ở ĐỢT 24 cho kết quả
+thất thường 0.918 → 0.486, và là lý do tôi loại phương án đó lúc đấy. Cùng một hố, hai lần.)*
+
+### 🔴 Và ngưỡng đã mô tả sai code
+
+Khối comment ngay trên `_CROSS_MODEL_SIMILARITY_THRESHOLD` trích *"legible 0.729–0.998, unreadable
+0.265–0.294"* — **toàn bộ đo trên raw text**. Sau thay đổi, code so trên normalized text, nên khối
+comment hiệu chỉnh **không còn mô tả cái mà code làm**. Class-1 xuất hiện ngay bên trong chính đoạn
+tài liệu hoá ngưỡng.
+
+### 🟡 Không test, không số đo
+
+Cả hai task đánh `[x]` mà section ĐỢT 25 **không có một con số nào**. `_normalize_text` **không có
+test**. Chỉ cần một test + chạy lại 12 ảnh là lỗi autojunk lộ ra ngay.
+
+### 🟡 Vấn đề nó định giải quyết thì đã được giải quyết rồi
+
+Hai báo động giả (`tilted_essay` 0.729, `stu_stuck` 0.756) đã được xử ở ĐỢT 24 bằng cách tách ngưỡng
+cross-model xuống **0.50**. Ở ngưỡng đó, verdict của bản normalize **giống hệt** raw trên cả 12 ảnh —
+thay đổi **không đổi hành vi nào**, chỉ **thu hẹp biên an toàn** (3 ảnh tụt gần ngưỡng hơn).
+
+### 🔴 Và nếu "sửa cho đúng" bằng `autojunk=False` thì hỏng chỗ khác
+
+`notes_socialmedia` nhảy **0.294 → 0.755**, vượt ngưỡng 0.50 → **không còn bị bắt**. Mà đó chính là
+**bằng chứng chủ lực của ADR-028** (Gemini tự đồng thuận với chính nó ở 0.781 nên ADR-007 cho qua;
+chỉ Gemma bắt được). Muốn giữ normalize thì phải nâng ngưỡng lên ~0.85 và đo lại toàn bộ.
+
+Quan trọng hơn — **raw phân tách tốt hơn**:
+
+```
+raw                    : xấu <= 0.294 | tốt >= 0.729   -> khoảng trống 0.435
+norm + autojunk=False  : xấu <= 0.755 | tốt >= 0.917   -> khoảng trống 0.162
+```
+
+Normalize **nén mọi thứ lên trên và làm HẸP biên**, không nới rộng.
+
+### Đã thi công (2026-08-28)
+
+- ✅ Gỡ `_normalize_text()`; `_cross_check_consistency()` so lại trên **raw text**.
+- ✅ Ghi toàn bộ lý do + số đo vào `nodes/ocr.py` cạnh hai hằng số ngưỡng, kèm câu
+  *"Do not re-introduce normalisation without re-measuring both of those numbers"* — để đợt sau không
+  rơi vào hố này lần thứ ba.
+- ✅ Gỡ các câu "normalize text" khỏi `README.md` (ADR-007 row + Decision + Context ADR-028),
+  `docs/For_notebookLM.md` (3 chỗ), `docs/devpost_submission_draft.md` §3.
+  **Giữ nguyên** toàn bộ phần đồng bộ Gemini+Gemma — đó là phần đúng.
+- ✅ README ADR-007 nay ghi rõ lý do dùng raw, để việc revert này tự nó là tài liệu.
+
+### Kiểm chứng sau revert
+
+```
+pytest -q -m "not e2e"                        -> 307 passed, 2 deselected
+run_eval_suite.py --strict                    -> 50/50 passed
+grep -rn -i "normaliz" README.md docs/*.md    -> chỉ còn 1 câu ở README giải thích VÌ SAO đã revert
+                                                 (+ 1 hit không liên quan ở data_lifecycle: "Normalized metrics")
+SABOTAGE ngưỡng cross-model -> 0.75           -> 2 test đỏ ✓
+SABOTAGE ép lượt hai về Gemini                -> 4 test đỏ ✓
+```
+
+### Bài học ghi lại
+
+Task ĐỢT 25 mô tả một **triệu chứng có thật** (hai model khác format) và đề ra một **cách chữa nghe
+rất hợp lý**. Cả hai đều đúng trên giấy. Cái thiếu là **một phép đo**: 12 cặp text đã nằm sẵn trong
+`eval/test_images/`, chạy 5 phút là ra. Không đo thì không có cách nào biết rằng cách chữa đó làm
+bệnh nặng thêm trên 1/4 số ca — và nó sẽ đi thẳng vào bài nộp dưới dạng một câu tài liệu nghe rất
+chuyên nghiệp.
+
+---
+
+## ĐỢT 24 (khảo sát) — 3.5 vs 3.6 vs 3.7: đo tốc độ và độ chính xác toàn hệ thống (2026-08-27/28)
+
+> Câu hỏi: *"tăng tốc độ + tăng độ chính xác toàn hệ thống, không quan tâm chi phí"*. Đo bằng chính
+> các nhạc cụ **zero-LLM** sẵn có của dự án — không dùng LLM-as-judge ở bất kỳ đâu.
+
+### Bản đồ model đang dùng (grep, không phải trí nhớ)
+
+| Biến | Model | Call site |
+|---|---|---|
+| `flash_model` | `gemini-3.5-flash` | `nodes/ocr.py:117`, `nodes/summarizer.py:74`, `nodes/debate.py:160`, `nodes/scorer.py:92`, `api.py:549` (reflection), `skills/parent_note.py:83` — **6 chỗ** |
+| `heavy_model` | `gemini-3.7-flash` | `aggregator/digest.py:119` (Teacher Digest) — 1 chỗ |
+| `gemma_model` | `gemma-4-26b-a4b-it-maas` | `nodes/ocr.py:172` (lượt hai, ADR-028) |
+
+**Điều lệ có cho dùng 3.7 không? CÓ.** `overview/rule.txt:67` nguyên văn:
+> *"Mandatory for all categories: 1) **Gemini 3.5 or newer** accessed through Gemini API or Vertex AI..."*
+
+`3.6-flash` và `3.7-flash` đều tồn tại ở `location=global` (kiểm bằng `client.models.list()`) và đều
+thoả *"3.5 or newer"*. Không có ràng buộc nào cấm.
+
+### TỐC ĐỘ — 3.6 thắng ở mọi tác vụ, 3.7 thua ở mọi tác vụ
+
+Đo **xen kẽ theo từng tác vụ** (gọi 3.5 → 3.6 → 3.7 liền nhau trên cùng input) để cả ba chịu cùng
+điều kiện nền tảng — bài học từ cửa sổ Vertex suy giảm hôm qua.
+
+| Tác vụ | 3.5-flash | **3.6-flash** | 3.7-flash |
+|---|---|---|---|
+| OCR (12 ảnh thật, so cặp) | 5.1s | **3.4s** *(−33%)* | 26.0s *(+410%, 1 lỗi)* |
+| Debate turn (16 lượt) | 5.21s | **4.83s** *(−7%)* | 6.19s |
+| Summarizer (4 bài) | 1.89s | **1.80s** | 2.18s |
+| Scorer (4 bài) | 7.32s | **5.97s** *(−18%)* | 23.19s *(+217%)* |
+| Live-persona eval suite (cả bộ) | 75-78s | 75-92s | **311s** |
+
+### ĐỘ CHÍNH XÁC — không model nào cải thiện được, và đây là lý do
+
+| Thước đo (zero-LLM) | 3.5 | 3.6 | 3.7 | Kết luận |
+|---|---|---|---|---|
+| **Validator qua ngay lượt đầu** (16 lượt × 4 persona) | **100%** | **100%** | **100%** | **Đã bão hoà.** Không còn chỗ để cải thiện — chất lượng ở đây do *prompt design* quyết định, không phải model tier |
+| **Persona fidelity** (4 lần chạy mỗi model) | 3,2,3,1 → TB 2.25/4 | 2,2,1,2 → TB 1.75/4 | 2/4 (1 lần) | **Nhiễu áp đảo.** Dải 1–3 ở cả hai; n=4 không đủ để nói model nào hơn |
+| **OCR confidence** (12 ảnh) | 12 high | 10 high + 2 medium | 10 high + 1 med + 1 lỗi | 3.6 **thận trọng hơn**, không phải chính xác hơn |
+| **Scorer discrimination** (8 cặp thesis) | 7/8, +2.50 | 7/8, +3.50 | — | ⚠️ **n=1 mỗi bên, CHƯA KẾT LUẬN ĐƯỢC** — xem ghi chú dưới |
+
+**Vì sao độ chính xác không nhúc nhích — và điều này đoán trước được:**
+- **OCR** là tác vụ **tri giác**, không phải suy luận. Chính code đã đặt `thinking_budget=0` ở đây từ
+  ĐỢT 3 vì lý do đó. Model suy luận nặng hơn không có chỗ phát huy khi việc cần làm là chép đúng nét
+  chữ. Phần sai còn lại là **chữ không đọc nổi** (2/12 ảnh tốc ký) — chỗ hai model bất đồng nhiều
+  nhất (agree 0.239 / 0.649) chính là 2 ảnh đó, tức **cả hai cùng bí**, không phải model mới thắng.
+- **Debate** đã 100% qua validator. Trần chất lượng nằm ở prompt + persona anchoring, không ở model.
+
+**⚠️ Ghi chú trung thực về scorer discrimination:** lần chạy đầu cho 3.6 delta cao hơn (+3.50 vs
++2.50), nhưng **n=1 mỗi bên**. Chính 3.5 hôm nay ra **+2.50** trong khi artifact canonical ghi
+**+2.75** — tức cùng một model dao động ±0.25 giữa các lần. Loạt chạy lặp để xác minh **bị dừng giữa
+chừng theo yêu cầu**, nên **con số này KHÔNG được dùng làm căn cứ**. Và kể cả nếu đúng: delta lớn hơn
+là *độ nhạy* cao hơn, **không đồng nghĩa chính xác hơn** — một scorer khuếch đại chênh lệch làm điểm
+giáo viên nhìn thấy nhiễu hơn. `pass_count` — tiêu chí thật — **giống hệt nhau: 7/8**.
+
+### Sự cố trong lúc đo — và cách xử lý
+
+Loạt chạy bị dừng **trước bước khôi phục artifact**, nên `eval/results/learning_outcome_measured.json`
+bị bỏ lại ở kết quả một lần benchmark (**8/8, +3.88**) thay vì bản canonical. File này là **phụ thuộc
+bắt buộc của eval Layer 4** và là nguồn của con số **+2.75** in trong README §7, blog và Devpost.
+Nếu để nguyên, ba tài liệu nộp bài sẽ trích một số không còn tồn tại trong artifact — đúng class-3.
+
+Đã khôi phục bằng `git checkout -- eval/results/learning_outcome_measured.json` (về bản commit: 7/8,
++2.75, `runs_per_text=2`, đo 2026-08-25). Kiểm chứng sau khôi phục:
+
+```
+git status -s eval/          -> trống
+run_eval_suite.py --strict   -> 50/50 passed
+pytest -q -m "not e2e"       -> 307 passed
+```
+
+**Bài học ghi lại cho đợt sau:** script benchmark **không được ghi đè artifact production**. Nếu còn
+chạy loạt so sánh model, phải `EDUAGENT_*` trỏ output sang file tạm, hoặc `git stash`/`checkout` ngay
+sau mỗi lần. Một lần Ctrl-C đúng chỗ là đủ để một con số bịa đi vào bài nộp.
+
+### KHUYẾN NGHỊ
+
+| Đề xuất | Quyết |
+|---|---|
+| **Đổi `flash_model` sang `gemini-3.7-flash`** | ❌ **KHÔNG.** Chậm hơn ở *mọi* tác vụ (OCR +410%, scorer +217%), không cải thiện chất lượng ở bất kỳ thước đo nào, và có lỗi. Vượt xa điều kiện huỷ bỏ ~35s của luồng ảnh |
+| **Đổi `flash_model` sang `gemini-3.6-flash`** | 🟡 **Có lợi thật về tốc độ (−7% đến −33%), nhưng KHÔNG khuyến nghị làm lúc này.** Lý do ở dưới |
+| **Đổi `heavy_model` (digest) 3.7 → 3.6** | 🟡 Đáng cân nhắc **hơn** cái trên — xem dưới |
+| Giữ nguyên `gemini-3.5-flash` | ✅ Mặc định an toàn |
+
+**Vì sao không khuyến nghị đổi sang 3.6 dù nó nhanh hơn thật:**
+1. `flash_model` điều khiển **6/8 call site**. Toàn bộ 24 đợt hiệu chỉnh, mọi ngưỡng (kể cả ngưỡng
+   cross-model 0.50 vừa hiệu chỉnh hôm qua trên 12 ảnh), và mọi con số công bố đều đo trên 3.5.
+2. **309 test đều mock LLM** → **không test nào bắt được** hồi quy hành vi do đổi model. Lưới an
+   toàn của dự án mù ở đúng chỗ này.
+3. Lần đo duy nhất cho thấy OCR confidence đổi **12 high → 10 high + 2 medium**. README §8 đang công
+   bố phân bố đó. Đổi model là phải đo lại và sửa lại tài liệu — thêm việc, thêm rủi ro sai số.
+4. **Lợi ích tuyệt đối nhỏ.** Beat OCR trong video: lượt một tiết kiệm ~1.7s, nhưng lượt hai giờ là
+   **Gemma (~5.8s)** nên tổng chỉ giảm ~1.7s trên ~8.8s. Không đổi được cách kể chuyện.
+5. Còn **3 ngày**, video **chưa quay**.
+
+**Ngoại lệ đáng cân nhắc — `heavy_model` cho Teacher Digest.** Đây là chỗ 3.7 gây rủi ro thật chứ
+không phải lý thuyết: đo được **23.19s** trên lời gọi JSON tương đương, và **1/4 lời gọi text hỏng**
+trong cửa sổ Vertex suy giảm. Digest là beat Gmail draft trong video. Đổi sang 3.6 sẽ nhanh hơn và ổn
+định hơn. **Nhưng:** digest là tác vụ tổng hợp thật sự cần suy luận (khác OCR), và **không có thước
+đo tất định nào** cho chất lượng digest — nên đổi là đánh đổi mù. Nếu đổi, phải tự đọc vài digest
+sinh ra bằng 3.6 và so bằng mắt trước khi chốt.
+
+**Nếu vẫn muốn đổi:** không cần sửa code — `EDUAGENT_FLASH_MODEL` / `EDUAGENT_HEAVY_MODEL` đã là env
+var (ADR-002). Nhưng phải chạy lại: `demo_real_handwriting_ocr.py` (cập nhật README §8),
+`evaluate_learning_outcomes.py` (cập nhật +2.75 ở README/blog/Devpost), `run_eval_suite.py --strict`,
+rồi deploy + `smoke_live.py`.
+
+---
+
+## ĐỢT 25 — Viết lại `DOC_UPDATE_RULE.md` + gỡ 4 file bằng chứng khỏi trạng thái "mồ côi" (2026-08-28)
+
+### Phát hiện: bằng chứng Architecture 30% mạnh nhất không ai với tới được
+
+Kiểm bằng lệnh, không bằng cảm tính:
+
+```
+grep -c "<tên file>" README.md docs/devpost_submission_draft.md
+-> failure_matrix           README=0  devpost=0
+-> data_lifecycle_and_privacy README=0  devpost=0
+-> eligibility_statement    README=0  devpost=0
+-> trace_evidence           README=0  devpost=0
+```
+
+`docs/failure_matrix.md` (ma trận **20** component + đường degrade + tín hiệu grep được),
+`docs/data_lifecycle_and_privacy.md` (vòng đời dữ liệu + STRIDE) là bằng chứng trực tiếp cho tiêu chí
+**Architectural Discipline 30%** (`rule.txt:190`: *"design robust, failure-tolerant agentic systems"*)
+— và **không có đường nào để giám khảo tới**. Devpost trỏ repo, repo có README, README không trỏ tiếp.
+
+### Điều lệ có đòi nội dung 4 file này không? KHÔNG — nhưng chúng vẫn ăn điểm
+
+§6 liệt kê đúng 7 mục bắt buộc (category, hosted URL, text description 4 thành phần, repo URL,
+spin-up instructions, architecture diagram, video). **Không mục nào** đòi failure matrix, privacy
+policy, threat model hay trace evidence. Đây là **điểm Stage Two**, không phải pass/fail Stage One.
+
+### Quyết định: teaser inline + link, KHÔNG dán nguyên nội dung vào Devpost/README
+
+Đo trước khi quyết:
+
+| | Dòng | KB | Bảng rộng nhất |
+|---|---|---|---|
+| `README.md` trước khi sửa | 534 | 48K | 253 ký tự |
+| `failure_matrix.md` | 71 | 16K | **1376 ký tự** |
+| `data_lifecycle_and_privacy.md` | 63 | 12K | **1644 ký tự** |
+
+Ba lý do loại phương án chèn nguyên nội dung:
+1. README đã **6.291 từ ≈ 31 phút đọc**; chèn thêm 28K là **+58%**. Tiêu chí dùng đúng chữ
+   *"Does the repository feature a **clean** architecture diagram…"* — một README 900 dòng không clean.
+2. Bảng của chúng **rộng gấp 5–6 lần** bất kỳ bảng nào trong README → ép cuộn ngang, phản tác dụng
+   đúng ở trục đang muốn ghi điểm.
+3. Dán vào Devpost sẽ đẩy phần trả lời **2 câu hỏi của track** (synthesize/mutate data; messy
+   unstructured input — quyết định 40%) xuống dưới một bảng 20 dòng.
+
+Nhưng **link thuần cũng không đủ**: giám khảo chấm nhiều bài, phần lớn sẽ không bấm. Nên chọn
+**teaser 2–4 dòng chứa KẾT LUẬN + link**: người lướt vẫn nhận được bằng chứng, người đào sâu có
+đường đi tiếp, README chỉ dài thêm **29 dòng (534 → 563)**.
+
+### Đã thi công
+
+- ✅ README §6 thêm 3 tiểu mục: *Failure behaviour is enumerated, not assumed* (nêu đích danh 20
+  component + ngoại lệ fail-fast #14 signing key), *Data lifecycle* (nêu TTL **ACTIVE** verify bằng
+  `doctor.py::check_firestore_ttl_policy`, không phải đọc từ schema), *Telemetry structure*.
+- ⚠️ `trace_evidence.md` được link **kèm nhãn cảnh báo tại chỗ**: *"millisecond figures are produced
+  by timed sleep stubs, not by live Gemini calls"*. Không làm teaser hấp dẫn cho nó. Lý do: một dòng
+  quảng bá "span tree end-to-end" đặt trong README sẽ khiến người đọc lướt tưởng là số đo thật — tự
+  tạo ra một overclaim mình không hề viết, đúng loại ĐỢT 11 dành cả đợt để gỡ.
+- ✅ `eligibility_statement.md` **không** link — nội dung cốt lõi (Mandatory Disclosure) đã ở README §1
+  và Devpost rồi; link thêm chỉ tạo thêm một chỗ phải giữ đồng bộ.
+- ✅ Mọi claim trong teaser đã verify trước khi viết: `grep -cE "^\| \*\*[0-9]+[a-z]?\*\*"
+  docs/failure_matrix.md` → **20**; ngoại lệ fail-fast là component **#14**; cột *"Observable Signal
+  (grep-able in code / Cloud Logging)"* có thật; `doctor.py:302 check_firestore_ttl_policy` có thật.
+
+### `DOC_UPDATE_RULE.md` — viết lại toàn bộ
+
+Bản cũ có 3 lỗi sẽ **tái tạo** đúng những thất bại 25 đợt trước đã sửa:
+
+| Mức | Lỗi bản cũ | Đã sửa thành |
+|---|---|---|
+| 🔴 | §2.3 ra lệnh *"cập nhật `learning_outcome_eval.md`, `experiment_memory_ab.md`, `trace_evidence.md`"* — cả 3 là **artifact do script sinh**. Tức biến lỗi `+5.62` (hằng số gõ tay giả làm kết quả đo) thành **quy trình chính thức** | Mục 0.1: danh sách file cấm sửa tay + lệnh `git checkout` khôi phục + cảnh báo `learning_outcome_measured.json` là phụ thuộc của eval Layer 4 |
+| 🔴 | Phạm vi chỉ `docs/` → **bỏ sót `README.md`** (ở gốc repo), đúng file điều lệ chấm trực tiếp. ĐỢT 17 từng ghi đè README làm mất đính chính ĐỢT 16 | Tầng 1 đặt README lên đầu, kèm cảnh báo nó nằm ngoài `docs/` |
+| 🔴 | Ngầm định **code luôn đúng** → agent sẽ sửa doc cho khớp bug. Ca ĐỢT 16: docstring nói *"prevents double-click race"* mà code không transaction — sửa doc là **xoá mất một bug thật** | Mục 0.2: doc-code mâu thuẫn → **DỪNG, báo cáo**, không tự chọn bên |
+| 🟡 | Ghi sai framework: *"LangGraph/Workflow"*. Đo: `langgraph` **0 hit**, `google.adk` **15 hit** | Ghi rõ ADK2 + câu *"dự án không dùng LangGraph — đừng đi tìm"* |
+| 🟡 | Coi `opus5_full_audit_prompt_v2.md` là tài liệu sống, và lẫn nó với system prompt trong code | Chuyển xuống Tầng 4 hiện vật lịch sử, kèm chỉ dẫn system prompt thật ở `nodes/*.py::_SYSTEM_INSTRUCTION` |
+| 🟡 | Thiếu 4 file khỏi danh sách, gồm `eligibility_statement.md` (**Stage One**) và `submission_checklist.md` | Phân tầng đủ 17 file trong `docs/` + README + PROJECT_WIKI |
+| 🟢 | Không có bước kiểm chứng cuối; không có quy tắc chống overclaim / giữ giọng candid | Mục 3 bước 5 (bắt buộc chạy lại + `git status -s eval/` phải trống) + mục 4 tự kiểm 6 câu |
+
+Bổ sung mới: **mục 0.3 — mọi con số phải kèm lệnh đã chạy ra nó**, áp dụng cả cho lệnh *viết vào*
+tài liệu làm bằng chứng (dẫn ca thật ĐỢT 24 suýt để lọt lệnh `git log --all --name-only` sai vào
+`eligibility_statement.md`).
+
+Và ngay sau khi thêm link vào README, `DOC_UPDATE_RULE.md` tự nó thành lạc hậu (Tầng 3 vẫn ghi "mồ
+côi") — đã cập nhật luôn, kèm **quy tắc teaser**: teaser phải chứa kết luận chứ không chỉ "xem thêm",
+và sửa file thì phải kiểm lại teaser tương ứng, vì *teaser sai lệch còn tệ hơn không có teaser*.

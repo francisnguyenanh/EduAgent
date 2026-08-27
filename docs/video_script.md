@@ -10,7 +10,7 @@
 Video, Devpost, README and slides all follow **this single flow**, in this order:
 
 ```
-handwritten photo → OCR (self-consistency cross-check) → weak evidence detected
+handwritten photo → OCR (Gemini + Gemma cross-MODEL check) → weak evidence detected
   → SKEPTIC → 3-turn debate → self-correction → memory updated
   → essay 2 → PERSONA CHANGES BECAUSE IT REMEMBERED
   → class-level fallacy pattern → deterministic teacher priority + mini-lesson
@@ -32,13 +32,21 @@ Two lines worth putting on screen as text, because they land harder read than he
 
 | Step | Measured |
 |---|---|
-| `transcribe_essay_image()` — 2 Vision passes + `difflib` cross-check | **22.5s** |
+| `transcribe_essay_image()` — Gemini Vision + Gemma 4 cross-model check (ADR-028) | **22.5s** measured Wave 15 on the same-model version; **must be re-measured on the deployed service** — see the note below |
 | Full `/api/debate/start-with-image` (OCR + summarizer + persona + turn 1) | **24.2s** |
+
+> ⚠️ **Audit Wave 24 — re-measure before you record.** ADR-028 moved the second transcription pass
+> to Gemma 4, which adds a call to the image path. Measured locally in a contemporaneous A/B (same
+> code, toggled by `EDUAGENT_OCR_CROSS_CHECK_GEMMA`) over the 12 real samples: mean per-image OCR
+> **7.30s → 8.82s, +21%**. The 22.5s / 24.2s figures above were measured at Wave 15 on the
+> *same-model* version against the deployed service and have **not** been re-measured since. Run the
+> image beat once on the live service and read the real number before you rehearse the timing —
+> per the numbers-discipline rule below, never say a figure you have not just seen.
 
 An external review predicted a **504 Deadline Exceeded** here. That is not the real risk: the Cloud Run request timeout is **300s** and the per-call LLM timeout is 60s, so there is ~12x headroom and a 504 needs something far worse than a slow photo. The real risk is **24 seconds of dead air in a 240-second video** — 10% of the budget on a spinner.
 
 Mitigations, in order of preference:
-1. **Talk over it.** Those 24 seconds are exactly when you explain *"we call Gemini Vision twice and compare the transcriptions, because we don't trust the model's own confidence score"* — the OCR beat has the most to say and nothing to show. Rehearse it as narration over a progress state, not as a wait.
+1. **Talk over it.** Those 24 seconds are exactly when you explain *"we transcribe the photo twice — once with Gemini Vision, once with Gemma, a different model family — and compare them, because we don't trust a model's own confidence score, and two passes of the SAME model share the same blind spot"* — the OCR beat has the most to say and nothing to show. Rehearse it as narration over a progress state, not as a wait.
 2. **Warm the service first** so cold start is not stacked on top: hit `/health-check` before recording.
 3. **If the timing still doesn't fit:** run the live beat with typed text (fast) and show the handwriting path in a second window that was started earlier. Do NOT cut the recording to hide the wait — "unedited live execution" is a scoring requirement.
 

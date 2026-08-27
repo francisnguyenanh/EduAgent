@@ -1,5 +1,7 @@
 # Social Post Draft (Bonus Stage Three)
 
+> **Published link (X):** https://x.com/EikiTomobe/status/2092985071435395283
+
 > Post on X/LinkedIn (public) with the mandatory hashtag `#AllThingsAgenticHackathon` + demo link. Choose between the two templates below or adapt the tone as needed.
 
 ## X (Official Version — 273/280 chars, including t.co short links)

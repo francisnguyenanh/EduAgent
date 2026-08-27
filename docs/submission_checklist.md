@@ -14,7 +14,7 @@
 - [ ] Rehearse the script **at least twice** before final recording (target timing ≤ 4:00).
 - [ ] Record a **single-take, unedited live run** showing:
   - Problem & core value proposition.
-  - Model names (`gemini-3.5-flash`, `gemini-3.7-flash`) and framework (Google ADK2).
+  - Model names (`gemini-3.5-flash`, `gemini-3.7-flash`, `gemma-4-26b-a4b-it-maas`) and framework (Google ADK2).
   - Live agent in action: Terminal logs, Firestore real-time profile mutation, Gmail draft creation.
   - Proof of Google Cloud infrastructure (Console, Cloud Run dashboard, live `.run.app` URL).
 - [ ] Ensure no secret API keys, JSON credentials, or private data are visible on screen.
@@ -53,42 +53,48 @@
 > 1 to 6"*, which is 5 (Stage Two maximum) **+ 1.0 bonus** = 0.2 blog + 0.2 social + **0.6 models**.
 >
 > Acting on the Wave 14 note capped this submission at **5.4/6.0** and led us to decline extra-model
-> work on the belief it scored nothing. `grep -rniE "gemma|veo|lyria|imagen" src/ scripts/` returns
-> zero, so **0.6 points — 10% of the maximum — is currently unclaimed.**
+> work on the belief it scored nothing. **Wave 24 closed the first 0.2 of that gap:**
+> `grep -rniE "gemma" src/ tests/` is no longer empty — see the Gemma 4 entry below. The remaining
+> **0.4 is deliberately left on the table** (Veo/Lyria), for the reason in the discipline note.
 - [x] **Technical Blog Post:** Published at https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p (+0.2 pts).
-- [ ] **Social Media Post:** Publish a project summary with demo link on LinkedIn or X with hashtag `#AllThingsAgenticHackathon` (+0.2 pts).
-- [ ] **Additional Google AI models (+0.2 each, max +0.6):** currently **0 integrated**
-      (`grep -rniE "gemma" src/ scripts/ tests/` → empty, re-checked 2026-08-27).
-
-  > **The candidate list that used to sit here was superseded by Audit Wave 22, which measured what
-  > this project can actually call instead of guessing.** Do not re-derive it:
-  >
-  > - ~~**Imagen**~~ — **does not exist in this project.** Wave 22 enumerated the model catalogue at
-  >   `global`, `us-central1` and `asia-southeast1`; Imagen appears at none of them. Not a judgement
-  >   call, a `404`.
-  > - ~~**Gemma for `skills/language.py`**~~ — dropped for a better target, not for effort. Wave 22
-  >   also measured that Gemma **ignores `response_schema`** (asked for `{resolved, reason}`, got
-  >   `{"answer": ...}`), so it belongs somewhere the output is compared as raw text.
-  > - ~~**Veo / Lyria**~~ — video and music generation in an essay-debate app. Declined twice before
-  >   (Waves 14, 15) and again in Wave 22: the 40% Innovation criterion asks *"does the system
-  >   eliminate real-world friction?"*, and a judge who asks "why is Veo here?" costs more than 0.4.
-
-  - [ ] **The one integration worth doing: ADR-028 — Gemma 4 as the second OCR pass.** Full 10-step
-        plan in `TODO.md` Wave 23. `gemma-4-26b-a4b-it-maas` on the `global` endpoint the project
-        already uses — no GPU, no new region, no new credential (proven callable in Wave 22).
-        The argument is architectural, not point-farming: ADR-007 currently runs *the same model
-        twice*, so a systematic misread survives both passes and the cross-check reports consensus;
-        a different model family makes the two errors uncorrelated.
-        ⚠️ **Timing gate (Audit Wave 24):** this changes the OCR latency that `video_script.md`
-        quotes (22.5s / 24.2s) and that the video's pacing is built around. Do it **before**
-        recording or **not at all** — never between recording and submitting.
+- [x] **Social Media Post:** Published on X at https://x.com/EikiTomobe/status/2092985071435395283 (+0.2 pts).
+  - ⚠️ **NOT machine-verified (Audit Wave 24).** x.com refuses unauthenticated fetches (HTTP 402), so
+        unlike the blog post — whose live text WAS read back and checked against the rule — this one
+        could not be. **Open it in a logged-out / incognito browser and confirm three things yourself:**
+        (1) it loads without signing in — the rules require public, and a protected or deleted post
+        scores nothing; (2) the hashtag reads exactly `#AllThingsAgenticHackathon`, no space (note
+        `rule.txt:150` prints it with a stray space and `rule.txt:213` without — the no-space form is
+        what the draft and the published blog tags use); (3) the demo and repo links resolve.
+        `rule.txt:213`: *"Publish a social media post… include the hashtag #AllThingsAgenticHackathon.
+        A maximum of 0.2 points will be added"*.
+- [x] ✅ **Additional Google AI models (+0.2 each, max +0.6): 1 integrated — Gemma 4.**
+      `gemma-4-26b-a4b-it-maas` runs the second transcription pass of the OCR consistency check
+      (ADR-028), replacing what used to be a second Gemini call. Implemented, tested and measured on
+      2026-08-27 (Audit Wave 24):
+  - [x] Code: `config.py` (`gemma_model`, `gemma_location` pinned to `global`), `llm.py`
+        (`generate_text_from_image` + a 429-specific retry), `nodes/ocr.py`
+        (`_transcribe_second_opinion` + mandatory fallback + `cross_check_model` signal).
+  - [x] Tests: **10 new cases**, each proven falsifiable by sabotage (ADR-019) — 7 sabotages run,
+        every one red on the intended test. Suite: **284 passed**, coverage **87%**, `nodes/ocr.py` 100%.
+  - [x] Quality: contemporaneous A/B over the 12 real handwriting samples — confidence distribution
+        **identical** (10 high / 0 medium / 2 low both ways). Gemma reached on **12/12** images, 0 fallbacks.
+  - [x] Latency: mean per-image OCR **7.30s → 8.82s (+21%)**. ⚠️ **Not yet re-measured on the
+        deployed service** — do that before recording (see `video_script.md`).
+  - [ ] 🔴 **Deploy to Cloud Run** — the integration is in the repo but NOT yet on the live revision.
+        Until it is deployed, a judge testing the hosted URL is not exercising Gemma.
+  - **Rollback lever:** `EDUAGENT_OCR_CROSS_CHECK_GEMMA=false` puts the second pass back on Gemini
+        with no code change.
+- [x] ~~**Imagen**~~ — does not exist in this project at any location (Wave 22 enumerated the
+      catalogue at `global`, `us-central1`, `asia-southeast1`). Not a judgement call, a `404`.
+- [x] ~~**Veo / Lyria**~~ — declined three times. A video or music model in an essay-debate app is a
+      bolt-on, and the 40% Innovation criterion punishes that harder than 0.2 rewards it.
 
 > **Discipline note:** integrate only what survives the same standard as every other feature here —
 > it must do real work, have a test, and be defensible in Q&A. A judge who asks "why is Veo in an
 > essay-debate app?" and hears "for bonus points" costs more on the 40% Innovation criterion than
 > the 0.2 is worth.
-- [ ] **Models Disclosed:** `gemini-3.5-flash` (default) and `gemini-3.7-flash` (heavy model for Teacher Digest). Declared accurately under technologies used.
-- [/] Add blog and social post links to the Devpost form (Blog added, pending social post).
+- [x] **Models Disclosed:** `gemini-3.5-flash` (default), `gemini-3.7-flash` (heavy model for Teacher Digest), and `gemma-4-26b-a4b-it-maas` (OCR cross-model second pass, ADR-028). All three declared under §8 of `devpost_submission_draft.md`, with the reason Gemma is present — a judge who asks "why?" gets an architectural answer, not "for the bonus".
+- [x] Add blog and social post links to the Devpost form (Blog and X post added).
 
 ## 6. Freeze Resources After Submission Deadline
 - [ ] **Submit early:** Submit at least 24 hours ahead of the final deadline: **August 31 at 5:00 PM PT**.
