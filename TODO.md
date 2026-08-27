@@ -2922,3 +2922,455 @@ hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
 | 4 | Blog + social post | ⏳ Đang làm | +0.2 mỗi cái. Đã đăng blog (https://dev.to/eiki_tomobe_927fe44127f66/building-a-socratic-debate-agent-that-refuses-to-give-answers-354p), chưa đăng social |
 
 **Deadline: 31/08/2026 17:00 PT.** Hạn xin credit $150: **28/08 12:00 PT**.
+
+---
+
+## ĐỢT 24 — FULL-SYSTEM PRE-SUBMISSION AUDIT: đo lại toàn bộ, và soi chỗ chưa từng bị soi (2026-08-27)
+
+> Kế thừa ĐỢT 21 (đối chiếu điều lệ), ĐỢT 22 (khảo sát Gemma) và ĐỢT 23 (kế hoạch ADR-028 chưa thi
+> công). Trọng tâm đợt này **không** phải tìm bug code — 12 đợt trước đã cày nát phần đó, và hôm nay
+> nó vẫn đứng vững. Trọng tâm là ba thứ chưa từng bị đối chiếu **ba chiều** (điều lệ ↔ tài liệu nộp
+> bài ↔ deployment thật): **chỗ đặt Mandatory Disclosure**, **mục "other data sources used"**, và
+> **các con số đã cũ đi kể từ lần đo cuối**. Mọi số dưới đây đo lại hôm nay, không chép lại.
+
+### Xác minh lại các mục "còn mở" từ ĐỢT 21–23
+
+| # | Việc | Trạng thái ghi nhận | Kết quả verify hôm nay | Lệnh dùng |
+|---|---|---|---|---|
+| 1 | Repo PRIVATE, chưa mời BGK | 🔴 Blocker Stage One | 🔴 **VẪN MỞ.** `{"isPrivate":true,"visibility":"PRIVATE"}`; collaborators chỉ `francisnguyenanh`; invitations `[]` | `gh repo view francisnguyenanh/EduAgent --json visibility,isPrivate` · `gh api repos/.../invitations` |
+| 2 | Commit chưa push (`ahead 1`) | 🔴 Blocker | ✅ **ĐÃ XÁC NHẬN GIẢI QUYẾT.** `## master...origin/master` (không còn `ahead`); GitHub `pushedAt=2026-08-27T00:32:29Z`. Chỉ còn `docs/opus5_full_audit_prompt_v2.md` untracked | `git status -sb`, `git log origin/master..HEAD --oneline` |
+| 3 | Ghi chú bonus sai (+0.4) | Cần xác nhận đã sửa | ✅ **ĐÃ XÁC NHẬN GIẢI QUYẾT.** `submission_checklist.md:43` nay là *"up to **+1.0 Points**"* kèm nguyên văn điều lệ +0.2/model, tối đa +0.6 | `grep -n -i bonus docs/submission_checklist.md` |
+| 4 | ADR-028 Gemma làm OCR lượt hai | Chưa thực thi | 🔴 **VẪN CHƯA CÓ.** `grep -rniE "gemma" src/ scripts/ tests/` → **rỗng**. README chỉ liệt ADR-001…ADR-027, không có ADR-028. **+0.2 bonus vẫn chưa lấy** | `grep -rniE "gemma" src/ scripts/ tests/` · `grep -oE "ADR-0[0-9]{2}" README.md \| sort -u` |
+| 5 | `assets/architecture_diagram.png` | Chưa làm | 🔴 **VẪN THIẾU.** `assets/` chỉ có `gcp_evidence/` (18 ảnh) và `sample_essays/` | `ls -la assets/` |
+| 6 | Blog (+0.2) / Social (+0.2) | Blog xong, social chưa | ✅ **Blog XÁC NHẬN ĐẠT ĐIỀU LỆ** (chi tiết ở phần "đã đối chiếu" bên dưới — lần đầu kiểm bài đăng thật, không chỉ kiểm draft). 🔴 **Social vẫn chưa đăng** — `devpost_submission_draft.md:…` còn `[Insert published X / LinkedIn post URL…]` | `WebFetch` bài dev.to · `grep -n "social media post" docs/devpost_submission_draft.md` |
+| 7 | Video demo | Chưa quay/upload | 🔴 **VẪN CHƯA.** `devpost_submission_draft.md` §7 = `[Insert YouTube / Vimeo video URL here]` | `sed -n '152,158p' docs/devpost_submission_draft.md` |
+| 8 | Diễn tập + `smoke_live.py` trước khi quay | Chưa làm | ✅ **Hệ thống sẵn sàng để diễn tập** (không phải "đã diễn tập"): `doctor.py` → **10 PASS / 1 WARN / 0 FAIL**; `smoke_live.py` → **13/13 PASS** trên revision live `eduagent-class-aggregator-00037-6h4` | `python scripts/doctor.py` · `python scripts/smoke_live.py` · `gcloud run services describe …` |
+
+---
+
+### Phát hiện mới — xếp theo mức ảnh hưởng điểm số
+
+#### 🔴 #1 — Mandatory Disclosure chỉ nằm ở README, KHÔNG có trong bài nộp Devpost; và `eligibility_statement.md` đang nói ngược lại
+
+- **Trục điều lệ ảnh hưởng:** **Eligibility (Stage One pass/fail)**
+- **Vị trí:** `README.md:84` (nơi duy nhất có) · `docs/devpost_submission_draft.md` (không có) · `docs/eligibility_statement.md:3` (mâu thuẫn)
+- **Phát hiện:**
+
+  ```
+  $ grep -rn "CritiqAI" . --include='*.md' | grep -v TODO.md | grep -v opus5_
+  README.md:84: ... inspired by the author's prior hackathon entry, **CritiqAI** ...
+  overview/PROJECT_WIKI.md:23,130,135,136,147,152,160,228,260,270
+  ```
+
+  **Không có dòng nào trong `docs/devpost_submission_draft.md`.** Điều lệ (`overview/rule.txt:118`)
+  bắt buộc phần *"text description"* của bài nộp phải chứa disclosure; `rule.txt:91` viết nguyên văn:
+  *"must disclose any other pre-existing code or work incorporated into the Project."*
+  ĐỢT 21 ghi *"✅ README §1 Mandatory Disclosure (CritiqAI)"* — đúng về sự tồn tại, **sai về vị trí**:
+  giám khảo chấm Stage One đọc **form Devpost**, README chỉ là link đính kèm.
+
+  Nghiêm trọng hơn: `docs/eligibility_statement.md` — file mà toàn bộ mục đích là *"Originality
+  Boundary Statement"* — **không hề nhắc CritiqAI**, và mở đầu bằng:
+
+  > *"The **EduAgent** project was developed **entirely from scratch** … adhering **100% to
+  > originality guidelines**"*
+
+  còn cột "Baseline / Prior Art" liệt kê prior art là *"Single-turn Q&A chatbot"* — tức mô tả prior
+  art **chung chung của ngành**, không phải dự án trước của chính tác giả. Đọc riêng file này, một
+  giám khảo sẽ hiểu là **không có prior work nào của tác giả**. Đó là đúng mẫu lỗi class-1 mà ĐỢT 8/
+  12/16 đã gặp ba lần: **tài liệu mô tả một trạng thái, sự thật là trạng thái khác** — chỉ lần này
+  nó rơi vào đúng hạng mục pass/fail.
+- **Vì sao mất điểm:** đây không phải trừ điểm, đây là **loại tư cách**. Một dự án có prior art thật,
+  disclosure đầy đủ ở README, nhưng file "eligibility statement" tự phủ nhận prior art đó — nếu bị
+  soi, nó tệ hơn là không có file nào.
+- **Đề xuất:** (a) chèn nguyên văn đoạn `README.md:84` vào `docs/devpost_submission_draft.md` §3
+  ("How we built it" hoặc cuối Project Story) để copy thẳng vào form; (b) thêm một dòng vào
+  `eligibility_statement.md` nêu đích danh CritiqAI ở cột Baseline, thay vì để "Single-turn Q&A
+  chatbot" đứng một mình. **Không viết lại câu disclosure đã chốt ở README** — copy nguyên văn.
+- **Effort:** S
+
+#### 🔴 #2 — Điều lệ §6 bắt buộc khai "any other data sources used"; bài nộp không có mục này
+
+- **Trục điều lệ ảnh hưởng:** **Eligibility (Stage One)** + Documentation (Demo 30%)
+- **Vị trí:** `docs/devpost_submission_draft.md` §3 và §8
+- **Phát hiện:** `overview/rule.txt:118` — *"Include a text description that should include a summary
+  of the Project's features and functionality, technologies used, **information about any other data
+  sources used**, and your findings and learnings."* Bốn thành phần; bài nộp có ba.
+
+  ```
+  $ grep -rni "data source" . --include='*.md' | grep -v TODO.md | grep -v opus5_
+  docs/trace_evidence.md:5  (Data Source Transparency Note -- về latency simulated, không liên quan)
+  overview/PROJECT_WIKI.md:118 (liệt kê yêu cầu, không phải câu trả lời)
+  ```
+
+  `TODO.md:1073` (PHASE 8) ghi *"✅ ĐÃ SOẠN — … other data sources (12 ảnh viết tay thật)"*. Kiểm
+  thật: dữ liệu 12 ảnh **có được nhắc** ở §3 "Accomplishments" (dòng 86) nhưng **không có mục nào
+  nhãn "other data sources"**, và không nhắc các nguồn còn lại (8 cặp thesis tự viết cho learning
+  outcome, `assets/sample_essays/`, hồ sơ học sinh demo được seed). Đây là mẫu lỗi class-1: một
+  dòng `[x]` trong TODO khẳng định việc đã xong, code/doc thật không có.
+- **Vì sao mất điểm:** là một trong bốn thành phần bắt buộc của Submission Requirements — mục
+  Stage One. Ngoài ra tiêu chí *Documentation* (30%) chấm độ minh bạch tài liệu.
+- **Đề xuất:** thêm một mục ngắn vào `devpost_submission_draft.md` §3, liệt kê: 12 ảnh viết tay thật
+  (`eval/test_images/`, tác giả tự chụp), 8 cặp luận điểm tự viết cho phép đo learning outcome, hồ
+  sơ học sinh demo do `scripts/seed_student_profiles.py` sinh — **không dùng dataset bên thứ ba nào**.
+  Câu cuối chính là câu trả lời mạnh nhất và nó đang bị bỏ trống.
+- **Effort:** S
+
+#### 🔴 #3 — ADR-028 (Gemma) vẫn chưa thi công: +0.2 bonus chưa lấy, và trần điểm vẫn kẹt ở 5.6
+
+- **Trục điều lệ ảnh hưởng:** **Bonus Stage Three**
+- **Vị trí:** `src/eduagent/nodes/ocr.py`, `src/eduagent/config.py`, `src/eduagent/llm.py`
+- **Phát hiện:** `grep -rniE "gemma" src/ scripts/ tests/` → **rỗng**. Toàn bộ checklist 10 bước ở
+  ĐỢT 23 vẫn `[ ]`. Devpost §8 *"Which Google AI Models did you use?"* chỉ khai Gemini 3.5/3.7 Flash.
+  Với blog (+0.2) đã đạt và social (+0.2) sẽ đạt, trần thực tế hiện là **5.4/6.0**, không phải 5.8.
+- **Vì sao mất điểm:** `overview/rule.txt:215` nguyên văn — *"Earn 0.2 bonus points for each
+  additional Google AI model successfully integrated (such as Gemma, Veo, or Lyria)."*
+- **Đề xuất:** **giữ nguyên kế hoạch ĐỢT 23, không thiết kế lại.** Lý do kỹ thuật ở ĐỢT 22 vẫn đúng
+  và mạnh (hai lượt cùng-model chia sẻ điểm mù → lượt hai khác họ mới bắt được lỗi tương quan). Nhưng
+  **điều kiện huỷ bỏ ở ĐỢT 23 mục 10 nay quan trọng hơn hôm qua**: còn 4 ngày, video **chưa quay**,
+  và beat OCR (22.5s) nằm trong video. Nếu quyết làm, làm **trước khi quay**, không phải sau — đổi
+  latency sau khi quay xong nghĩa là kịch bản và video lệch nhau. Nếu không kịp làm trước buổi quay:
+  **bỏ +0.2 này**, đừng nhét vào phút chót.
+- **Effort:** M (~45–60 phút theo ước tính ĐỢT 23, cộng deploy + đo lại latency)
+
+#### 🟡 #4 — README §8 công bố phân bố OCR đã cũ: đo lại hôm nay ra số khác
+
+- **Trục điều lệ ảnh hưởng:** Innovation 40% (bằng chứng "messy unstructured input") + Documentation
+- **Vị trí:** `README.md:496-500`
+- **Phát hiện:** README đang ghi **9 high / 1 medium / 2 low**. Chạy lại đúng lệnh README chỉ:
+
+  ```
+  $ python scripts/demo_real_handwriting_ocr.py
+  annotated_essay_books.jpg      high      cursive_essay_climate.jpg     high
+  faded_essay_cellphones.jpg     high      messy_essay_videogames.jpg    high
+  neat_essay_homework.jpg        high      notes_socialmedia.jpg         LOW
+  pencil_essay_uniforms.jpg      high      stu_common_fallacy_grid.png   high
+  stu_declining_unstructured.png LOW       stu_improving_neat.png        high
+  stu_stuck_messy.png            high      tilted_essay_grading.jpg      high
+  -> 10 high / 0 medium / 2 low
+  ```
+
+  Lệch ở cả hai bậc, và câu chú thích *"1 sample: confidence = medium (sample with heavy physical
+  cross-outs)"* hiện **mô tả một mẫu không tồn tại trong kết quả**. Đây đúng class-3 (số trong `docs/`
+  không tái tạo được) và class-4 (README bị tin vì "đợt trước đã sửa").
+- **Vì sao mất điểm:** đây là **bảng bằng chứng multimodal duy nhất** của dự án, và nếu giám khảo
+  chạy lại đúng lệnh README in ra thì họ ra số khác README. Một con số không tái tạo được làm hỏng
+  uy tín của cả các con số **đúng** ở §7 (vốn tái tạo chính xác — xem bảng dưới).
+- **Đề xuất:** cập nhật §8 theo số đo hôm nay, **và thêm một câu nêu rõ đây là kết quả của model
+  sinh, có dao động giữa các lần chạy** (đúng tinh thần "numbers discipline" mà `video_script.md`
+  đã tự đặt ra: *"never say a number that is not visible on screen at that moment"*). Không nên chỉ
+  thay 9→10 rồi để nó cũ tiếp lần sau.
+- **Effort:** S
+
+#### 🟡 #5 — Devpost §6 "Project Media" liệt kê 4 file ảnh không tồn tại ở bất cứ đâu trong repo
+
+- **Trục điều lệ ảnh hưởng:** Demo & Production Readiness 30% (*"Does the public GitHub repository
+  feature a clean architecture diagram…"* — `rule.txt:203`)
+- **Vị trí:** `docs/devpost_submission_draft.md` §6
+- **Phát hiện:**
+
+  ```
+  $ for f in README_architecture_diagram.png student_debate_interface.png \
+             teacher_dashboard_analytics.png gmail_digest_draft_inbox.png; do
+      find . -name "$f" -not -path "./.git/*"; done
+  (không file nào tồn tại)
+  ```
+
+  Cộng với `assets/architecture_diagram.png` (mục 5 bảng trên) là **5 ảnh phải nộp, 0 ảnh đã có**.
+  Hai file `.md` còn lại trong danh sách (`eval_report_v2.md`, `experiment_memory_ab.md`) — file thật
+  tên là `eval/results/eval_report.md`, **không có `_v2`**; `docs/experiment_memory_ab.md` có thật.
+- **Vì sao mất điểm:** §6 điều lệ bắt buộc Architecture Diagram; ba ảnh còn lại là thứ giám khảo nhìn
+  trước khi bấm vào video. Đồng thời một danh sách media trỏ tới file không tồn tại là class-1 lần
+  nữa, ngay trong file nộp bài.
+- **Đề xuất:** export mermaid ở `README.md` §2 ra `assets/architecture_diagram.png`, chụp 3 ảnh còn
+  lại trong lúc **diễn tập quay video** (không phải một buổi riêng — cùng một lần chạy, chụp luôn),
+  và sửa `eval_report_v2.md` → `eval/results/eval_report.md`.
+- **Effort:** M
+
+#### 🟡 #6 — Con trỏ trong chính câu Mandatory Disclosure trỏ tới đường dẫn không tồn tại
+
+- **Trục điều lệ ảnh hưởng:** Eligibility (phụ trợ #1) + Documentation 30%
+- **Vị trí:** `README.md:84`, `README.md:330`, và 8 file trong `src/`
+- **Phát hiện:** README §1 viết *"documented in `PROJECT_WIKI.md` Section 9"*. File thật nằm ở
+  **`overview/PROJECT_WIKI.md`** — không có `PROJECT_WIKI.md` ở gốc repo, và mục "repo structure"
+  (`README.md:140-152`) **không liệt kê thư mục `overview/` chút nào**. Giám khảo lần theo con trỏ
+  của câu disclosure sẽ không tìm thấy file.
+
+  ```
+  $ find . -name PROJECT_WIKI.md -not -path "./.git/*"
+  ./overview/PROJECT_WIKI.md
+  ```
+
+  Bổ sung: file đó viết bằng **tiếng Việt**. Không vi phạm điều lệ (điều lệ yêu cầu *Project* hỗ trợ
+  tiếng Anh, và UI đã đạt — ĐỢT 14), nhưng nó nghĩa là bằng chứng chống lưng cho disclosure không
+  đọc được với giám khảo quốc tế → càng thêm lý do phải làm #1 (đưa disclosure vào chính bài nộp).
+- **Đề xuất:** sửa đường dẫn thành `overview/PROJECT_WIKI.md` ở README (2 chỗ), thêm `overview/` vào
+  cây thư mục README. Các comment trong `src/` để nguyên — chúng là ghi chú nội bộ, không phải điều
+  hướng cho giám khảo, và sửa 8 file sát deadline là rủi ro không đổi lại điểm nào.
+- **Effort:** S
+
+#### 🟡 #7 — `submission_checklist.md` đã lạc hậu so với chính ĐỢT 22, ở đúng mục hướng dẫn thao tác cuối
+
+- **Trục điều lệ ảnh hưởng:** Bonus + rủi ro thao tác sai lúc nộp
+- **Vị trí:** `docs/submission_checklist.md:12` và `:60-70`
+- **Phát hiện:** Mục §5 (đã được ĐỢT 21 sửa đúng phần *luật điểm*) vẫn còn nguyên phần *đề xuất
+  model* của ĐỢT 14 và **mâu thuẫn với kết luận đo được ở ĐỢT 22**:
+  - vẫn đề xuất **Imagen** ("render mini-lesson thành ảnh") — ĐỢT 22 đã kiểm mọi location và xác
+    nhận **Imagen không tồn tại trong project**;
+  - vẫn đề xuất **Gemma cho `skills/language.py`** — ĐỢT 22/23 đã chọn **OCR lượt hai (ADR-028)** sau
+    khi đo được rằng Gemma **không tuân thủ `response_schema`**.
+
+  Và dòng 12 vẫn ghi `doctor.py → **9 PASS** / 1 WARN / 0 FAIL`; đo hôm nay là **10 PASS / 1 WARN /
+  0 FAIL** (doctor đã thêm check `push_config` ở ĐỢT 16 và check revision thật ở ĐỢT 19).
+- **Vì sao mất điểm:** đây là file *bạn sẽ mở ra lúc 2 giờ sáng ngày nộp*. Một checklist mâu thuẫn
+  với kết luận mới nhất là cách chắc chắn nhất để làm lại việc đã bị loại bỏ có lý do.
+- **Đề xuất:** thay §5 phần model bằng đúng một dòng trỏ về ADR-028/ĐỢT 23, gạch bỏ Imagen kèm lý do
+  một câu ("không tồn tại trong project — ĐỢT 22"), cập nhật 9→10 PASS.
+- **Effort:** S
+
+#### 🟡 #8 — `video_script.md`: câu "khoảnh khắc quan trọng nhất" trỏ sai mốc thời gian trong chính timeline của nó
+
+- **Trục điều lệ ảnh hưởng:** Demo & Production Readiness 30%
+- **Vị trí:** `docs/video_script.md:20` vs `:84-86` và `:104-116`
+- **Phát hiện:** dòng 20 viết: *"The single most important moment in the video is 'the persona changed
+  because it remembered' **(~2:10)**."* Nhưng timeline (dòng 84-86) và Scene 2 (dòng 104-116) đặt beat
+  đó ở **1:00 – 1:25**; mốc **2:10** trong bản hiện tại là *"Actionable 15-Minute Mini-Lesson"*
+  (Scene 3 Visual 2, dòng 125). Kịch bản đã được viết lại ở các đợt trước nhưng dòng ghi chú cao trào
+  **không được cập nhật theo** — class-4 (nội dung bị sửa, phần đính chính/chú thích bị bỏ lại).
+- **Vì sao mất điểm:** ĐỢT 17/18 **hai lần từ chối** viết lại timeline để bảo vệ đúng khoảnh khắc
+  này. Nếu người quay diễn tập theo dòng 20, họ sẽ dồn nhấn mạnh vào phút 2:10 — tức vào mini-lesson
+  — và làm nhạt đúng cái mà hai đợt trước đã cố giữ. Đây là lỗi tài liệu gây hỏng thứ nó định bảo vệ.
+- **Đề xuất:** sửa `(~2:10)` → `(~1:10)`. **Không đụng vào timeline** — timeline đúng, chỉ con trỏ sai.
+  Đồng thời cập nhật dòng 47 (*"verified 2026-08-26 against revision `00036-dbv`"`*) → `00037-6h4`,
+  revision live hôm nay (đã xác minh cả 2 passcode còn hoạt động qua `smoke_live.py` hôm nay).
+- **Effort:** S
+
+#### 🟢 #9 — README nói `doctor.py` có "10 independent checks"; nó chạy 11
+
+- **Trục điều lệ ảnh hưởng:** Documentation (nhỏ)
+- **Vị trí:** `README.md:65`
+- **Phát hiện:** output thật liệt kê 11 mục (ADC, session secret, teacher password separation, no
+  plaintext creds, Firestore connectivity, Firestore TTL, Pub/Sub topic/DLQ/subscription, Gmail OAuth,
+  Sheets permission, Vertex quota, Cloud Run live) → `10 passed, 1 warned, 0 failed`. Con số 10 trong
+  README có lẽ là số cũ trước khi ĐỢT 16 thêm check `push_config`.
+- **Đề xuất:** sửa 10 → 11.
+- **Effort:** S
+
+#### 🟢 #10 — `/reflect` trên đường degraded ghi một bản ghi reflection mới cho mỗi lần thử lại
+
+- **Trục điều lệ ảnh hưởng:** Innovation 40% (tính toàn vẹn của hồ sơ giáo viên nhìn thấy)
+- **Vị trí:** `src/eduagent/api.py:576-600`
+- **Phát hiện:** khi Vertex sập, hàm **vẫn** gọi `apply_reflection_result(... resolved=False ...)`
+  rồi **trả lại** quyền reflection qua `release_reflection_claim()`. Đúng theo thiết kế ĐỢT 16 ở chỗ
+  quan trọng nhất: `breakthrough_count` và `growth_bonus` **không** tăng (đã xác nhận trong code, và
+  `smoke_live.py` có case ADR-024 kiểm `growth_bonus` trong biên → PASS hôm nay). Nhưng mỗi lần thử
+  lại nối thêm một dòng vào lịch sử reflection, nên `reflections_recorded` — con số giáo viên đọc —
+  đếm **số lần thử**, không phải số lần reflect. Một sự cố Vertex kéo dài làm học sinh trông như
+  chăm chỉ bất thường.
+- **Vì sao đây là 🟢 chứ không cao hơn:** không có số bịa nào lọt vào hồ sơ (đúng ADR-008), và không
+  ai chấm điểm dựa trên `reflections_recorded`. Đây là vết bẩn trong audit trail, không phải bug ăn điểm.
+- **Đề xuất:** **hoãn tới sau deadline.** Sửa đúng cách là khoá theo `session_id` khi ghi lịch sử,
+  tức đụng vào đường ghi Firestore của reflection — đúng chỗ ĐỢT 16 vừa mất 8 mục để làm cho ổn định.
+  Rủi ro sửa > lợi ích, còn 4 ngày và video chưa quay. **Ghi nhận để ĐỢT sau xử, không sửa bây giờ.**
+- **Effort:** S (nhưng rủi ro hồi quy M)
+
+---
+
+### Bảng số liệu đã đối chiếu
+
+| Claim | File nguồn | Trạng thái | Cách verify |
+|---|---|---|---|
+| `274 tests, 86% statement coverage, TOTAL 2157 statements 292 missed` | `README.md:464-469` | ✅ **VERIFIED — khớp tuyệt đối** | `pytest --cov=src/eduagent --cov-report=term -q` → `274 passed`, `TOTAL 2157 292 86%` |
+| Bảng coverage theo module (ocr 100%, persona_selector 100%, tier1_pipeline 100%, student_profile 99%, debate 98%, scorer 97%, validator 95%, rate_limit 94%, interactive 92%, api 92%, firestore_session 90%, sheets_mcp 31%, firestore_memory 39%, gmail_mcp 52%) | `README.md:476-484` | ✅ **VERIFIED — cả 14 module khớp** | cùng lệnh trên |
+| ⚠️ *Lưu ý cho đợt sau:* các số trên **chỉ tái tạo khi CHẠY CẢ e2e**. Với `-m "not e2e"` (lệnh README §3.2 dùng) ra **85% / 333 missed**, persona_selector 67%, validator 74%, tier1_pipeline 88% | — | ✅ đã đo cả hai | `pytest -q -m "not e2e" --cov=src/eduagent` |
+| `>240 tests` / `240+ unit tests` | `README.md:65,151`, `eligibility_statement.md` | ✅ VERIFIED (thận trọng, không overclaim) | `272 passed, 2 deselected` |
+| `doctor.py` 0 FAIL trên môi trường thật | `submission_checklist.md:9` | ✅ **VERIFIED** — 10 PASS / 1 WARN / 0 FAIL. WARN là session secret local, đúng như checklist tiên liệu | `python scripts/doctor.py` |
+| `smoke_live.py` 13/13 | ĐỢT 19-20 | ✅ **VERIFIED trên live** revision `00037-6h4` | `python scripts/smoke_live.py` |
+| ADK Eval Suite `50/50` | `README.md:6,441`, blog, video script, eligibility | ✅ VERIFIED — `eval/results/eval_report.md` liệt đủ 50 case PASS, Layer 4 dựa trên artifact đo thật (`measured_at='2026-08-25T12:44:52'`, scorer = production `score_essay`) | `tail -25 eval/results/eval_report.md` |
+| `+2.75` mean targeted delta, `7/8` scenarios | README §7, blog:190, devpost:88 | ✅ VERIFIED — eval case `outcome-measured-mean-targeted-delta-positive` PASS với `+2.75`; `outcome-measured-majority-of-scenarios-improved` PASS với `7/8 (88%)`. Cả 3 nơi đều **kèm disclaimer n=8, không có nhóm đối chứng** | `grep outcome-measured eval/results/eval_report.md` |
+| `+5.62` (số cũ đã bị gỡ) | — | ✅ VERIFIED ĐÃ GỠ — chỉ còn xuất hiện ở blog:193 và devpost:78 **dưới dạng thú nhận sai lầm**, đúng giọng candid mà quy tắc 6 yêu cầu giữ | `grep -rn "5.62" docs/ README.md` |
+| **9 high / 1 medium / 2 low** (OCR) | `README.md:496-500` | 🔴 **STALE** — đo lại: **10 high / 0 medium / 2 low** | `python scripts/demo_real_handwriting_ocr.py` (xem #4) |
+| Latency **22.5s** / **24.2s** (OCR) | `video_script.md:30-31`, `failure_matrix.md:14`, `PROJECT_WIKI.md:402` | ⚠️ **KHÔNG VERIFY LẠI ĐỢT NÀY** — đo ở ĐỢT 15 trên ảnh 958KB. Cả 3 nơi đều ghi rõ "Measured (Audit Wave 15)" nên **không phải bằng chứng bịa**. Nhưng nếu làm ADR-028 (#3) thì con số này **chắc chắn đổi** và phải đo lại trước khi quay | — |
+| Latency mili-giây trong `trace_evidence.md` (45ms, 124ms…) | `docs/trace_evidence.md` | ✅ **SIMULATED — ĐÃ DISCLOSE ĐÚNG.** Kiểm cả repo: không nơi nào khác trích lại các số này. `grep -rn "45ms\|124ms"` chỉ trả về chính dòng disclaimer | `grep -rn "45ms\|124ms" --include='*.md' .` |
+| 11 "Trace Attribute" bịa (bài học ĐỢT 12) | `docs/failure_matrix.md` | ✅ **ĐÃ SẠCH — không tái phát.** Trích mọi identifier dạng `a.b` trong file và grep ngược vào `src/`: `score_volatility` 5 hit, `needs_attention` 6, `times_repeated_without_improvement` 6, `ocr.degraded` 1, `essay.evaluated` 23. **Không có identifier nào 0 hit** | `grep -oE '\`[a-z_]+\.[a-z_.]+\`' docs/failure_matrix.md \| sort -u` rồi grep từng cái vào `src/` |
+| Priority score Binh `14.29` (ĐỢT 15) | `video_script.md:121` | ✅ VERIFIED-VÀ-ĐÃ-LƯỜNG-TRƯỚC — hôm nay live ra **14.43**. Kịch bản đã tự viết *"read whatever total the screen shows — inactivity grows every day"*, nên độ lệch này là **đúng như tài liệu dự đoán**, không phải finding | `smoke_live.py` → `top: Binh (stu_stuck) = 14.43` |
+| Bài blog đạt điều kiện bonus §8 | `submission_checklist.md:56` | ✅ **VERIFIED LẦN ĐẦU TRÊN BÀI ĐĂNG THẬT** (các đợt trước chỉ kiểm draft). Bài dev.to là **public**, mang tag `#allthingsagentichackathon`, và **có câu điều lệ bắt buộc**: *"Written for the All Things Agentic Hackathon (Collaborative Partner track)"*. `rule.txt:211` đòi *"must include language that says you created the piece of content for the purposes of entering this hackathon"* — **đạt** | `WebFetch` bài dev.to |
+| Git history sạch secret (kết luận ĐỢT 16) | ĐỢT 21 dùng để khuyến nghị public | ✅ **VERIFIED LẠI HÔM NAY** — `git log -p --all` grep `refresh_token\|AIza…\|BEGIN PRIVATE KEY\|"private_key"\|client_secret`: mọi hit đều là **tên biến/tên hàm/văn bản tài liệu**, không có giá trị bí mật nào. `git ls-files` không track `.env`, `secrets/`, `deploy.txt`. **Chuyển public vẫn an toàn** | `git log -p --all \| grep -inE …` · `git ls-files \| grep -iE "env\|secret\|token\|credential"` |
+| Reproducibility từ máy sạch | `README.md` §3 | ✅ **VERIFIED** — venv mới hoàn toàn → `pip install -r requirements.txt` (exit 0) → `pytest -q -m "not e2e"` → **272 passed, 2 deselected**, không cần credential GCP | `python3 -m venv … && pip install -r requirements.txt && pytest -q -m "not e2e"` |
+| "Tranh biện, không đưa đáp án" — không có đường vòng | narrative khắp nơi | ✅ **VERIFIED bằng trace code, không đọc mô tả.** `validator.py` không import `eduagent.llm` (zero-LLM thật); `debate.py:166` là **cổng duy nhất** — mọi câu hỏi phải qua `validate_debate_turn()` hoặc rơi về fallback đóng sẵn; không có nhánh nào trả thẳng text model ra học sinh. `scorer.py::student_feedback` và `api.py::submit_reflection::feedback` là phản hồi **sau** tranh biện (không viết lại bài cho học sinh), đúng phạm vi mà Devpost §3 mục 4 tuyên bố (*"Every question generated by the LLM is validated"*) | đọc `nodes/validator.py`, `nodes/debate.py:120-213`, `nodes/scorer.py`, `api.py:478-610` |
+
+---
+
+### TỔNG KẾT ĐỢT 24
+
+| Hạng mục | Số liệu |
+|---|---|
+| **Blocker Eligibility đang mở** | **4** — repo private (#bảng 1), disclosure vắng khỏi bài nộp (#1), thiếu "other data sources" (#2), thiếu architecture diagram (#5) |
+| Blocker Bonus đang mở | 2 — social post chưa đăng, Gemma/ADR-028 chưa thi công (#3) |
+| Blocker Demo đang mở | 1 — video chưa quay |
+| Finding mới đợt này | 10 (3 🔴 · 5 🟡 · 2 🟢) — **không có finding nào là bug code** |
+| Trạng thái hệ thống thật | `doctor.py` 10/1/0 · `smoke_live.py` 13/13 · revision live `eduagent-class-aggregator-00037-6h4` · 274 test xanh · coverage 86% khớp README tuyệt đối |
+| Còn lại tới deadline | **4 ngày** (31/08/2026 17:00 PT) |
+| Trần điểm thực tế **nếu nộp nguyên trạng hôm nay** | **5.2/6.0** (5.0 + 0.2 blog) — social chưa đăng, model phụ chưa có |
+| Trần điểm nếu làm xong social + ADR-028 | **5.4 → 5.6/6.0** |
+
+**Nếu chỉ được chọn ĐÚNG MỘT việc: chuyển repo sang PUBLIC.** Không phải vì nó khó — nó mất 30 giây
+— mà vì nó là mục **pass/fail** duy nhất còn mở mà **không ai khác ngoài bạn làm được**, và vì
+`rule.txt:203` chấm *"Does the **public** GitHub repository feature a clean architecture diagram…"*
+trên trục 30%. Đã xác minh lại hôm nay rằng git history sạch secret, nên không còn lý do trì hoãn.
+
+**Nếu được chọn hai:** việc thứ hai là **#1 + #2** — dán disclosure và mục "other data sources" vào
+`devpost_submission_draft.md`. Cả hai cộng lại mất chưa tới 10 phút, cả hai đều là mục Stage One, và
+cả hai đã bị 23 đợt trước bỏ sót vì chưa ai đối chiếu **ba chiều** (điều lệ ↔ **bài nộp** ↔ repo) —
+các đợt trước dừng ở "repo có chưa", không hỏi "bài nộp có chưa".
+
+**Thứ tự đề nghị cho 4 ngày còn lại:** public repo → dán #1/#2 vào Devpost → sửa doc vặt (#4, #6,
+#7, #8, #9 — tổng cộng ~20 phút) → quyết ADR-028 **trước** khi quay (hoặc bỏ hẳn) → export
+architecture diagram → đăng social → diễn tập + quay. Ba việc cuối đều phụ thuộc việc trước, nên
+mọi ngày trì hoãn ở đầu chuỗi đều ăn thẳng vào ngân sách quay video.
+
+---
+
+## ĐỢT 24 (thi công) — XỬ LÝ 10 FINDING (2026-08-27) ✅ 8 SỬA XONG · 1 CHUYỂN QUYẾT ĐỊNH · 1 HOÃN CÓ LÝ DO
+
+> Sửa ngay trong phiên audit, không để sang đợt sau. Mọi sửa đổi đều là **tài liệu**; không đụng một
+> dòng code `src/` nào — `pytest -q -m "not e2e"` chạy lại sau khi sửa: **272 passed, 2 deselected**,
+> đúng bằng trước khi sửa.
+
+### Bảng trạng thái
+
+| # | Finding | Trạng thái | Đã làm gì |
+|---|---|---|---|
+| 🔴 1 | Disclosure vắng khỏi bài nộp; `eligibility_statement.md` nói ngược lại | ✅ **XONG** | Thêm mục **"Mandatory Disclosure"** vào `devpost_submission_draft.md` (trước "What's next"), copy nguyên văn ý README + nêu rõ không fork/copy source. Thêm **§0 Mandatory Disclosure** vào `eligibility_statement.md`, gọi đích danh CritiqAI kèm bảng "carried over / not carried over", và sửa câu certification không còn đọc thành "không có prior work nào" |
+| 🔴 2 | Thiếu "other data sources used" (điều lệ §6) | ✅ **XONG** | Thêm mục **"Other data sources used"** vào `devpost_submission_draft.md`: 12 ảnh viết tay tự chụp, 8 cặp thesis tự viết, hồ sơ học sinh sinh bằng script, sample essays — và câu quan trọng nhất: **không dùng dataset bên thứ ba, không có dữ liệu học sinh thật nào** |
+| 🔴 3 | ADR-028 (Gemma) chưa thi công | ⏸️ **CHUYỂN THÀNH QUYẾT ĐỊNH CỦA BẠN** — xem mục riêng bên dưới | Không tự ý code. Đã dọn `submission_checklist.md` để lựa chọn này rõ ràng và không bị dẫn sai |
+| 🟡 4 | README §8 phân bố OCR cũ (9/1/2) | ✅ **XONG** | Cập nhật theo số đo hôm nay (**10 high / 0 medium / 2 low**), gọi tên 2 mẫu `low`, **và thêm cảnh báo đây là phân bố dao động giữa các lần chạy chứ không phải hằng số** — để lần sau nó không lại thành số cũ |
+| 🟡 5 | Devpost §6 liệt kê 4 ảnh không tồn tại | ✅ **XONG (phần sửa được)** | Đổi §6 từ "danh sách đã có" thành **checklist có cảnh báo**, đánh dấu `[ ]` cho 4 ảnh chưa tồn tại và `[x]` cho thứ đã có; sửa `eval_report_v2.md` → `eval/results/eval_report.md` (tên chưa từng tồn tại); bổ sung `assets/gcp_evidence/` (18 ảnh) vốn bị bỏ quên. **Việc chụp ảnh thật vẫn cần bạn làm** |
+| 🟡 6 | `PROJECT_WIKI.md` trỏ sai đường dẫn | ✅ **XONG** | Sửa 2 chỗ trong README → `overview/PROJECT_WIKI.md`, ghi rõ file đó tiếng Việt và **đoạn README mới là bản tiếng Anh có thẩm quyền**; bổ sung `docs/`, `overview/`, `assets/` vào cây thư mục README (trước đây thiếu cả ba) |
+| 🟡 7 | `submission_checklist.md` lạc hậu so với ĐỢT 22 | ✅ **XONG** | Gạch bỏ Imagen kèm lý do đo được (`404` ở mọi location), gạch Gemma-cho-`language.py` kèm lý do (không tuân thủ `response_schema`), gạch Veo/Lyria kèm lý do điểm số; thay bằng **một mục duy nhất trỏ về ADR-028** + **cổng thời gian**: làm trước khi quay hoặc không làm. Cập nhật 9 PASS → **10 PASS**, 3/3 secret → **4/4** |
+| 🟡 8 | `video_script.md` trỏ cao trào sai mốc | ✅ **XONG** | `~2:10` → **`~1:10`**, kèm dòng đính chính giải thích vì sao (giữ giọng candid, không âm thầm sửa). Cập nhật stamp credential `00036-dbv` → **`00037-6h4`**; đồng thời sửa `failure_matrix.md` dòng 14b từ "live as of `00036-dbv`" thành "first shipped on `00036-dbv`, re-verified on `00037-6h4`" |
+| 🟢 9 | README nói doctor có 10 check, thật ra 11 | ✅ **XONG** | 10 → **11** |
+| 🟢 10 | `/reflect` degraded ghi trùng bản ghi mỗi lần retry | ⏸️ **HOÃN CÓ CHỦ Ý** | Không sửa. Lý do đã nêu ở finding: đường sửa đi qua đúng chỗ ĐỢT 16 vừa mất 8 mục để ổn định, còn 4 ngày và video chưa quay, còn tác hại thì chỉ là `reflections_recorded` đếm số lần thử. **Rủi ro hồi quy > lợi ích.** Ghi lại để đợt sau xử, không để nó biến mất |
+
+### Một lỗi tôi tự gây ra trong lúc sửa, và đã tự bắt
+
+Khi viết §0 cho `eligibility_statement.md`, tôi đã chèn câu *"verifiable with
+`git log --all --name-only | grep -i critq`, which returns nothing"* — rồi chạy thử chính lệnh đó
+theo quy tắc bất biến #1. **Nó KHÔNG trả về rỗng**: `--name-only` in cả commit message, nên hai dòng
+message có chữ "CritqAI" khớp. Lệnh đúng là:
+
+```
+$ git rev-list --all --objects | grep -i critq
+(rỗng, exit 1)
+```
+
+Đã thay bằng lệnh này. Kết luận không đổi — **không object nào mang đường dẫn CritqAI từng vào repo
+ở bất kỳ commit nào trên bất kỳ nhánh nào** — nhưng suýt nữa tài liệu eligibility lại chứa một lệnh
+"bằng chứng" mà người kiểm chạy sẽ ra kết quả ngược. Đây đúng là class-3 (bằng chứng không tái tạo
+được), và nó xuất hiện **trong chính đợt audit đi săn class-3**. Ghi lại vì nó là bằng chứng cho
+đúng luận điểm mà dự án này đang bán: một green claim chưa chạy thử thì chưa là bằng chứng.
+
+### #3 — ADR-028 (Gemma): cần bạn quyết, không phải tôi quyết
+
+Tôi **cố tình không tự thi công**. Không phải vì khó — ĐỢT 22 đã chứng minh gọi được và ĐỢT 23 đã
+viết sẵn 10 bước — mà vì nó là việc duy nhất trong danh sách **đổi hành vi production và đổi độ trễ
+đang nằm trong kịch bản video**, trong khi video **chưa quay**. Ba dữ kiện để bạn quyết:
+
+- **Được:** +0.2 (5.2 → 5.4, và 5.6 nếu cộng social), cộng một luận điểm kiến trúc thật sự mạnh hơn
+  cái đang có ("hai lượt cùng model chia sẻ điểm mù").
+- **Mất nếu hỏng:** beat OCR 22.5s trong video phải đo lại; Gemma MaaS có thể `429`; nếu tỉ lệ
+  fallback cao thì tuyên bố "đã tích hợp Gemma" thành nửa đúng — tệ hơn không tích hợp.
+- **Cổng an toàn:** làm **trước** buổi quay, hoặc **bỏ hẳn**. Không làm giữa quay và nộp.
+
+Nếu bạn nói "làm", tôi thi công theo đúng 10 bước ĐỢT 23 kèm điều kiện huỷ bỏ ở mục 10 của đợt đó.
+
+### Còn lại — chỉ bạn làm được (không đổi so với ĐỢT 24 gốc)
+
+| # | Việc | Vì sao tôi không làm được |
+|---|---|---|
+| 1 | **Chuyển repo sang PUBLIC** | Tác động ra ngoài tài khoản GitHub của bạn. Đã xác minh lại hôm nay: history sạch secret (`git rev-list --all --objects \| grep -i critq` rỗng; grep pattern secret rỗng) → an toàn |
+| 2 | Export `assets/architecture_diagram.png` + chụp 3 ảnh UI | Cần render/chụp màn hình thật |
+| 3 | Đăng social post | Draft đã sẵn sàng ở `docs/social_post_draft.md`, hashtag đúng |
+| 4 | Quay + upload video | — |
+
+### Kiểm chứng sau khi sửa
+
+```
+$ pytest -q -m "not e2e"          -> 272 passed, 2 deselected      (không đổi)
+$ grep -rn '`PROJECT_WIKI.md`' README.md docs/    -> rỗng          (hết con trỏ sai)
+$ grep -rn "eval_report_v2" docs/ README.md       -> chỉ còn dòng đính chính
+$ grep -rn "9 PASS" docs/                         -> chỉ còn dòng ghi lịch sử "was 9 PASS"
+```
+
+**Tổng: 6 file tài liệu sửa** — `README.md`, `docs/devpost_submission_draft.md`,
+`docs/eligibility_statement.md`, `docs/submission_checklist.md`, `docs/video_script.md`,
+`docs/failure_matrix.md`. **0 file code.**
+
+---
+
+## ĐỢT 24 (đối soát) — 46 ô `[ ]` còn lại thật sự là gì (2026-08-27)
+
+> `grep -c '^\s*-\s*\[ \]' TODO.md` → **46**, `[x]` → **197**. Nhưng đếm thô con số 46 là sai lệch:
+> phần lớn là **nguyên tắc không bao giờ tick**, hoặc **việc đã xong mà checkbox chưa được tick lại**.
+> Bảng này đối soát từng nhóm bằng lệnh thật, để không ai (kể cả đợt sau) phải dò lại từ đầu.
+
+| Nhóm | Số ô | Bản chất |
+|---|---|---|
+| A. Nguyên tắc, không phải task | 7 | mục 0 "Nguyên tắc bất biến khi code" (dòng 11–17) — kim chỉ nam, **không bao giờ tick** |
+| B. Đã xong, checkbox stale | 16 | xác minh bên dưới |
+| C. Đã bị từ chối / thay thế | 2 | không phải việc tồn đọng |
+| D. **Còn mở thật** | 10 | thao tác người thật + 1 việc chờ bên ngoài |
+| E. **ADR-028 (Gemma)** | 11 | 1 đề xuất + 10 bước thi công — chờ bạn quyết |
+| | **46** | |
+
+### B — 16 ô đã xong nhưng chưa tick (đã xác minh, KHÔNG cần làm lại)
+
+| Dòng | Việc | Bằng chứng |
+|---|---|---|
+| 304, 1002 | Commit artifact eval | `git ls-files eval/results/` → **5 file đã track**, gồm `learning_outcome_measured.json` (phụ thuộc bắt buộc của eval suite) |
+| 349 | Thu thập bằng chứng GCP | `ls assets/gcp_evidence/` → **18 ảnh** (Cloud Run revisions, Firestore, Pub/Sub DLQ, Cloud Trace, Gemini logs) |
+| 438 *(nửa đầu)* | Kiểm tra Cloud Run public access | `gcloud run services get-iam-policy` → binding **`allUsers` / `roles/run.invoker`**; `curl /health-check` không auth → **HTTP 200**. *(Nửa sau — architecture diagram — vẫn mở, xem nhóm D)* |
+| 1202 | Proactive Stepping / multi-turn chờ học sinh | `interactive.py::step_debate_turn()` + route `/api/debate/start`, `start-with-image`, `start-with-gdoc`; `smoke_live.py` chạy thật 3 lượt tuần tự → PASS. Làm bằng interactive API thay vì `RequestInput` của ADK — **khác cách, đúng kết quả** |
+| 1209 | Kịch bản demo 4 phút | `docs/video_script.md` đầy đủ timeline + credential + latency budget |
+| 1213 | Blog post (+0.2) | Đã đăng, **và xác minh trên bài thật ở ĐỢT 24**: public, đúng hashtag, có câu điều lệ §8 bắt buộc |
+| 2331, 2336, 2340, 2346, 2351, 2356, 2360, 2366, 2370, 2373 | 10 mục ĐỢT 19 | Có hẳn section `## ĐỢT 19 (thi công) — XỬ LÝ TOÀN BỘ 10 MỤC ✅ HOÀN THÀNH 10/10` ngay bên dưới |
+
+### C — 2 ô đã bị từ chối, đừng làm sống lại
+
+- **Dòng 1212** — *"thêm Gemma2 để re-rank fallacy"*: **đã từ chối** vì phá chính thuộc tính zero-LLM
+  của priority engine (đang được chấm 5.0/5.0). Thay thế đúng là **ADR-028** (Gemma làm lượt OCR thứ
+  hai — chỗ so sánh bằng `difflib` trên text thô, không đụng ranking).
+- **Dòng 2812** — *"~~Veo / Lyria / Imagen~~"*: đã gạch sẵn ở ĐỢT 22. Imagen **không tồn tại** trong
+  project; Veo/Lyria bị từ chối 3 lần. Không phải việc tồn đọng.
+
+### D — 10 ô CÒN MỞ THẬT (đây mới là danh sách cần nhìn)
+
+| Dòng | Việc | Mức | Ai làm |
+|---|---|---|---|
+| — | **Chuyển repo sang PUBLIC** *(không có checkbox riêng — nằm ở bảng CHỐT cuối ĐỢT 23)* | 🔴 **Stage One pass/fail** | Bạn |
+| 438, 2494 | Export `assets/architecture_diagram.png` từ mermaid README §2 | 🔴 **Bắt buộc §6** | Bạn |
+| — | 3 ảnh UI cho Devpost §6 *(phát hiện ĐỢT 24 #5, chưa từng có checkbox)* | 🟡 | Bạn — chụp trong lúc diễn tập |
+| 1214 | Đăng social post (+0.2) | 🔴 Bonus | Bạn — draft sẵn ở `docs/social_post_draft.md` |
+| 1071 | Quay unedited live execution | 🔴 Demo 30% | Bạn |
+| 1072 | Upload YouTube/Vimeo **public** | 🔴 | Bạn |
+| 2496 | Diễn tập + `smoke_live.py` ngay trước khi bấm ghi | 🟡 | Bạn |
+| 1076 | Nộp sớm ≥ 1 ngày trước 31/08 17:00 PT | 🔴 | Bạn |
+| 1003 | *(ô tổng, trùng 1071/1072/1076 — phần "chụp evidence GCP" đã xong)* | — | — |
+| 2497 | Đổi tên 8 file ảnh có khoảng trắng trong `assets/gcp_evidence/` | 🟢 Mỹ quan | Bạn hoặc tôi |
+| 1107 | Chờ `cloudhackathons@google.com` trả lời về eligibility CritiqAI | ⏳ Ngoài tầm kiểm soát | — |
+
+> **Về dòng 1107:** đã chờ từ ĐỢT 8, chưa có hồi âm. **Không nên coi đây là blocker.** Điều lệ §6
+> chỉ yêu cầu *disclose*, và ĐỢT 24 đã đưa disclosure vào **cả ba nơi** (README §1, bài nộp Devpost,
+> `eligibility_statement.md` §0) kèm bằng chứng git history sạch. Nghĩa vụ đã hoàn thành bằng hành
+> động, không phụ thuộc vào việc họ có trả lời hay không.
+
+### E — 11 ô ADR-028 (Gemma), chờ bạn quyết
+
+Dòng 2807 (đề xuất) + 2850–2902 (10 bước thi công). Đây là **việc duy nhất còn lại có thể tăng
+điểm bằng code** (+0.2 → trần 5.6/6.0). Cổng thời gian đã ghi ở phần thi công ĐỢT 24: **làm trước
+buổi quay hoặc bỏ hẳn** — nó đổi độ trễ OCR mà kịch bản video đang canh nhịp theo.
+
+### Kết luận một dòng
+
+Trong 46 ô, **không ô nào là bug code hay việc kỹ thuật tồn đọng**. Toàn bộ việc thật còn lại là
+**thao tác của người thật** (public repo → diagram → social → quay → nộp) cộng **một quyết định**
+(ADR-028). Dự án đã ở trạng thái xong-về-kỹ-thuật từ ĐỢT 20; mọi thứ sau đó là thủ tục nộp bài.

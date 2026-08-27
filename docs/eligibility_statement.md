@@ -1,12 +1,39 @@
 # Hackathon Eligibility & Originality Boundary Statement
 
-> **Submission Certification:** The **EduAgent** project was developed entirely from scratch for the All Things Agentic Hackathon, adhering 100% to originality guidelines, architectural transparency, and open-source licensing standards.
+> **Submission Certification:** All code, prompts, schemas, workflows, and evaluation suites in the
+> **EduAgent** repository were written from scratch during the All Things Agentic Hackathon
+> Submission Period.
+
+## 0. Mandatory Disclosure — the author's prior work
+
+*(Added in Audit Wave 24. This document previously described its prior art only as a generic
+"single-turn Q&A chatbot" and never named the author's own earlier project — which, read on its own,
+implied there was no prior work to disclose. Rules §6 "New Projects Only" requires the opposite:
+"must disclose any other pre-existing code or work incorporated into the Project.")*
+
+**This architecture is inspired by the author's prior hackathon entry, CritiqAI** — a multi-agent AI
+debate coach built with ADK, which placed in the top 12 of 6000+ teams at the Kaggle/Google AI Agents
+Intensive Vibe Coding Capstone (Agents for Good — Education track). What carried over is **experience
+and pedagogical principle, not source code**:
+
+| Carried over | Not carried over |
+|---|---|
+| The core pedagogical thesis — challenge the student's reasoning rather than correct their text | Any line of CritiqAI's source, prompts, schemas, or evals |
+| Architectural lessons learned, documented as a case study in `overview/PROJECT_WIKI.md` §9 | Its agent graph, persona definitions, data model, or infrastructure |
+
+CritiqAI's source was kept locally as reference material only and is excluded from this repository's
+git history by the **first line** of `.gitignore` (`CritqAI-main/`). Verified 2026-08-27 —
+`git rev-list --all --objects | grep -i critq` returns **no results**, i.e. no object with that path
+has ever entered this repository at any commit on any branch. Everything in the table in §1 below was
+designed and built during this Submission Period.
 
 ---
 
 ## 1. Original Contribution Boundary Statement
 
-To provide full transparency to judges, the table below delineates the baseline prior art from the novel architectural contributions developed during this hackathon:
+To provide full transparency to judges, the table below delineates the baseline prior art — both the
+generic state of the art and, where relevant, the author's own earlier work disclosed in §0 — from
+the novel architectural contributions developed during this hackathon:
 
 | Area | Baseline / Prior Art | Novel EduAgent Contribution |
 |---|---|---|
@@ -22,5 +49,5 @@ To provide full transparency to judges, the table below delineates the baseline 
 ## 2. Codebase Standards & Open Source Licensing
 
 * **License:** MIT License / Open Source.
-* **Code Standards:** 100% type-annotated Python (FastAPI, Google GenAI SDK, Pydantic v2, OpenTelemetry), structured error boundaries, and high test coverage (>240 pytest test cases + 50 deterministic eval benchmarks).
+* **Code Standards:** 100% type-annotated Python (FastAPI, Google GenAI SDK, Pydantic v2, OpenTelemetry), structured error boundaries, and measured test coverage — **274 pytest cases, 86% statement coverage** over `src/eduagent` (`pytest --cov=src/eduagent --cov-report=term -q`, re-measured 2026-08-27) plus **50 deterministic eval benchmarks**, every one of them sabotage-verified as capable of failing (ADR-019).
 * **Compliance Commitment:** Built strictly with standard public Google Cloud Platform services and open APIs, containing zero proprietary closed-source dependencies.

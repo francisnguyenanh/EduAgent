@@ -62,7 +62,7 @@ pip install -r requirements.txt && cp .env.example .env   # set GCP_PROJECT_ID
 # 2. Authenticate Application Default Credentials (no SA key download needed)
 gcloud auth application-default login
 
-# 3. Run comprehensive environment diagnostics (10 independent checks)
+# 3. Run comprehensive environment diagnostics (11 independent checks)
 python scripts/doctor.py
 
 # 4. Run test & evaluation suites
@@ -81,7 +81,8 @@ Run `python scripts/deploy_to_cloud_run.py` — preflights all Secret Manager se
 
 ## 1. Mandatory Disclosure
 
-This architecture is inspired by the author's prior hackathon entry, **CritiqAI**. **All code, prompts, schemas, workflows, and evaluation suites in this repository were written completely from scratch during this Submission Period.** The prior project served solely as a case study for architectural lessons learned (documented in `PROJECT_WIKI.md` Section 9). Track: **Collaborative Partner**.
+This architecture is inspired by the author's prior hackathon entry, **CritiqAI**. **All code, prompts, schemas, workflows, and evaluation suites in this repository were written completely from scratch during this Submission Period.** The prior project served solely as a case study for architectural lessons learned (documented in `overview/PROJECT_WIKI.md` Section 9 — that file is written in Vietnamese; this
+paragraph is the authoritative English statement of the boundary). Track: **Collaborative Partner**.
 
 ---
 
@@ -149,6 +150,9 @@ src/eduagent/
 eval/             ADK Eval Suite (evalset.py, results/) + eval/test_images/ (handwritten test assets)
 scripts/          Diagnostic tools (doctor.py), demos (demo_tier1_run.py), and deployment automation
 tests/            Pytest test suite (>240 tests, unit + integration)
+docs/             Submission artefacts (Devpost draft, video script, failure matrix, eligibility statement)
+overview/         PROJECT_WIKI.md (full design narrative + ADR history, Vietnamese) + the official rules text
+assets/           gcp_evidence/ (Cloud Console screenshots) + sample_essays/
 ```
 
 ---
@@ -327,7 +331,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 
 </details>
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26) — see `TODO.md` and `PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26) — see `TODO.md` and `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
 
 ---
 
@@ -494,11 +498,21 @@ The modules carrying the decisions a judge would want verified are the well-cove
 
 The multimodal OCR pipeline (`nodes/ocr.py`) was evaluated on **12 real-world handwritten essay samples** (`eval/test_images/`) encompassing varied handwriting styles, cursive, pencil, cross-outs, and uneven lighting:
 
-* **9 samples:** `confidence = high`
-* **1 sample:** `confidence = medium` (sample with heavy physical cross-outs)
-* **2 samples:** `confidence = low` (dense shorthand notes; correctly routed to `pending_essays`)
+Most recent full run (**2026-08-27**, Audit Wave 24):
+
+* **10 samples:** `confidence = high`
+* **0 samples:** `confidence = medium`
+* **2 samples:** `confidence = low` — `notes_socialmedia.jpg` and `stu_declining_unstructured.png`
+  (dense shorthand notes; correctly routed to `pending_essays` rather than scored)
 
 Reproduce with: `python scripts/demo_real_handwriting_ocr.py`
+
+> **Read this as a distribution, not a constant.** The confidence label is the output of ADR-007's
+> dual-pass `difflib` cross-check over two *generative* transcription passes, so borderline samples
+> move between runs — an earlier run of this same script scored 9 high / 1 medium / 2 low. What is
+> stable across runs, and what this section actually claims, is that the two genuinely illegible
+> samples are the ones that come back `low` and never reach the scorer. If you re-run it, trust your
+> own output over this table.
 
 ---
 

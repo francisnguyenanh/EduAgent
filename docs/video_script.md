@@ -17,7 +17,12 @@ handwritten photo → OCR (self-consistency cross-check) → weak evidence detec
   → human approval (teacher clicks Send)
 ```
 
-**The single most important moment in the video is "the persona changed because it remembered" (~2:10).** Everything else is context for that moment. Do not attempt to demo the whole system.
+**The single most important moment in the video is "the persona changed because it remembered" (~1:10).** Everything else is context for that moment. Do not attempt to demo the whole system.
+
+> *(Audit Wave 24 correction: this line used to say `~2:10`, left over from an earlier cut of the
+> timeline. In the current script that beat is **Scene 2, Visual 2 (1:00 – 1:25)**; 2:10 is now the
+> mini-lesson. Rehearsing to the old marker would have put the emphasis on the wrong beat — the
+> exact beat two prior reviews were rejected for proposing to cut.)*
 
 Two lines worth putting on screen as text, because they land harder read than heard:
 * *"We don't trust the model's own confidence score."* (during the OCR beat)
@@ -41,7 +46,7 @@ Mitigations, in order of preference:
 
 ---
 
-## 🔑 Credentials & data you will actually type on camera (verified 2026-08-26 against revision `00036-dbv`)
+## 🔑 Credentials & data you will actually type on camera (re-verified 2026-08-27 against live revision `00037-6h4`)
 
 **The two portals now take DIFFERENT passcodes (ADR-025, Audit Wave 18).** Typing the student
 passcode into the Teacher Portal returns `401 Incorrect password.` on camera.
