@@ -142,7 +142,7 @@ def test_start_debate_from_image_transcribes_then_starts_debate():
     with (
         patch(
             "eduagent.api.transcribe_essay_image",
-            return_value={"transcribed_text": "Cats are great pets.", "confidence": "high", "uncertain_segments": [], "degraded": False},
+            return_value={"transcribed_text": "Cats are great pets.", "confidence": "high", "uncertain_segments": [], "degraded": False, "cross_check_model": "gemma-4-26b-a4b-it-maas"},
         ) as mock_transcribe,
         patch("eduagent.api.summarize_essay", return_value=({"fallacies_draft": []}, False)),
         patch("eduagent.api.get_profile", return_value=None),
@@ -163,7 +163,7 @@ def test_start_debate_from_image_still_starts_on_low_confidence():
     with (
         patch(
             "eduagent.api.transcribe_essay_image",
-            return_value={"transcribed_text": "", "confidence": "unavailable", "uncertain_segments": [], "degraded": True},
+            return_value={"transcribed_text": "", "confidence": "unavailable", "uncertain_segments": [], "degraded": True, "cross_check_model": None},
         ),
         patch("eduagent.api.summarize_essay", return_value=({"fallacies_draft": []}, False)),
         patch("eduagent.api.get_profile", return_value=None),
@@ -193,3 +193,50 @@ def test_start_debate_from_gdoc_fetches_text_and_starts_debate():
     assert result["gdoc"]["char_count"] == len("AI is transforming education.")
     assert result["turn"]["question"] == "What role should teachers play?"
     assert "session_id" in result
+
+
+# --- ADR-028 / Audit Wave 25: the Gemma signal must reach the client ---------
+
+
+def test_image_response_surfaces_which_model_did_the_cross_check():
+    """`nodes/ocr.py` has always returned `cross_check_model`, but the API used
+    to drop it when building `ocr_meta`, so the only proof Gemma was in the
+    request path lived in Cloud Logging -- which a judge testing the hosted URL
+    cannot read. A signal written but never on any read path is the ADR-015
+    failure mode; this one is also the evidence for the extra-model bonus."""
+    import base64
+
+    payload = DebateStartFromImageRequest(image_base64=base64.b64encode(b"fake").decode(), student_id="s1")
+    with (
+        patch(
+            "eduagent.api.transcribe_essay_image",
+            return_value={"transcribed_text": "Cats are great pets.", "confidence": "high", "uncertain_segments": [], "degraded": False, "cross_check_model": "gemma-4-26b-a4b-it-maas"},
+        ),
+        patch("eduagent.api.summarize_essay", return_value=({"fallacies_draft": []}, False)),
+        patch("eduagent.api.get_profile", return_value=None),
+        patch("eduagent.nodes.debate.generate_text", return_value="Why do you believe that?"),
+    ):
+        result = start_debate_from_image(payload)
+
+    assert result["ocr"]["cross_check_model"] == "gemma-4-26b-a4b-it-maas"
+
+
+def test_image_response_reports_the_fallback_honestly_when_gemma_is_unavailable():
+    """The field is only worth exposing if it tells the truth in BOTH states.
+    If it always read like Gemma, "integrated with Gemma" would be an
+    unfalsifiable claim rather than a checkable one."""
+    import base64
+
+    payload = DebateStartFromImageRequest(image_base64=base64.b64encode(b"fake").decode(), student_id="s1")
+    with (
+        patch(
+            "eduagent.api.transcribe_essay_image",
+            return_value={"transcribed_text": "Cats are great pets.", "confidence": "high", "uncertain_segments": [], "degraded": False, "cross_check_model": "gemini-fallback"},
+        ),
+        patch("eduagent.api.summarize_essay", return_value=({"fallacies_draft": []}, False)),
+        patch("eduagent.api.get_profile", return_value=None),
+        patch("eduagent.nodes.debate.generate_text", return_value="Why do you believe that?"),
+    ):
+        result = start_debate_from_image(payload)
+
+    assert result["ocr"]["cross_check_model"] == "gemini-fallback"
