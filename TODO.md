@@ -3891,3 +3891,314 @@ tài liệu làm bằng chứng (dẫn ca thật ĐỢT 24 suýt để lọt l�
 Và ngay sau khi thêm link vào README, `DOC_UPDATE_RULE.md` tự nó thành lạc hậu (Tầng 3 vẫn ghi "mồ
 côi") — đã cập nhật luôn, kèm **quy tắc teaser**: teaser phải chứa kết luận chứ không chỉ "xem thêm",
 và sửa file thì phải kiểm lại teaser tương ứng, vì *teaser sai lệch còn tệ hơn không có teaser*.
+
+---
+
+## ĐỢT 25 — KIỂM CHỨNG ADR-028 TRÊN DEPLOYMENT THẬT + đường fallback (2026-08-28)
+
+> Sau khi bạn redeploy. Đây là lần đầu ADR-028 được đo **trên Cloud Run**, không phải local — và nó
+> đóng lại **điều kiện huỷ bỏ #2 của ĐỢT 23**, mục duy nhất trong ba điều kiện chưa xác minh được.
+
+### Revision live
+
+```
+$ gcloud run services describe eduagent-class-aggregator --region asia-southeast1
+eduagent-class-aggregator-00038-rx5          (trước: 00037-6h4)
+env: GOOGLE_CLOUD_LOCATION=global · EDUAGENT_FLASH_MODEL=gemini-3.5-flash
+     EDUAGENT_HEAVY_MODEL=gemini-3.7-flash · (không set EDUAGENT_GEMMA_MODEL -> dùng default)
+$ python scripts/doctor.py      -> 10 passed, 1 warned, 0 failed
+$ python scripts/smoke_live.py  -> 13 passed, 0 failed
+```
+
+### 1. Gemma CÓ chạy thật trên server — bằng chứng từ Cloud Logging, không phải suy đoán
+
+12 ảnh thật gửi qua `POST /api/debate/start-with-image` trên URL live, rồi đếm log server:
+
+```
+$ gcloud logging read '... AND jsonPayload.message:"gemma-4-26b-a4b-it-maas"' --freshness=1h
+  tổng lời gọi Gemma : 16      <-- khớp đúng 16 request đã gửi
+  200 OK             : 16
+  429                : 0
+  lỗi khác           : 0
+
+$ ... jsonPayload.message:"gemini-3.5-flash:generateContent"
+  tổng: 48 | 200 OK: 48 | 429: 0     (OCR lượt 1 + summarizer + debate turn)
+
+$ ... severity>=WARNING  | grep -i "gemma|cross-check|queue full|fallback"
+  (trống — KHÔNG có fallback nào)
+```
+
+Dòng log nguyên văn là request thật tới Vertex:
+`POST https://aiplatform.googleapis.com/v1beta1/projects/.../locations/global/publishers/google/models/gemma-4-26b-a4b-it-maas:generateContent "HTTP/1.1 200 OK"`
+
+**Đây là bằng chứng mạnh nhất cho +0.2 bonus** — không phải "code có gọi Gemma", mà là "Vertex đã
+nhận và trả lời 16 request Gemma từ đúng revision giám khảo đang test".
+
+*(Ghi nhận một lỗi của tôi trong lúc đo: hai query đầu dùng `textPayload:"gemma"` và trả về **0**, làm
+tôi suýt kết luận sai là Gemma không chạy. Log của service nằm ở `jsonPayload.message`, không phải
+`textPayload`. Query đúng mới ra 16.)*
+
+### 2. Độ trễ trên deployment — điều kiện huỷ bỏ #2 ĐÃ ĐÓNG
+
+12 ảnh, đo end-to-end `start-with-image` (OCR 2 lượt + summarizer + persona + turn 1):
+
+| | Giá trị |
+|---|---|
+| Thành công | **12/12** |
+| Trung bình | **18.73s** |
+| Trung vị | **16.34s** |
+| Nhanh nhất / chậm nhất | 12.65s / **31.17s** |
+
+Đối chiếu: `video_script.md` ghi **24.2s** (đo ĐỢT 15, bản **cùng-model**). Bản có Gemma **nhanh
+hơn** ở trung vị (16.34s) và trung bình (18.73s) — nhưng đây là hai lần đo cách nhau nhiều ngày trên
+nền tảng có dao động lớn, nên **không kết luận "Gemma làm nhanh hơn"**; chỉ kết luận được điều cần
+biết: **ngưỡng huỷ bỏ ~35s KHÔNG bị chạm.**
+
+⚠️ Đỉnh **31.17s** (`cursive_essay_climate.jpg`) là con số phải nhớ khi quay: nó nằm trong khoảng
+ngân sách của beat OCR. Ảnh lớn nhất (`stu_improving_neat.png`, 2662KB) chỉ mất 15.56s, nên độ trễ
+**không tương quan với kích thước ảnh** — đừng chọn ảnh nhỏ để quay với hy vọng nhanh hơn.
+
+Phân bố confidence trên live: **10 high / 1 medium / 1 low** — khớp với đo local.
+
+### 3. Đường FALLBACK — kiểm chứng bằng ép lỗi thật trên ảnh thật, không mock
+
+Live chưa từng fallback (0/16), nên phải chủ động ép. Không dùng mock: trỏ
+`EDUAGENT_GEMMA_MODEL` sang một model không tồn tại để Vertex trả lỗi thật.
+
+| Kịch bản | `cross_check_model` | Kết quả |
+|---|---|---|
+| **A. Bình thường** | `gemma-4-26b-a4b-it-maas` (4/4) | transcribe OK |
+| **B. Gemma lỗi** (`EDUAGENT_GEMMA_MODEL=gemma-does-not-exist-xyz`) | `gemini-fallback` (4/4) | **vẫn transcribe được 4/4**, `degraded=False`, không bài nào bị chặn. Log đúng câu `"Gemma cross-check unavailable (MaaS queue full or error) -- using same-model second pass"` |
+| **C. Toggle revert** (`EDUAGENT_OCR_CROSS_CHECK_GEMMA=false`) | `gemini-fallback` (4/4) | không gọi Gemma lần nào |
+
+**Kết luận: fallback hoạt động đúng thiết kế** — một hàng đợi MaaS đầy không bao giờ chặn bài nộp của
+học sinh (ADR-008), và cần gạt revert dùng được ngay mà không cần sửa code hay rollback image.
+
+Chi phí của đường fallback: kịch bản B chậm hơn A (10.54s và 13.50s so với 4.28s và 4.18s) vì phải
+chạy **ba** lời gọi model thay vì hai. Đây là chi phí đúng và chấp nhận được cho một đường hiếm.
+
+### 4. 🟡 PHÁT HIỆN MỚI — `cross_check_model` bị bỏ rơi ở biên API
+
+`nodes/ocr.py` **có** trả `cross_check_model`, nhưng `api.py:250-254` chỉ chuyển ba trường ra client:
+
+```python
+ocr_meta={
+    "confidence": ocr_result["confidence"],
+    "uncertain_segments": ocr_result["uncertain_segments"],
+    "degraded": ocr_result["degraded"],
+    #  <-- cross_check_model KHÔNG có ở đây
+},
+```
+
+Xác nhận trên live: response của `start-with-image` trả
+`{"confidence": "high", "uncertain_segments": [], "degraded": false}` — **không có** `cross_check_model`.
+
+**Vì sao đáng sửa:** ĐỢT 23 bước 4 đặt ra mục tiêu cho trường này là *"bằng chứng tích hợp Gemma để
+trưng cho giám khảo"*. Hiện tại một giám khảo test URL hosted **không có cách nào thấy Gemma tồn tại**
+— phải có quyền đọc Cloud Logging của dự án mới thấy, thứ họ không có. Tín hiệu tồn tại trong code
+nhưng không tới được người cần đọc nó: đúng mẫu class-2 (*"thêm cờ mới, nhưng đường đọc thật không
+dùng nó"*) mà ADR-015 và `/reflect` đã mắc.
+
+**Đề xuất:** thêm đúng một dòng `"cross_check_model": ocr_result["cross_check_model"],` vào `ocr_meta`,
++ một test, rồi redeploy. Sau đó giám khảo (và cả ta) xác minh Gemma bằng một lệnh `curl` thay vì phải
+đọc log GCP. **Cần bạn quyết vì nó kéo theo một lần deploy nữa.**
+
+### Đối chiếu 3 điều kiện HUỶ BỎ của ĐỢT 23 — cả ba đã đóng
+
+| Điều kiện | Ngưỡng | Đo trên live | Kết |
+|---|---|---|---|
+| Chất lượng OCR 12 ảnh xấu đi | bất kỳ | 10 high / 1 med / 1 low, khớp local | ✅ không chạm |
+| `start-with-image` vượt ~35s | 35s | TB **18.73s**, đỉnh **31.17s** | ✅ không chạm |
+| Tỉ lệ 429 cao tới mức fallback chạy thường xuyên | — | **0/16 fallback**, 0 lần 429 | ✅ không chạm |
+
+**ADR-028 giữ lại.** Không có lý do revert.
+
+---
+
+## ĐỢT 25 (thi công) — `cross_check_model` ra tới client + hướng dẫn quay bằng chứng Gemma (2026-08-28)
+
+### 1. Sửa lỗ hổng class-2: tín hiệu Gemma giờ tới được người cần đọc
+
+`api.py` nay chuyển `cross_check_model` vào `ocr_meta`. Xác minh trên live bằng `curl` — đúng thứ
+giám khảo sẽ thấy:
+
+```json
+"ocr": {
+  "confidence": "high",
+  "uncertain_segments": [],
+  "degraded": false,
+  "cross_check_model": "gemma-4-26b-a4b-it-maas"
+}
+```
+
+**2 test mới + 2 sabotage:**
+
+| Sabotage | Test đỏ |
+|---|---|
+| Bỏ lại `cross_check_model` khỏi `ocr_meta` (quay về bug cũ) | cả 2 test |
+| Hard-code luôn `"gemma-4-26b-a4b-it-maas"` (biến nó thành tuyên bố không thể sai) | `test_image_response_reports_the_fallback_honestly_when_gemma_is_unavailable` |
+
+Sabotage thứ hai quan trọng hơn thứ nhất: một trường **luôn** báo "gemma" thì vô dụng như không có
+trường nào. Nó chỉ là bằng chứng khi nó biết nói *"gemini-fallback"*.
+
+Deploy: revision **`00039-zzw`** · `doctor.py` 10/1/0 · `smoke_live.py` 13/13 · 309 test · eval 50/50.
+
+### 2. Độ trễ live — nhiễu nền tảng áp đảo, KHÔNG phải chi phí Gemma
+
+Hai lần chạy đầy đủ 12 ảnh trên live, **cùng logic**:
+
+| Lần | Revision | mean | median | max |
+|---|---|---|---|---|
+| 1 | `00038-rx5` | 18.73s | 16.34s | 31.17s |
+| 2 | `00039-zzw` | **24.84s** | 22.09s | **40.38s** ⚠️ |
+
+Lần 2 **vượt ngưỡng huỷ bỏ 35s**. Nhưng hai revision chỉ khác nhau **một khoá dict** — không thể gây
+ra 6s. Đo A/B liền kề để tách nguyên nhân:
+
+| | mean | median | max |
+|---|---|---|---|
+| Gemini×2 (toggle OFF) | **9.91s** | 5.95s | 27.95s |
+| Gemini+Gemma (toggle ON) | **9.31s** | 7.63s | 27.43s |
+
+**Gemma không chậm hơn** — nằm trong nhiễu (hôm qua đo +1.52s, hôm nay −0.60s). Kết luận: **40.38s là
+thời tiết nền tảng, không phải Gemma.** Điều kiện huỷ bỏ *"start-with-image > 35s"* của ĐỢT 23 được
+viết khi tưởng Gemma cộng thêm chi phí cố định; thực tế **số hạng áp đảo là dao động nền tảng, tác
+động lên cả hai đường như nhau**. Nó đo thời tiết, không đo thay đổi. **Không revert.**
+
+⚠️ **Nhưng rủi ro quay video là thật**, bất kể nguyên nhân: quan sát được **40.38s** trong một lần
+chạy và **72.13s** ở một request đơn lẻ. Và độ trễ **không tương quan kích thước ảnh** (ảnh 2662KB:
+15.56s; ảnh 958KB: 40.38s) — chọn ảnh nhỏ không giúp gì. Cách phòng duy nhất là **chạy
+`smoke_live.py` ngay trước khi bấm ghi**; nếu chậm bất thường thì hoãn vài giờ.
+
+### 3. Hướng dẫn quay bằng chứng Gemma — thêm vào 2 file guide
+
+**Vấn đề tìm ra khi soạn:** UI demo **không hiển thị** `cross_check_model` — nó chỉ cảnh báo khi
+`confidence` thấp (`demo_page.py:741`). Quay UI thôi thì **không có một khung hình nào** chứng minh
+Gemma tồn tại, và +0.2 thành lời khai suông.
+
+**Giải pháp — một khung hình phục vụ hai mục đích.** Điều lệ đòi video *"Must demonstrate the backend
+is running on Google Cloud (ie: Google Cloud Console, Cloud Run dashboard, **Vertex AI logs**, URL of
+.run)"*. Nên log Vertex vừa là **yêu cầu bắt buộc**, vừa là **bằng chứng bonus**.
+
+Query đã dựng và kiểm chứng thật, cho ra **hai họ model xen kẽ trong cùng luồng request**:
+
+```
+resource.labels.service_name="eduagent-class-aggregator"
+(jsonPayload.message:"gemma-4-26b-a4b-it-maas" OR jsonPayload.message:"gemini-3.5-flash:generateContent")
+```
+
+```
+POST .../models/gemini-3.5-flash:generateContent       200 OK
+POST .../models/gemini-3.5-flash:generateContent       200 OK
+POST .../models/gemma-4-26b-a4b-it-maas:generateContent  200 OK   <-- Gemma
+POST .../models/gemini-3.5-flash:generateContent       200 OK
+```
+
+Đây là **hình ảnh trực quan của chính luận điểm ADR-028** — không cần giải thích, người xem tự thấy
+"không so một model với chính nó".
+
+**Đã thêm:**
+- `docs/gcp_screenshot_guide.md` → **PHẦN 6** mới: URL Logs Explorer điền sẵn query, 6 bước làm, câu
+  nói ≈8 giây khi quay, 2 cách dự phòng (DevTools Network tab / `curl`), và **kịch bản xử lý nếu trên
+  camera hiện `gemini-fallback`** — nói thẳng ra thay vì quay lại, vì một hệ thống thừa nhận degrade
+  đáng tin hơn một hệ thống chỉ chạy đúng lúc thuận lợi.
+- `docs/gcp_evidence_checklist.md`: URL vào bảng Quick Reference, một dòng vào bảng timeline video
+  (beat 1:30–2:15), và mục **⭐ GEMMA CROSS-MODEL EVIDENCE** kèm **lệnh pre-flight đã chạy thử**.
+- Cả hai file ghi lại **cái bẫy đã gặp thật**: log service nằm ở `jsonPayload.message`, không phải
+  `textPayload`. Query sai trường trả về **0 dòng** và trông y hệt "Gemma chưa từng chạy" — chính tôi
+  đã suýt kết luận sai như vậy trong đợt này.
+- Danh sách ảnh: 11 → **12**, thêm `06_vertex_gemma_crossmodel_logs.png`.
+
+### Bằng chứng Gemma trên live — tổng hợp
+
+```
+16 lời gọi Gemma | 16× 200 OK | 0× 429 | 0 fallback     (Cloud Logging, revision 00038)
+fallback ép lỗi thật (model không tồn tại) -> 4/4 transcribe OK, cross_check_model="gemini-fallback"
+toggle revert (EDUAGENT_OCR_CROSS_CHECK_GEMMA=false)   -> 4/4 "gemini-fallback", không gọi Gemma
+curl trên live (revision 00039) -> "cross_check_model": "gemma-4-26b-a4b-it-maas"
+```
+
+---
+
+## ĐỢT 25 (review) — Thẩm định luồng ingest hai bước `extract-image` / `extract-gdoc` (2026-08-28)
+
+> Hai endpoint mới xuất hiện trong working tree do người/agent khác thêm, **chưa có test, chưa deploy**.
+> Review đúng chuẩn: chạy thử đúng như UI gọi, không đọc code suông.
+
+### 🔴 Lỗi chặn: luồng mới HỎNG HOÀN TOÀN — mọi lần bấm trả 422
+
+UI gọi `/api/debate/extract-image` với `{image_base64, image_mime_type}` và `/api/debate/extract-gdoc`
+với `{gdoc_url}` — **thiếu `student_id`**, trong khi payload model bắt buộc trường đó. Tái hiện thật:
+
+```
+POST /api/debate/extract-image  {"image_base64":"eA==","image_mime_type":"image/jpeg"}
+-> HTTP 422 {'type':'missing','loc':['body','student_id'],'msg':'Field required'}
+```
+
+UI hiển thị lỗi này thẳng ra màn hình (`throw new Error(HTTP ${resp.status}...)`). **Nút "Extract OCR"
+sẽ báo lỗi ngay trên camera** nếu quay video với bản đó. Luồng cũ một bước (`start-with-image`) gửi
+đúng `student_id/name/class_id`; hai lời gọi mới chỉ đơn giản quên.
+
+**Đã sửa:** cả hai fetch trong `demo_page.py` nay gửi `student_id: auth.user_id, name:
+auth.display_name, class_id: auth.class_id`, khớp luồng cũ. Xác minh trên live sau deploy: gửi thiếu
+→ **422**, gửi đủ → **200**.
+
+### 🟡 Hồi quy: mất cảnh báo khi Vertex sập
+
+Luồng cũ cảnh báo khi `confidence` là `'low' || 'unavailable'` (`demo_page.py:741`). Luồng mới chỉ
+kiểm `'low'`. Mà khi Vertex sập, `transcribe_essay_image()` trả **text RỖNG** với
+`confidence='unavailable'` (ADR-008: không bao giờ bịa transcription) — nên học sinh sẽ nhìn một ô
+soạn thảo trống **không có lời giải thích nào**.
+
+**Đã sửa:** thêm nhánh `degraded || confidence==='unavailable'` với thông điệp riêng (*"transcription
+service is temporarily unavailable — try again shortly, or type the essay in yourself"*).
+
+### ✅ Những điểm bản gốc làm ĐÚNG
+
+- `_verify_student_auth` + `_enforce_rate_limit` có mặt ở cả hai route — đúng chuẩn ADR-018, và
+  authorization quyết định **trước** khi tốn Vertex.
+- `extract_text_from_image` **đã có sẵn** `cross_check_model` — nhất quán với thay đổi cùng ngày.
+- Cap 10MB ảnh, cap 100KB gdoc đều còn.
+- **Không** sanitize ở bước extract — và đó là **đúng**: extract trả text thô để học sinh xem/sửa,
+  còn `strip_injection_attempts` + cap 20k chạy ở `/api/debate/start`, tức tại đúng biên nơi text
+  thật sự được nộp. Kiến trúc này chuẩn hơn là sanitize hai lần.
+- `PermissionError → 403` cho Doc riêng tư: đúng thứ người dùng cần đọc.
+
+### Test: 11 case mới + 4 sabotage
+
+`tests/test_extract_endpoints.py`:
+
+| Sabotage | Test đỏ |
+|---|---|
+| Bỏ `_verify_student_auth` khỏi `extract-image` | 2 test (anonymous 401, cross-student 403) |
+| Bỏ `cross_check_model` khỏi `extract_text_from_image` | 1 |
+| Bỏ cap kích thước ảnh | 1 *(sau khi sửa test — xem dưới)* |
+| Map `PermissionError` thành 502 thay vì 403 | 1 |
+
+**Sabotage bắt được một test hỏng của chính tôi.** `test_extract_image_rejects_an_oversized_payload`
+ban đầu dùng `"A" * 14_000_001` — chuỗi đó **không phải base64 hợp lệ** (độ dài không chia hết cho 4),
+nên `b64decode` ném `binascii.Error`, vốn là **subclass của `ValueError`**, và route map thành 400.
+Test xanh y hệt khi **đã xoá cap**. Nó kiểm validation base64 trong khi tuyên bố kiểm cap. Đã thay
+bằng `"QUFB" * 3_500_001` (14.000.004 ký tự, base64 hợp lệ) và assert thêm `"too large" in detail`;
+sabotage lại thì đỏ. Đây là lần thứ ba trong hai ngày sabotage bắt được một assertion kể lại chính
+setup của nó — quy tắc ADR-019 tiếp tục trả cổ tức.
+
+### 🟡 Hệ quả cho video: phải soi ĐÚNG request
+
+Luồng hai bước làm đổi chỗ bằng chứng Gemma. Debate giờ khởi động qua `/api/debate/start` (đường văn
+bản gõ tay), nên response của `start` **không có khối `ocr` nào cả** — `cross_check_model` **chỉ nằm
+trong response của `extract-image`**. Soi nhầm `start` sẽ tưởng tín hiệu biến mất.
+
+Đã cập nhật `gcp_screenshot_guide.md` PHẦN 6 Cách 2: bấm **Extract OCR** → soi request
+**`extract-image`** (không phải `start-with-image`), kèm cảnh báo nêu trên.
+
+### Kiểm chứng sau deploy — revision `00040-bd7`
+
+```
+POST extract-image, thiếu student_id (như UI cũ)  -> HTTP 422   ✓
+POST extract-image, không token                   -> HTTP 401   ✓
+POST extract-image, đầy đủ (như UI đã sửa)        -> HTTP 200, 1200 ký tự, 10.3s
+   ocr = {"confidence":"high","degraded":false,"cross_check_model":"gemma-4-26b-a4b-it-maas"}
+pytest -q -m "not e2e"      -> 320 passed   (trước review: 309)
+run_eval_suite --strict     -> 50/50
+```
