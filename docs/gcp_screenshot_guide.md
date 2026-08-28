@@ -278,6 +278,117 @@ https://console.cloud.google.com/traces/list?project=project-4fc36103-f4ca-49f6-
 
 ---
 
+## 🎯 **PHẦN 6: BẰNG CHỨNG GEMMA ĐANG CHẠY THẬT (ADR-028) — mới, Audit Wave 25**
+
+> **Vì sao cần riêng một phần:** Gemma 4 là model phụ mang **+0.2 điểm bonus** (`rule.txt:215`).
+> Nhưng **UI demo KHÔNG hiển thị nó** — giao diện chỉ cảnh báo khi `confidence` thấp, không hề nhắc
+> model nào chạy lượt hai. Nếu bạn chỉ quay UI, không có một khung hình nào chứng minh Gemma tồn tại,
+> và +0.2 trở thành lời khai suông.
+>
+> **Tin tốt:** điều lệ đòi *"Must demonstrate the backend is running on Google Cloud (ie: Google Cloud
+> Console, Cloud Run dashboard, **Vertex AI logs**, URL of .run)"* — nên **một khung hình log Vertex
+> phục vụ CẢ HAI**: vừa chứng minh backend chạy trên Google Cloud (bắt buộc), vừa chứng minh Gemma
+> (bonus). Đây là beat hiệu quả nhất trong video.
+
+### ⭐ Cách 1 (KHUYẾN NGHỊ) — Logs Explorer, hai họ model xen kẽ trên cùng một màn hình
+
+**Tab cần mở — dán nguyên URL này, query đã điền sẵn:**
+
+```
+https://console.cloud.google.com/logs/query;query=resource.labels.service_name%3D%22eduagent-class-aggregator%22%0A%28jsonPayload.message%3A%22gemma-4-26b-a4b-it-maas%22%20OR%20jsonPayload.message%3A%22gemini-3.5-flash%3AgenerateContent%22%29;duration=PT1H?project=project-4fc36103-f4ca-49f6-883
+```
+
+Nếu URL không load, dán thủ công vào ô query của Logs Explorer:
+
+```
+resource.labels.service_name="eduagent-class-aggregator"
+(jsonPayload.message:"gemma-4-26b-a4b-it-maas" OR jsonPayload.message:"gemini-3.5-flash:generateContent")
+```
+
+**Nội dung sẽ hiện ra (đã kiểm chứng thật ngày 2026-08-28):**
+
+```
+POST .../publishers/google/models/gemini-3.5-flash:generateContent      "HTTP/1.1 200 OK"
+POST .../publishers/google/models/gemini-3.5-flash:generateContent      "HTTP/1.1 200 OK"
+POST .../publishers/google/models/gemma-4-26b-a4b-it-maas:generateContent  "HTTP/1.1 200 OK"   <-- Gemma
+POST .../publishers/google/models/gemini-3.5-flash:generateContent      "HTTP/1.1 200 OK"
+```
+
+**Vì sao khung hình này mạnh:** hai họ model **xen kẽ nhau trong cùng một luồng request** — chính là
+hình ảnh trực quan của luận điểm ADR-028 (*"chúng tôi không so một model với chính nó"*). Không cần
+giải thích thêm, người xem tự thấy.
+
+**Câu nói khi quay (≈8 giây):**
+> *"This is the live Vertex AI log from the deployed service. Notice two different model families
+> interleaved on the same request: Gemini Vision transcribes the photo, then Gemma — a different
+> family — transcribes it again. We compare the two, because a model agreeing with itself proves
+> nothing."*
+
+**Bước làm:**
+1. **Chạy một request TRƯỚC** để có log tươi: mở Student Portal → preset *📷 2. Handwritten Essay (OCR)* → submit.
+2. Mở URL trên (hoặc dán query).
+3. Đặt **Time range = Last 1 hour**.
+4. Chờ ~15–30 giây rồi bấm **Refresh** — log Cloud Run có độ trễ ingest.
+5. Zoom Chrome **125%** để dòng `gemma-4-26b-a4b-it-maas` đọc được trên video.
+6. Chụp `06_vertex_gemma_crossmodel_logs.png`.
+
+⚠️ **Bẫy đã gặp thật:** log của service nằm ở trường **`jsonPayload.message`**, KHÔNG phải
+`textPayload`. Query bằng `textPayload:"gemma"` trả về **0 kết quả** và làm tưởng nhầm là Gemma không
+chạy. Dùng đúng query ở trên.
+
+### Cách 2 (dự phòng, nhanh hơn) — DevTools Network tab
+
+Nếu Logs Explorer chậm hoặc log chưa kịp ingest:
+
+1. Mở Student Portal, bấm **F12** → tab **Network**.
+2. Bấm nút **Extract OCR** (luồng hai bước: trích text → xem lại → rồi mới Start).
+3. Click request **`extract-image`** → tab **Response** (hoặc **Preview**) → mở khối `ocr`:
+
+```json
+"ocr": {
+  "confidence": "high",
+  "uncertain_segments": [],
+  "degraded": false,
+  "cross_check_model": "gemma-4-26b-a4b-it-maas"
+}
+```
+
+⚠️ **Quan trọng — soi đúng request.** Từ Audit Wave 25 giao diện dùng **luồng hai bước**: `extract-image`
+trả text ra ô soạn thảo để học sinh sửa, rồi `start` mới bắt đầu tranh biện. Khối `ocr` (và
+`cross_check_model`) **chỉ nằm trong response của `extract-image`** — response của `start` là đường
+văn bản gõ tay nên **không có** khối `ocr` nào cả. Soi nhầm `start` sẽ tưởng tín hiệu biến mất.
+*(Luồng cũ `start-with-image` một bước vẫn còn và vẫn trả `cross_check_model`, nhưng UI không dùng nó nữa.)*
+
+Trường `cross_check_model` được thêm ở Audit Wave 25 đúng để quay được cảnh này. **Ưu điểm:** đây là
+response trực tiếp từ Cloud Run, không phải log — tức thì, không delay. **Nhược điểm:** DevTools trông
+rối hơn trên video; nhớ đóng bớt panel thừa.
+
+### Cách 3 (chỉ khi cần, cho terminal beat)
+
+```bash
+URL=https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app
+T=$(curl -s -X POST $URL/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"role":"student","user_id":"zz9_ocrtest","password":"eduagent2026"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+# ... POST /api/debate/start-with-image với image_base64 ...
+# -> khối .ocr trả về "cross_check_model": "gemma-4-26b-a4b-it-maas"
+```
+
+### ⚠️ Nếu trên camera nó hiện `"gemini-fallback"` thì sao?
+
+**Đừng hoảng, và ĐỪNG quay lại giả vờ không thấy.** Nghĩa là hàng đợi MaaS dùng chung của Gemma đang
+đầy (`429 RESOURCE_EXHAUSTED`) và hệ thống đã tự lùi về lượt hai cùng-model đúng thiết kế. Đo được
+**0/16 lần fallback** trên live ngày 2026-08-28, nên xác suất thấp — nhưng nếu gặp, đó lại là **câu
+chuyện tốt hơn**, hãy nói thẳng:
+
+> *"That says gemini-fallback — Gemma runs on shared capacity, so it can be busy. When it is, the
+> system falls back to the original same-model check instead of failing the student's submission.
+> A busy queue never blocks a kid's homework."*
+
+Một hệ thống thừa nhận degrade trên camera đáng tin hơn một hệ thống chỉ chạy đúng lúc thuận lợi.
+
+---
+
 ## 📁 **Lưu File Chụp**
 
 Sau khi chụp xong tất cả, lưu vào thư mục:
@@ -293,14 +404,16 @@ assets/gcp_evidence/
 ├── 04_pubsub_dlq_config.png
 ├── 04_pubsub_dlq_topic.png
 ├── 05_cloud_logging_structured_list.png
-└── 05_cloud_logging_structured_json.png
+├── 05_cloud_logging_structured_json.png
+└── 06_vertex_gemma_crossmodel_logs.png      <-- Audit Wave 25 (bằng chứng Gemma + backend on GCP)
 ```
 
 ---
 
 ## ✅ **Checklist Trước Quay Video**
 
-- [ ] Tất cả 11 ảnh chụp đã lưu vào `assets/gcp_evidence/`
+- [ ] Tất cả 12 ảnh chụp đã lưu vào `assets/gcp_evidence/` (11 cũ + `06_vertex_gemma_crossmodel_logs.png`)
+- [ ] 🔴 **Đã chạy thử PHẦN 6 ít nhất một lần trước khi quay** — xác nhận log hiện `gemma-4-26b-a4b-it-maas` chứ không phải `gemini-fallback`
 - [ ] Mỗi ảnh có tên file theo chuẩn
 - [ ] Tất cả ảnh resize sao cho chữ rõ ràng (không quá to/nhỏ)
 - [ ] Đọc qua từng ảnh 1 lần để chắc nó match ý muốn show trong video
@@ -324,5 +437,7 @@ assets/gcp_evidence/
 | Logs trống | Chạy `python scripts/demo_ocr_run.py` để trigger request |
 | Firestore trống | Chạy seed script trước: `python scripts/seed_student_profiles.py` |
 | Traces không có | Traces delay ~30s từ lúc request; chờ rồi refresh |
+| **Query Gemma trả về 0 dòng** | Đang dùng `textPayload:` — sai trường. Log service nằm ở **`jsonPayload.message`**. Dùng query ở PHẦN 6 |
+| **Log Gemma chưa xuất hiện** | Ingest delay 15–30s. Chạy 1 request rồi chờ, bấm Refresh |
 | DLQ có messages | Bình thường nếu chạy chaos test trước |
 

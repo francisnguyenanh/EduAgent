@@ -23,6 +23,7 @@
 | **Firestore Database** | https://console.cloud.google.com/firestore/databases/default/data?project=project-4fc36103-f4ca-49f6-883 |
 | **Cloud Trace Explorer** | https://console.cloud.google.com/traces/list?project=project-4fc36103-f4ca-49f6-883 |
 | **Cloud Logging** | https://console.cloud.google.com/logs/query?project=project-4fc36103-f4ca-49f6-883 |
+| **⭐ Gemma cross-model proof (ADR-028)** | https://console.cloud.google.com/logs/query;query=resource.labels.service_name%3D%22eduagent-class-aggregator%22%0A%28jsonPayload.message%3A%22gemma-4-26b-a4b-it-maas%22%20OR%20jsonPayload.message%3A%22gemini-3.5-flash%3AgenerateContent%22%29;duration=PT1H?project=project-4fc36103-f4ca-49f6-883 |
 | **Secret Manager** | https://console.cloud.google.com/security/secret-manager?project=project-4fc36103-f4ca-49f6-883 |
 | **Firestore TTL Policies** | (Use CLI: `gcloud firestore fields ttls list --collection-group=debate_sessions`) |
 
@@ -35,10 +36,60 @@
 | **0:00 - 0:45** | Problem statement & handwritten essay OCR upload | *(No GCP required)* |
 | **0:45 - 1:30** | Student Socratic Socratic debate live run (1 turn) | *(No GCP required)* |
 | **1:30 - 2:15** | **Show Cloud Run logs & latency** | `02_cloud_run_service_metrics.png` + `05_cloud_logging_structured.png` |
+| **1:30 - 2:15** *(cùng beat)* | **⭐ Show Vertex AI logs: Gemini + Gemma interleaved** — serves the mandatory *"backend is running on Google Cloud… Vertex AI logs"* proof **and** the extra-model bonus in one frame | `06_vertex_gemma_crossmodel_logs.png` |
 | **2:15 - 2:45** | **Show Firestore data mutation** | `03_firestore_live_data.png` |
 | **2:45 - 3:15** | **Show Pub/Sub event-driven workflow & DLQ** | `04_pubsub_topic_dlq.png` |
 | **3:15 - 3:45** | **Show Cloud Trace span hierarchy waterfall** | `01_cloud_trace_e2e_spans.png` |
 | **3:45 - 4:00** | Conclusion & live `.run.app` URL display | *(No GCP required, show URL overlay)* |
+
+---
+
+## ⭐ GEMMA CROSS-MODEL EVIDENCE (ADR-028) — Audit Wave 25
+
+**Why this needs its own item:** Gemma 4 is the extra Google AI model claimed for the **+0.2 bonus**
+(`overview/rule.txt:215`). The demo UI does **not** display it — the interface only warns on low OCR
+confidence and never names the model that ran the second pass. Capture this, or nothing in the video
+proves Gemma exists.
+
+**It is dual-purpose.** The rules require the video to *"demonstrate the backend is running on Google
+Cloud (ie: Google Cloud Console, Cloud Run dashboard, **Vertex AI logs**, URL of .run)"*. One Vertex
+log frame satisfies that mandatory requirement **and** the optional bonus at the same time.
+
+### What to capture
+
+| # | Evidence | Where | Shows |
+|---|---|---|---|
+| 1 | **Vertex AI request log, both model families interleaved** | Logs Explorer (URL in the table above) | `gemini-3.5-flash:generateContent` and `gemma-4-26b-a4b-it-maas:generateContent`, both `200 OK`, in the same request flow |
+| 2 | *(backup)* **API response `ocr.cross_check_model`** | Browser DevTools → Network → `start-with-image` → Response | `"cross_check_model": "gemma-4-26b-a4b-it-maas"` — live from Cloud Run, no ingest delay |
+
+Step-by-step, the exact query, the on-camera line to say, and the fallback wording are in
+**`docs/gcp_screenshot_guide.md` → PHẦN 6**.
+
+### Pre-flight — run this before recording
+
+```bash
+# 1. Generate fresh traffic (Vertex logs have a 15-30s ingest delay)
+#    Student Portal -> preset "2. Handwritten Essay (OCR)" -> submit
+# 2. Confirm Gemma actually ran, not the fallback:
+gcloud logging read 'resource.labels.service_name="eduagent-class-aggregator"
+  AND jsonPayload.message:"gemma-4-26b-a4b-it-maas"' --limit 5 --freshness=15m \
+  --format='value(jsonPayload.message)'
+# Expect: POST .../models/gemma-4-26b-a4b-it-maas:generateContent "HTTP/1.1 200 OK"
+```
+
+- [ ] Ran a live OCR request within the last 15 minutes
+- [ ] Above command returns `gemma-4-26b-a4b-it-maas … 200 OK` (**not** empty, **not** `429`)
+- [ ] Logs Explorer time range set to **Last 1 hour**, Chrome zoom **125%** so the model id is legible
+- [ ] Captured `06_vertex_gemma_crossmodel_logs.png`
+
+⚠️ **Trap, hit for real during Wave 25:** the service logs live in **`jsonPayload.message`**, not
+`textPayload`. Querying `textPayload:"gemma"` returns **0 rows** and looks exactly like "Gemma never
+ran". Verified on 2026-08-28: the correct query returned **16 Gemma calls, 16× 200 OK, 0× 429, 0
+fallbacks**.
+
+⚠️ **If it shows `gemini-fallback` on camera** — say so out loud rather than re-taking. It means
+Gemma's shared MaaS queue was full and the system degraded as designed instead of failing the
+student's submission. Wording is in the screenshot guide, PHẦN 6.
 
 ---
 
