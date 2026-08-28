@@ -275,7 +275,7 @@ Zero LLM-as-judge dependency to eliminate reward-hacking loops. Output validated
 To ensure complete transparency to hackathon judges:
 - **Novel Contribution Statement:**
   > *"EduAgent's core contribution is NOT merely another Socratic debate chatbot. The breakthrough lies in the **2-Tier Event-Driven Agent Architecture** combining Student Long-Term Adaptive Memory, a Deterministic Teacher Pedagogical Dashboard, and a Metacognitive Self-Correction Loop that measures cognitive jumps."*
-- **Source Availability:** 100% open-source under MIT/Apache licensing, with zero proprietary closed-source dependencies.
+- **Source Availability:** Source is **publicly readable** on GitHub for evaluation and transparency, under **All Rights Reserved** (Copyright (c) 2026 francisnguyenanh) with an explicit grant to Google/Devpost/judges for contest evaluation. Zero proprietary closed-source dependencies; all third-party libraries are open source under their own licences. *(Audit Wave 27: previously read "100% open-source under MIT/Apache licensing" — wrong on both counts. The repo never carried Apache, and it is no longer MIT.)*
 
 ---
 

@@ -4,7 +4,7 @@
 [![Google ADK2](https://img.shields.io/badge/Framework-Google_ADK2-34A853?logo=google&logoColor=white)](https://github.com/google/agent-development-kit)
 [![Models](https://img.shields.io/badge/Models-Gemini_3.5_%7C_3.7_Flash_%7C_Gemma_4-EA4335?logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
 [![Eval Suite](https://img.shields.io/badge/ADK_Eval_Suite-50%2F50_Passed-0F9D58?logo=pytest&logoColor=white)](eval/results/eval_report.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: All Rights Reserved](https://img.shields.io/badge/License-All_Rights_Reserved-lightgrey.svg)](LICENSE)
 
 > **All Things Agentic Hackathon** — Track: **Collaborative Partner**  
 > *Philosophy: "Using AI to teach students how NOT to depend on AI."*
@@ -256,9 +256,10 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 | **ADR-030** | The Draft The Teacher Never Saw | HITL / UX | The digest draft lands in the *system* mailbox, so the dashboard now renders the draft's own body. Auto-send was rejected — it would delete ADR-001. |
 | **ADR-031** | Why The Draft Is Missing, Not Just That It Is | Honesty / Degradation | An expired OAuth token and an unset recipient used to render the *same* badge. `gmail_draft_status` now distinguishes `created` / `failed` / `no_recipient`. |
 | **ADR-032** | Loosening The Login Bucket On Purpose | Security / Judging | Login burst 5→15, 1/10s→1/2s so a month-long review is not locked out. Login does no LLM call; the Vertex-spend bucket is untouched. |
+| **ADR-033** | Public For Reading Is Not A Licence To Reuse | IP / Licensing | MIT replaced with **All Rights Reserved** plus an explicit judging grant. The Rules require no licence for your own work; MIT invited the commercial reuse the author does not intend. Full rationale in §9. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-032)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-032; ADR-033 is documented in §9)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
 
@@ -371,7 +372,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 
 </details>
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26); ADR-028 from the Wave 24 pre-submission audit (2026-08-27); ADR-029 and ADR-030 from the Wave 25/26 review (2026-08-27 and 2026-08-28); ADR-031 and ADR-032 from the Wave 27 final pre-submission audit (2026-08-28) — see `TODO.md` and `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26); ADR-028 from the Wave 24 pre-submission audit (2026-08-27); ADR-029 and ADR-030 from the Wave 25/26 review (2026-08-27 and 2026-08-28); ADR-031, ADR-032 and ADR-033 from the Wave 27 final pre-submission audit (2026-08-28) — see `TODO.md` and `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
 
 ---
 
@@ -592,4 +593,16 @@ visible rather than silent.
 
 ## 9. License
 
-Distributed under the **MIT License**. See `LICENSE` for details.
+**Copyright (c) 2026 francisnguyenanh. All Rights Reserved.** This repository is public for
+evaluation and transparency, which is not the same as being open source: you may read the source,
+but reuse requires written permission. `LICENSE` carries one explicit exception — a perpetual,
+irrevocable, royalty-free grant to Google, Devpost and the hackathon judges to evaluate, reproduce
+and promote this Project, mirroring Section 12 of the Official Rules so the notice can never be
+read as restricting the judging access Section 6 requires.
+
+*Audit Wave 27: this repository previously carried the MIT Licence. The Rules require no particular
+licence for an entrant's own work — every mention of "licence" there concerns third-party software
+the entrant uses, or the evaluation licence granted to Google. MIT had been adopted only because an
+early draft of `docs/eligibility_statement.md` already asserted it, and it invites exactly the
+closed-source commercial reuse the author does not intend. Third-party dependencies in
+`requirements.txt` remain under their own licences.*

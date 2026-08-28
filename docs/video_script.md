@@ -200,9 +200,9 @@ timeline
 * **Visual:** Live Cloud Run URL, GitHub repository badge, and Judge 1-Click Showcase screen.
   `[VISUAL: "EduAgent / Powered by Gemini & Google Cloud" text lockup appears on screen simultaneously with QR code.]`
 * **Voiceover:**
-  > *"EduAgent bridges the gap between individual Socratic coaching and scalable classroom intelligence. Fully deployed on Google Cloud, MIT-licensed, and verified with deterministic rigor.*
+  > *"EduAgent bridges the gap between individual Socratic coaching and scalable classroom intelligence. Fully deployed on Google Cloud, and verified with deterministic rigor.*
   >
   > *Don't give every student an answer. Give every student a reason to think.*
   >
   > *Experience EduAgent live at our Cloud Run showcase link today."*
-  > (CTA "Experience EduAgent..." remains the final line. Say **MIT**, not "MIT/Apache" — `LICENSE` in the repo root is MIT, and only MIT; naming a licence the repo does not carry is a free credibility hit.)
+  > (CTA "Experience EduAgent..." remains the final line. ⚠️ **Audit Wave 27 — do NOT say "MIT-licensed" any more.** The repo is now **All Rights Reserved**, public for evaluation, so the voiceover above has had that phrase removed. Say **"fully deployed on Google Cloud and verified with deterministic rigor"** and stop there; if a judge asks about licensing in Q&A, the honest answer is *"the source is public for evaluation, but it is not open source — the rules do not require it, and I would rather not invite closed-source commercial reuse."* Naming a licence the repo does not carry is a free credibility hit — which is exactly why this line changed.)

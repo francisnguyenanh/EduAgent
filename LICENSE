@@ -1,21 +1,52 @@
-MIT License
+Copyright (c) 2026 francisnguyenanh. All Rights Reserved.
 
-Copyright (c) 2026 francisnguyenanh
+This repository is published publicly for evaluation and transparency. Making
+source code readable is not the same as licensing it: no permission to copy,
+modify, merge, publish, distribute, sublicense, sell, or create derivative
+works of this software is granted, except as stated below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+GRANT FOR HACKATHON EVALUATION
+------------------------------
+Permission is granted to Google LLC, Devpost, Inc., their affiliates, agents,
+and the judges of the All Things Agentic Hackathon to use, reproduce, adapt,
+modify, publish, distribute, publicly perform, create derivative works from,
+and publicly display this software:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  (1) for the purposes of evaluating this Project for that contest, and
+  (2) in connection with advertising and promotion of the contest.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+This grant is perpetual, irrevocable, worldwide, royalty-free, and
+non-exclusive, and mirrors the licence granted to Google under Section 12 of
+the contest's Official Rules. It exists so that this notice can never be read
+as restricting the access that Section 6 ("Testing") of those Rules requires:
+the Project is made available to the Sponsor, Administrator, and Judges free
+of charge and without restriction for testing, evaluation, and use.
+
+Anyone may read this source, and may fork it within GitHub as GitHub's Terms
+of Service permit. Any other reuse requires prior written permission from the
+copyright holder.
+
+WHY THIS IS NOT AN OPEN-SOURCE LICENCE
+--------------------------------------
+This repository previously carried the MIT Licence. The Official Rules do not
+require an entrant to license their own work under any particular terms --
+every mention of "licence" in those Rules concerns either third-party software
+the entrant *uses*, or the evaluation licence granted to Google. MIT was
+adopted because an earlier draft of `docs/eligibility_statement.md` had
+already asserted it, not because it was chosen deliberately. It was replaced
+in Audit Wave 27 once that was noticed, because MIT actively invites
+closed-source commercial reuse of this work, which is not the author's intent.
+
+NO WARRANTY
+-----------
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+EduAgent also depends on third-party open-source software (see
+`requirements.txt`). Those components remain under their own licences, and
+nothing in this notice alters them.

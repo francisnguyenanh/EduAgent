@@ -46,9 +46,20 @@ the novel architectural contributions developed during this hackathon:
 
 ---
 
-## 2. Codebase Standards & Open Source Licensing
+## 2. Codebase Standards & Licensing
 
-* **License:** MIT License / Open Source.
+* **License:** **All Rights Reserved** (Copyright (c) 2026 francisnguyenanh). The repository is
+  public for evaluation and transparency; that is deliberately *not* the same as an open-source
+  grant. `LICENSE` carries one explicit exception: a perpetual, irrevocable, royalty-free licence
+  to Google, Devpost and the judges to use, reproduce, adapt and promote this Project for contest
+  evaluation — mirroring Official Rules §12, and written so this notice cannot be read as
+  restricting the unrestricted testing access §6 requires.
+  > *Audit Wave 27 correction: this section was headed "Open Source Licensing" and asserted "MIT
+  > License / Open Source". The Official Rules impose no licensing requirement on an entrant's own
+  > work; MIT had been adopted only because this document already claimed it. Since MIT actively
+  > permits closed-source commercial reuse, which is not the author's intent, both the licence and
+  > this claim were corrected. All third-party dependencies remain under their own licences, and
+  > the project still contains zero proprietary closed-source dependencies.*
 * **Code Standards:** 100% type-annotated Python (FastAPI, Google GenAI SDK, Pydantic v2, OpenTelemetry), structured error boundaries, and measured test coverage — **327 pytest cases** (`pytest -q -m "not e2e"`, re-measured 2026-08-28) and **88% statement coverage** over `src/eduagent`, measured 2026-08-27 when the suite stood at 309 tests. Coverage requires a tool that is deliberately *not* a runtime dependency, so reproduce it with `pip install pytest-cov && pytest --cov=src/eduagent --cov-report=term -q -m "not e2e"`. Plus **50 deterministic eval benchmarks**, every one of them sabotage-verified as capable of failing (ADR-019).
 
 > *Audit Wave 27 correction: this line previously read "274 pytest cases, 86% statement coverage" while `README.md` said "309 tests, 88%" — two different figures for the same measurement on the same date, and the command quoted as evidence failed with `unrecognized arguments: --cov` because `pytest-cov` is not declared in `requirements.txt`. Both numbers and the reproduction instructions are now stated accurately.*
