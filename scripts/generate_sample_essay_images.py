@@ -1,5 +1,5 @@
 """PHASE 6: generates the 2 placeholder sample images referenced in
-TODO.md's Phase 6 DoD ("chuan bi san 2 anh mau cho video: 1 anh 'dep vua
+Phase 6's DoD ("chuan bi san 2 anh mau cho video: 1 anh 'dep vua
 phai' + 1 anh that su lon xon").
 
 IMPORTANT: these are SYNTHETIC placeholders (rendered typed text, not real
@@ -56,7 +56,7 @@ def main() -> None:
     # A heavy blur simulates real messy-photo conditions (poor lighting,
     # camera shake, low resolution) well enough to exercise the
     # low-confidence / '[[unclear]]' path -- verified for real against
-    # Vertex AI during development (see TODO.md PHASE 6 for the finding
+    # Vertex AI during development (see the ADR-007 / ADR-008 entries in README.md for the finding
     # that led to the anti-hallucination rule in nodes/ocr.py's prompt).
     messy_path = _ASSETS_DIR / "sample_essay_messy.png"
     _render(_MESSY_ESSAY_TEXT, blur_radius=6.0).save(messy_path)

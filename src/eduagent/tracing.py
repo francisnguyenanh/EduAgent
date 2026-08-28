@@ -1,6 +1,6 @@
 """Cloud Trace instrumentation -- one real span per graph node.
 
-PROJECT_WIKI.md 8.3 / TODO.md PHASE 4: "Mot trace span hoan chinh la 'proof
+PROJECT_WIKI.md 8.3 (Phase 4): "Mot trace span hoan chinh la 'proof
 of action' manh nhat trong ca video." Wired at the lowest common point
 (a decorator each node applies to itself) rather than trying to instrument
 the ADK Workflow internals, so it works whether a node runs inside the

@@ -1,6 +1,6 @@
 """ĐỢT 4 #3 -- Parent Communication Co-Pilot ("Copy Parent Update Note").
 
-TODO.md's own risk analysis rules out auto-sending email to parents
+This project's own risk analysis rules out auto-sending email to parents
 (mass mailing 40+ inboxes on every submission is a FERPA/COPPA risk and
 drowns quota, same discipline as Phase 0/3's Gmail HITL gate). Instead
 this generates ONE short, encouraging note text for the teacher to

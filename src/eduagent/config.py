@@ -66,7 +66,7 @@ class PubSubConfig:
     dead_letter_topic: str = "essay-evaluated-dlq"
     # ADR-003: Google Pub/Sub enforces a platform minimum of 5 for
     # max-delivery-attempts (a subscription create with 3 was rejected) --
-    # the TODO.md plan's "fail 3 times -> DLQ" is implemented as 5, the
+    # the original plan's "fail 3 times -> DLQ" is implemented as 5, the
     # platform floor, not a design choice.
     max_delivery_attempts: int = 5
     # ĐỢT 8: the Cloud Run service is deployed --allow-unauthenticated (so

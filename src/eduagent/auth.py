@@ -2,7 +2,7 @@
 
 Not a real auth system (no Firebase Auth/Keycloak, no session tokens,
 no password hashing/storage) -- deliberately so, per the hackathon-scope
-tradeoff in TODO.md's ĐỢT 4: a judge should feel a multi-tenant SaaS
+tradeoff recorded in Wave 4: a judge should feel a multi-tenant SaaS
 (Student Portal / Teacher Portal, correct class_id scoping) without
 burning implementation time on infrastructure the eval rubric doesn't
 score. `EDUAGENT_MOCK_PASSWORD` is one shared demo password (not
@@ -10,7 +10,7 @@ per-user secrets), and login is stateless -- the frontend just carries
 the returned identity in memory for the rest of the session, the same
 way `interactive.py` already carries debate session state in memory.
 
-ID convention (see TODO.md ĐỢT 4): "<class_id>_<local_id>", e.g.
+ID convention (Wave 4): "<class_id>_<local_id>", e.g.
 "c1_stu01" or "12A1_NguyenAn" -- class_id is everything before the
 FIRST underscore, local_id is everything after it. A bare ID with no
 underscore is rejected (a class_id can never be inferred from nothing).

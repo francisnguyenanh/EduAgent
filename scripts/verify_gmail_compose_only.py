@@ -1,7 +1,7 @@
 """Phase 0 verification: what gmail.compose actually enforces, and what it
 doesn't (real finding, tested 2026-08-24 against the live Gmail API).
 
-CORRECTED UNDERSTANDING (see TODO.md Phase 0 / PROJECT_WIKI.md 9.1 for the
+CORRECTED UNDERSTANDING (see ADR-001 in README.md / PROJECT_WIKI.md 9.1 for the
 original, WRONG assumption):
   Google's gmail.compose scope is documented as "create, read, update, and
   delete drafts; send messages and drafts" — it is NOT a send-blocking scope.

@@ -1,5 +1,5 @@
 """Phase 2 seed data: 5 student profiles with varied history, per
-TODO.md PHASE 2 spec, so Phase 3's Class Aggregator has something real to
+the Phase 2 spec, so Phase 3's Class Aggregator has something real to
 rank against during development and the demo video.
 
 Profiles (all in class 'c1'):

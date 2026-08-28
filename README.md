@@ -150,7 +150,8 @@ src/eduagent/
 eval/             ADK Eval Suite (evalset.py, results/) + eval/test_images/ (handwritten test assets)
 scripts/          Diagnostic tools (doctor.py), demos (demo_tier1_run.py), and deployment automation
 tests/            Pytest test suite (>240 tests, unit + integration)
-docs/             Submission artefacts (Devpost draft, video script, failure matrix, eligibility statement)
+docs/             Technical documentation (failure matrix, data lifecycle & privacy threat model,
+                  eligibility statement, and the three generated evidence reports)
 overview/         PROJECT_WIKI.md (full design narrative + ADR history, Vietnamese) + the official rules text
 assets/           gcp_evidence/ (Cloud Console screenshots) + sample_essays/
 ```
@@ -344,8 +345,8 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 
 ### ADR-029: Nobody Should Debate A Transcription They Have Not Read
 * **Context:** `/api/debate/start-with-image` did OCR and opened the Socratic debate in **one** call, so the first thing a student saw of their own handwriting was an AI already arguing with a transcription they had never read. ADR-007/ADR-028 reduce how often that transcription is wrong; they cannot make it zero, and a `[[unclear]]` in the wrong sentence changes what the essay *argues*.
-* **Decision:** Ingest is two steps. `POST /api/debate/extract-image` and `/api/debate/extract-gdoc` return the transcription and nothing else; the student reads it, edits it if the model misread a word, and only then does `POST /api/debate/start` open the debate on text a human has approved. The one-call endpoints remain for programmatic use and for the latency figures in `docs/video_script.md`. This is the second human gate in the system — the first being ADR-001 at the Gmail boundary — and it sits at the other end of the pipeline, on **input** rather than output.
-* **Where the evidence moved:** `cross_check_model` (which model actually ran the ADR-028 second pass) is returned by the **`extract-image`** response, not by `start`. Anyone filming or auditing the Gemma claim must inspect that request — `docs/gcp_screenshot_guide.md` Part 6 was corrected accordingly. Inspecting `start` shows no `ocr` block at all and reads as if the signal had vanished.
+* **Decision:** Ingest is two steps. `POST /api/debate/extract-image` and `/api/debate/extract-gdoc` return the transcription and nothing else; the student reads it, edits it if the model misread a word, and only then does `POST /api/debate/start` open the debate on text a human has approved. The one-call endpoints remain for programmatic use, and are the ones the historical latency figures were measured against. This is the second human gate in the system — the first being ADR-001 at the Gmail boundary — and it sits at the other end of the pipeline, on **input** rather than output.
+* **Where the evidence moved:** `cross_check_model` (which model actually ran the ADR-028 second pass) is returned by the **`extract-image`** response, not by `start`. Anyone auditing the Gemma claim must inspect that request. Inspecting `start` shows no `ocr` block at all and reads as if the signal had vanished.
 * **The bug this shipped with:** the first UI wiring sent no `student_id`, so every Extract click returned `422` — the two-step flow had introduced a second place where identity has to be attached and only the first was wired. Both extract routes run `_verify_student_auth` and `_enforce_rate_limit` **before** touching Vertex, so authorization is decided before any spend.
 * **Rejected Alternative:** sanitizing at extract time. Extract returns the raw transcription because the student is about to edit it; `strip_injection_attempts` runs at `/api/debate/start`, the boundary where the text actually becomes a submission. Sanitizing twice would have hidden which boundary was the real one.
 
@@ -372,7 +373,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 
 </details>
 
-(ADR-001 through ADR-003 were captured live in `TODO.md` during Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26); ADR-028 from the Wave 24 pre-submission audit (2026-08-27); ADR-029 and ADR-030 from the Wave 25/26 review (2026-08-27 and 2026-08-28); ADR-031, ADR-032 and ADR-033 from the Wave 27 final pre-submission audit (2026-08-28) — see `TODO.md` and `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence.)
+(Each ADR was captured at the moment the decision was made, in a running engineering log kept alongside the work. ADR-001 through ADR-003 date from Phase 0/3; ADR-004 onward were captured during the Wave 2 Enhancements and Phase 5/6 work; ADR-012 & ADR-013 were added during Phase 7/Wave 6; ADR-014 was added during Wave 8; ADR-015 during Wave 10 and corrected in Wave 12; ADR-016 through ADR-019 came out of the Wave 12 full audit; ADR-020 from an external review in Wave 14; ADR-021 from a second external review in Wave 15; ADR-022 and ADR-023 from the Wave 15 senior-engineer audit (2026-08-26); ADR-024 and ADR-025 from the Wave 16 independent review; ADR-026 and ADR-027 from the Wave 17 cross-review (2026-08-26); ADR-028 from the Wave 24 pre-submission audit (2026-08-27); ADR-029 and ADR-030 from the Wave 25/26 review (2026-08-27 and 2026-08-28); ADR-031, ADR-032 and ADR-033 from the Wave 27 final pre-submission audit (2026-08-28) — see `overview/PROJECT_WIKI.md` section 12 for the full narrative and verification evidence. The underlying wave-by-wave audit log is internal working material and is not part of this repository; every decision it produced is recorded above, and the commit history carries the dated evidence.)
 
 ---
 
@@ -403,7 +404,7 @@ What this actually costs us:
 
 **Why we did not split it before the deadline:** a second service means another Dockerfile, service
 account binding, push endpoint URL, and a full re-run of the deployment evidence chain (ADR-014's
-OIDC verification, `scripts/doctor.py`, `docs/gcp_evidence_checklist.md`). That is real risk added in
+OIDC verification, `scripts/doctor.py`). That is real risk added in
 the last week for an architecture change no judging criterion asks for. Splitting is the first thing
 we would do with a sixth day.
 
@@ -490,7 +491,7 @@ The OpenTelemetry span tree produced by the `@traced_node` decorator across the 
 [`docs/trace_evidence.md`](docs/trace_evidence.md). ⚠️ **Read that file as structural proof only —
 its millisecond figures are produced by timed sleep stubs, not by live Gemini calls, and the file
 says so at the top.** For real latencies, submit an essay on the live deployment and read Cloud
-Trace in the Google Cloud Console (see [`docs/gcp_evidence_checklist.md`](docs/gcp_evidence_checklist.md)).
+Trace in the Google Cloud Console for the deployed revision.
 
 ---
 

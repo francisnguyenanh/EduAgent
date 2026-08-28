@@ -3,7 +3,7 @@ routing detection (deterministic, zero LLM) and the OCR node's degrade path.
 Mocks generate_json_from_image so this suite runs fast and offline -- the
 real Vertex AI Vision behavior (verbatim transcription, low-confidence
 flagging on a blurry image, anti-hallucination) was verified manually against
-live Gemini during development; see TODO.md PHASE 6 for that evidence.
+live Gemini during development; see ADR-007/ADR-008 in README.md for that evidence.
 """
 
 from __future__ import annotations

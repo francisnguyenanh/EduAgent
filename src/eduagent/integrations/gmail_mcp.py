@@ -1,6 +1,6 @@
 """Gmail MCP integration -- compose-only by CODE DISCIPLINE, not OAuth scope.
 
-ADR-001 (see TODO.md PHASE 0 / PROJECT_WIKI.md 9.1): real testing proved
+ADR-001 (see README.md's ADR table / PROJECT_WIKI.md 9.1): real testing proved
 `gmail.compose` does NOT block `messages.send()` at the credential layer --
 Google's own docs describe the scope as including send. So the least-
 privilege guarantee here is enforced by never calling `.send()` anywhere in
@@ -34,7 +34,7 @@ def _find_client_secret() -> Path:
     if not matches:
         raise FileNotFoundError(
             f"No client_secret_*.json found in {_SECRETS_DIR}. "
-            "Download it from Cloud Console > Credentials > OAuth client ID (see TODO.md PHASE 0)."
+            "Download it from Cloud Console > Credentials > OAuth client ID (see README.md section 3)."
         )
     return Path(matches[0])
 

@@ -177,7 +177,7 @@ def client_key(*, x_forwarded_for: str | None, peer_host: str | None) -> str:
     sending a different random `X-Forwarded-For` per request got a brand-new
     full bucket every time -- verified against the live service, where 8/8
     requests with random spoofed values passed while the real bucket was
-    drained (see TODO.md ĐỢT 17).
+    drained (ADR-026; see README.md).
 
     Falls back to the socket peer when there is no proxy (local runs).
 
