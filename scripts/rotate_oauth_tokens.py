@@ -25,6 +25,7 @@ Usage:
     .venv/bin/python scripts/rotate_oauth_tokens.py --gmail-only
     .venv/bin/python scripts/rotate_oauth_tokens.py --sheets-only
     .venv/bin/python scripts/rotate_oauth_tokens.py --skip-redeploy
+    .venv/bin/python scripts/rotate_oauth_tokens.py --gmail-only --upload-only   # recovery
 """
 
 from __future__ import annotations
@@ -108,9 +109,29 @@ def _mint_new_token(scopes: list[str], token_path: Path, label: str):
     return creds
 
 
+def _gcloud() -> str:
+    """Absolute path to the gcloud launcher.
+
+    ĐỢT 27: this script was the one place the ĐỢT 15 #5 Windows fix never
+    reached. `doctor.py::_gcloud_executable()` and
+    `deploy_to_cloud_run.py::_gcloud()` both resolve the launcher first,
+    because on Windows gcloud ships as `gcloud.CMD` and CreateProcess does not
+    apply PATHEXT to an argv[0] of "gcloud" -- so the bare string raised
+    `FileNotFoundError: [WinError 2]`. It surfaced at the worst moment: after
+    the browser consent had already minted a new token, so the token existed
+    locally but never reached Secret Manager, leaving the rotation half done.
+    """
+    import shutil
+
+    resolved = shutil.which("gcloud") or shutil.which("gcloud.cmd")
+    if not resolved:
+        sys.exit("[FAIL] gcloud CLI not found on PATH. Install the Google Cloud SDK, then re-run this script.")
+    return resolved
+
+
 def _upload_secret_version(secret_name: str, token_path: Path) -> None:
     result = subprocess.run(
-        ["gcloud", "secrets", "versions", "add", secret_name, f"--data-file={token_path}"],
+        [_gcloud(), "secrets", "versions", "add", secret_name, f"--data-file={token_path}"],
         capture_output=True,
         text=True,
     )
@@ -120,8 +141,21 @@ def _upload_secret_version(secret_name: str, token_path: Path) -> None:
     print(f"  [ok] new version of secret '{secret_name}' uploaded.")
 
 
-def rotate(which: str) -> None:
+def rotate(which: str, *, upload_only: bool = False) -> None:
     cfg = _TARGETS[which]
+    if upload_only:
+        # ĐỢT 27 recovery path. Rotation is revoke -> mint -> upload, and the
+        # upload used to be able to fail on Windows *after* the browser consent
+        # had already produced a valid token. Re-running the whole thing would
+        # then revoke that good token and demand consent a second time --
+        # punishing the user for the script's own bug. This uploads the token
+        # already on disk instead. Refuses to guess: if there is no local token,
+        # say so rather than uploading nothing.
+        print(f"\n=== Uploading EXISTING local {which} token (no revoke, no consent) ===")
+        if not cfg["token_path"].exists():
+            sys.exit(f"[FAIL] no local token at {cfg['token_path']} -- nothing to upload. Run without --upload-only.")
+        _upload_secret_version(cfg["secret_name"], cfg["token_path"])
+        return
     print(f"\n=== Rotating {which} OAuth token ===")
     _revoke_old_token(cfg["token_path"], which)
     cfg["token_path"].unlink(missing_ok=True)  # force a fresh grant, not a refresh() of the old one
@@ -130,10 +164,14 @@ def rotate(which: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Rotate the Gmail/Sheets OAuth refresh tokens (ĐỢT 16).")
+    # ASCII only. argparse prints this to a console that may be cp932; a
+    # non-ASCII character here raises UnicodeEncodeError and kills --help,
+    # which is exactly what someone runs when the script has confused them.
+    parser = argparse.ArgumentParser(description="Rotate the Gmail/Sheets OAuth refresh tokens (Audit Wave 16).")
     parser.add_argument("--gmail-only", action="store_true")
     parser.add_argument("--sheets-only", action="store_true")
     parser.add_argument("--skip-redeploy", action="store_true", help="Don't run deploy_to_cloud_run.py at the end.")
+    parser.add_argument("--upload-only", action="store_true", help="Upload the token already on disk to Secret Manager; skip revoke and browser consent. Recovery path when the upload failed after consent succeeded.")
     args = parser.parse_args()
 
     targets = ["gmail", "sheets"]
@@ -143,7 +181,7 @@ def main() -> None:
         targets = ["sheets"]
 
     for which in targets:
-        rotate(which)
+        rotate(which, upload_only=args.upload_only)
 
     print("\n=== Done rotating token(s). New Secret Manager versions are live. ===")
     if args.skip_redeploy:
