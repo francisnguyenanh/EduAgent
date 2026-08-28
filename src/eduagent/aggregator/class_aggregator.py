@@ -14,6 +14,8 @@ Sheets on every test run.
 
 from __future__ import annotations
 
+import html
+
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -60,6 +62,16 @@ def _display_name(student_id: str, name_by_id: dict[str, str]) -> str:
     from the ranking data instead of trusting the LLM to spell it right."""
     name = name_by_id.get(student_id)
     return f"{name} ({student_id})" if name else student_id
+
+
+def _h(value) -> str:
+    """ĐỢT 26 #1.3: HTML-escapes every model- or user-derived string before it
+    lands in format_digest_email_html(). Gmail sanitizes what it renders, so
+    this was invisible on the email path -- but the same HTML is now served to
+    the Teacher Dashboard preview, where an unescaped `<` out of an LLM field
+    would be live markup in our own origin. One renderer, escaped at the source,
+    so the preview can never drift from the draft."""
+    return html.escape("" if value is None else str(value), quote=True)
 
 
 def format_digest_email(digest: dict, name_by_id: dict[str, str] | None = None) -> str:
@@ -109,10 +121,10 @@ def format_digest_email_html(digest: dict, ranked_students: list[dict], name_by_
         r = breakdown_by_id.get(p["student_id"], {})
         rows.append(
             "<tr>"
-            f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;\">{_display_name(p['student_id'], name_by_id)}</td>"
-            f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;\">{r.get('priority', '')}</td>"
+            f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;\">{_h(_display_name(p['student_id'], name_by_id))}</td>"
+            f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;\">{_h(r.get('priority', ''))}</td>"
             f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;\">{_priority_badges(r.get('reason', {}))}</td>"
-            f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;\">{p['why']}</td>"
+            f"<td style=\"padding:6px 10px;border-bottom:1px solid #e5e7eb;\">{_h(p['why'])}</td>"
             "</tr>"
         )
 
@@ -131,34 +143,34 @@ def format_digest_email_html(digest: dict, ranked_students: list[dict], name_by_
     mini_lesson = ""
     alp = digest.get("actionable_lesson_plan")
     if alp and isinstance(alp, dict):
-        steps_html = "".join([f"<li>{s}</li>" for s in alp.get("in_class_activity_steps", [])])
+        steps_html = "".join([f"<li>{_h(step)}</li>" for step in alp.get("in_class_activity_steps", [])])
         mini_lesson = (
             '<div style="margin-top:16px;padding:14px 18px;background:#f0fdf4;border-left:4px solid #16a34a;'
             'border-radius:4px;font-family:Arial,sans-serif;font-size:13px;color:#14532d;">'
-            f'<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">📚 {alp.get("title", "15-Minute Mini-Lesson Plan")}</div>'
-            f'<div style="margin-bottom:8px;"><strong>Objective:</strong> {alp.get("objective", "")}</div>'
+            f'<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">📚 {_h(alp.get("title", "15-Minute Mini-Lesson Plan"))}</div>'
+            f'<div style="margin-bottom:8px;"><strong>Objective:</strong> {_h(alp.get("objective", ""))}</div>'
             f'<div style="margin-bottom:6px;"><strong>In-Class Activity Steps:</strong><ol style="margin:4px 0 8px 20px;padding:0;">{steps_html}</ol></div>'
             f'<div style="font-size:12px;color:#166534;background:#dcfce7;padding:6px 10px;border-radius:4px;">'
-            f'<strong>Example to dissect:</strong> "{alp.get("example", "")}"<br>'
-            f'<strong>Exemplary counterexample:</strong> "{alp.get("counterexample", "")}"'
+            f'<strong>Example to dissect:</strong> "{_h(alp.get("example", ""))}"<br>'
+            f'<strong>Exemplary counterexample:</strong> "{_h(alp.get("counterexample", ""))}"'
             '</div></div>'
         )
     elif digest.get("mini_lesson_suggestion"):
         mini_lesson = (
             '<div style="margin-top:16px;padding:12px 16px;background:#f0fdf4;border-left:4px solid #16a34a;'
             'font-family:Arial,sans-serif;font-size:13px;">'
-            f"<strong>Suggested mini-lesson:</strong> {digest['mini_lesson_suggestion']}</div>"
+            f"<strong>Suggested mini-lesson:</strong> {_h(digest['mini_lesson_suggestion'])}</div>"
         )
 
     class_pattern = (
-        f'<p style="font-family:Arial,sans-serif;font-size:13px;">Class-wide pattern: {digest["class_wide_pattern"]}</p>'
+        f'<p style="font-family:Arial,sans-serif;font-size:13px;">Class-wide pattern: {_h(digest["class_wide_pattern"])}</p>'
         if digest.get("class_wide_pattern")
         else ""
     )
 
     return (
         f'<div style="font-family:Arial,sans-serif;">'
-        f'<h2 style="font-size:16px;">{digest["headline"]}</h2>'
+        f'<h2 style="font-size:16px;">{_h(digest["headline"])}</h2>'
         f"{table}{class_pattern}{mini_lesson}"
         "</div>"
     )

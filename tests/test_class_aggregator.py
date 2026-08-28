@@ -54,6 +54,28 @@ def test_format_digest_email_html_includes_table_and_mini_lesson():
     assert "15-minute exercise" in html
 
 
+def test_format_digest_email_html_escapes_model_generated_text():
+    """ĐỢT 26 #1.3: this HTML is no longer Gmail-only -- it is also injected into
+    the Teacher Dashboard preview. Gmail sanitizes; our own origin does not, so
+    markup arriving in an LLM-written field must come out inert.
+
+    Sabotage check: drop `_h(...)` from the `why` cell and this goes red."""
+    digest = {
+        "headline": "<b>headline</b>",
+        "priority_students": [{"student_id": "s1", "why": "<script>alert(1)</script>"}],
+        "class_wide_pattern": "cause & effect",
+        "mini_lesson_suggestion": "compare <a> and <b>",
+    }
+    html = format_digest_email_html(digest, [{"student_id": "s1", "priority": 9.0, "reason": {}}])
+
+    assert "<script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "<b>headline</b>" not in html
+    assert "cause &amp; effect" in html
+    # The chrome the function itself writes must survive escaping.
+    assert "<table" in html
+
+
 def test_process_event_skips_duplicate_delivery():
     with patch("eduagent.aggregator.class_aggregator.claim_event", return_value=False):
         result = asyncio.run(process_event({"event_id": "e1", "student_id": "s1", "class_id": "c1", "essay_id": "e1"}))

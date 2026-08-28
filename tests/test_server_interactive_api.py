@@ -155,8 +155,54 @@ def test_api_class_analytics_returns_digests():
         response = client.get("/api/classes/c1/analytics", headers=_C1_HEADERS)
 
     assert response.status_code == 200
-    assert response.json() == {"class_id": "c1", "digests": fake_digests}
+    body = response.json()
+    assert body["class_id"] == "c1"
+    # Compares field-by-field rather than to `fake_digests`: the route enriches
+    # the dicts the mock handed it IN PLACE, so an `== fake_digests` assertion
+    # would stay green even if the enrichment were deleted -- the mock's own
+    # object would have mutated alongside it. Asserted against literals instead.
+    assert [d["digest_id"] for d in body["digests"]] == ["e1"]
+    assert body["digests"][0]["timestamp"] == "t1"
     mock_list.assert_called_once_with(class_id="c1", limit=10)
+
+
+def test_api_class_analytics_attaches_the_draft_body_as_digest_html():
+    """ĐỢT 26 #1.3: a judge with no access to the system mailbox must still be
+    able to read what the Gmail draft says. The preview is the draft body."""
+    fake_digests = [
+        {
+            "digest_id": "e1",
+            "digest_text": {
+                "headline": "Binh needs attention.",
+                "priority_students": [{"student_id": "stu_stuck", "why": "three flat essays"}],
+                "class_wide_pattern": "hasty generalization",
+                "mini_lesson_suggestion": "15-minute exercise",
+            },
+            "ranked_students": [{"student_id": "stu_stuck", "name": "Binh", "priority": 9.0, "reason": {}}],
+            "common_fallacies": [],
+            "gmail_draft_id": "r-123",
+            "timestamp": "t1",
+        }
+    ]
+    with patch("eduagent.server.list_recent_digests", return_value=fake_digests):
+        response = client.get("/api/classes/c1/analytics", headers=_C1_HEADERS)
+
+    html = response.json()["digests"][0]["digest_html"]
+    assert "Binh needs attention." in html
+    assert "three flat essays" in html
+    assert "Binh (stu_stuck)" in html          # resolved from ranked_students, not re-guessed
+    assert "15-minute exercise" in html
+
+
+def test_api_class_analytics_survives_a_digest_it_cannot_render():
+    """A doc written before a schema field existed must degrade to no preview,
+    never take the whole Analytics tab down with a 500."""
+    fake_digests = [{"digest_id": "old", "digest_text": {"headline": "h"}, "timestamp": "t1"}]
+    with patch("eduagent.server.list_recent_digests", return_value=fake_digests):
+        response = client.get("/api/classes/c1/analytics", headers=_C1_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["digests"][0]["digest_html"] is None
 
 
 def test_api_class_analytics_firestore_failure_returns_503():

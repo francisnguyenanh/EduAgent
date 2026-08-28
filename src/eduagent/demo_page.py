@@ -271,8 +271,9 @@ DEMO_PAGE_HTML = """<!doctype html>
       <label for="setting_stuck_threshold">Stuck-streak threshold (essays without improvement)</label>
       <input id="setting_stuck_threshold" type="number" min="1">
       
-      <label for="setting_digest_email">Digest notification email (Gmail draft recipient)</label>
-      <input id="setting_digest_email" placeholder="teacher@school.edu">
+      <label for="setting_digest_email">Digest recipient &mdash; the <code>To:</code> address on the Gmail draft</label>
+      <input id="setting_digest_email" placeholder="parent@example.com or principal@school.edu">
+      <p class="hint" style="margin-top:0.35rem;">The agent <strong>composes a draft, it never sends</strong> (ADR-001). This address is who <em>you</em> will be sending to once you review it &mdash; a parent, the principal, a co-teacher. Nobody is emailed automatically; the digest itself is shown to you below the Analytics table.</p>
 
       <label for="setting_socratic_persona" style="font-weight:600; margin-top:0.75rem; display:block;">Socratic Coach Persona (Class-wide Enforcement)</label>
       <select id="setting_socratic_persona" style="width:100%; padding:0.55rem 0.7rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font:inherit; font-size:0.9rem; margin-top:0.25rem;">
@@ -1156,11 +1157,38 @@ async function loadAnalytics() {
         <td><span style="font-size:12px;color:var(--accent);font-weight:bold;">${esc(miniLessonText)}</span></td>
       </tr>`;
     }).join('');
-    resultsEl.innerHTML = `<table><thead><tr><th>Timestamp</th><th>Priority ranking</th><th>Common fallacies</th><th>Suggested Mini-Lesson</th></tr></thead><tbody>${rows}</tbody></table>`;
+    resultsEl.innerHTML = `<table><thead><tr><th>Timestamp</th><th>Priority ranking</th><th>Common fallacies</th><th>Suggested Mini-Lesson</th></tr></thead><tbody>${rows}</tbody></table>`
+      + digestDraftPreview(data.digests[0]);
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
   }
+}
+
+// ĐỢT 26 #1.2-#1.4 -- the Gmail draft lives in the SYSTEM account's Drafts
+// folder, so before this a judge (or a teacher on a different address) had no
+// way to see what the agent had actually composed. `digest_html` is the exact
+// body the draft carries, rendered server-side and HTML-escaped at the source
+// (class_aggregator._h), so there is no second renderer to drift and no
+// unescaped LLM text reaching this origin.
+function digestDraftPreview(latest) {
+  if (!latest) return '';
+  const draftId = latest.gmail_draft_id;
+  const badge = draftId
+    ? '<span style="background:#dcfce7;color:#14532d;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">Draft created &#10003; &mdash; awaiting human Send (ADR-001)</span>'
+    : '<span style="background:#e5e7eb;color:#374151;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">No draft for this digest &mdash; no recipient configured</span>';
+  const link = draftId
+    ? `<a href="https://mail.google.com/mail/u/0/#drafts?compose=${encodeURIComponent(draftId)}" target="_blank" rel="noopener noreferrer" class="small" style="text-decoration:none;">Open the draft in Gmail &rarr;</a>`
+    : '';
+  const body = latest.digest_html
+    ? `<div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:#fff;color:#111827;overflow-x:auto;">${latest.digest_html}</div>`
+    : '<p class="hint">Preview unavailable for this digest.</p>';
+  return `<section style="margin-top:1.5rem;">
+    <h3 style="margin-bottom:0.35rem;">Latest teacher digest &mdash; exactly what the Gmail draft contains</h3>
+    <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;margin-bottom:0.6rem;">${badge}${link}</div>
+    ${body}
+    <p class="hint" style="margin-top:0.5rem;">The agent stops here on purpose. It composes; a human reviews and presses Send.</p>
+  </section>`;
 }
 
 const TREND_COLORS = {improving: '#1e7a34', declining: '#b3261e', stagnant: '#b8860b', insufficient_data: '#5b6472'};

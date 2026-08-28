@@ -27,7 +27,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
 
-from eduagent.aggregator.class_aggregator import process_event
+from eduagent.aggregator.class_aggregator import format_digest_email_html, process_event
 from eduagent.aggregator.digest_store import list_recent_digests
 from eduagent.api import (
     ClassSettingsRequest,
@@ -441,6 +441,22 @@ async def api_class_analytics(class_id: str, limit: int = 10, authorization: str
     except Exception:
         _logger.exception("list_recent_digests failed for class_id=%s", class_id)
         raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
+    # ĐỢT 26 #1.3: attach the SAME HTML body that went into the Gmail draft, so
+    # a judge can read the digest without access to the mailbox that holds it.
+    # Rendered from the stored digest_text/ranked_students -- not re-generated
+    # and not re-worded -- so "what the page shows" and "what the teacher will
+    # send" cannot drift. Per-digest try/except: an older doc written before a
+    # schema field existed degrades to no preview, it does not 500 the endpoint.
+    for d in digests:
+        try:
+            d["digest_html"] = format_digest_email_html(
+                d.get("digest_text") or {},
+                d.get("ranked_students") or [],
+                name_by_id={r["student_id"]: r["name"] for r in (d.get("ranked_students") or []) if r.get("name")},
+            )
+        except Exception:
+            _logger.exception("digest preview render failed", extra={"class_id": class_id, "digest_id": d.get("digest_id")})
+            d["digest_html"] = None
     return {"class_id": class_id, "digests": digests}
 
 
