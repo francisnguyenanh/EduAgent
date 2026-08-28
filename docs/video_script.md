@@ -10,12 +10,24 @@
 Video, Devpost, README and slides all follow **this single flow**, in this order:
 
 ```
-handwritten photo → OCR (Gemini + Gemma cross-MODEL check) → weak evidence detected
+handwritten photo → OCR (Gemini + Gemma cross-MODEL check) → student reads & approves
+     the transcription (ADR-029) → weak evidence detected
   → SKEPTIC → 3-turn debate → self-correction → memory updated
   → essay 2 → PERSONA CHANGES BECAUSE IT REMEMBERED
   → class-level fallacy pattern → deterministic teacher priority + mini-lesson
+  → digest shown on the dashboard as composed (ADR-030)
   → human approval (teacher clicks Send)
 ```
+
+> **Audit Wave 25/26 — two beats changed shape since the last recording.**
+> **(a) Ingest is two clicks now (ADR-029).** The photo beat is *Extract OCR* → the transcription
+> appears in an editable box → *Start debate*. Say why out loud: *"the student reads the
+> transcription before the AI argues with it."* It also gives you something on screen during the
+> OCR wait discussed below, which the one-call flow did not.
+> **(b) The digest is visible on the dashboard (ADR-030).** You no longer have to cut to a Gmail
+> mailbox to prove the agent composed something — the Analytics tab renders the draft's own body
+> with the badge `Draft created ✓ — awaiting human Send`. Show that, *then* click through to the
+> real draft. The badge is the HITL claim made visible; read it aloud.
 
 **The single most important moment in the video is "the persona changed because it remembered" (~1:10).** Everything else is context for that moment. Do not attempt to demo the whole system.
 
@@ -26,6 +38,7 @@ handwritten photo → OCR (Gemini + Gemma cross-MODEL check) → weak evidence d
 
 Two lines worth putting on screen as text, because they land harder read than heard:
 * *"We don't trust the model's own confidence score."* (during the OCR beat)
+* *"The agent composed this. It did not send it."* (during the digest beat — pointing at the badge)
 * *"The agent doesn't replace the teacher or the student's thinking. It makes both more scalable."* (closing)
 
 **⏱️ Latency budget — measured, not estimated (Audit Wave 15).** The image path is the slowest thing in the demo. Measured on a real 958 KB handwritten photo against Vertex AI:

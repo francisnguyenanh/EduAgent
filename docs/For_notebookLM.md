@@ -65,12 +65,12 @@ TIER 2: Class Aggregator & Teacher Co-Pilot
 ```
 
 **End-to-End Data Flow:**
-> Student submits essay (Text / Photo) $\rightarrow$ OCR extracts verbatim text $\rightarrow$ Sanitizer strips prompt injections $\rightarrow$ Summarizer diagnoses argument flaws $\rightarrow$ Persona Selector picks adaptive persona $\rightarrow$ 3-turn Socratic debate $\rightarrow$ 4-axis cognitive scoring $\rightarrow$ Profile Mutator writes to Firestore $\rightarrow$ Pub/Sub event published $\rightarrow$ Cloud Run Aggregator receives event $\rightarrow$ Priority Engine calculates ranking $\rightarrow$ Gmail Draft (HITL gate) & Google Sheets audit row created.
+> Student submits essay (Text / Photo) $\rightarrow$ OCR extracts verbatim text $\rightarrow$ Student reviews and may correct it before the debate opens (ADR-029) $\rightarrow$ Sanitizer strips prompt injections $\rightarrow$ Summarizer diagnoses argument flaws $\rightarrow$ Persona Selector picks adaptive persona $\rightarrow$ 3-turn Socratic debate $\rightarrow$ 4-axis cognitive scoring $\rightarrow$ Profile Mutator writes to Firestore $\rightarrow$ Pub/Sub event published $\rightarrow$ Cloud Run Aggregator receives event $\rightarrow$ Priority Engine calculates ranking $\rightarrow$ Gmail Draft (HITL gate) & Google Sheets audit row created.
 
 ### 2.2 Tier 1 — Graph Nodes Breakdown
 
 ```
-[Essay Input] → intake → [OCR if image] → sanitizer → summarizer
+[Essay Input] → intake → [OCR if image → student reviews/corrects the transcription, ADR-029] → sanitizer → summarizer
                → persona_selector → debate_loop ↔ challenge_validator
                → cognitive_scorer → profile_mutator → [Firestore]
                                                           ↓
@@ -220,6 +220,9 @@ Zero LLM-as-judge dependency to eliminate reward-hacking loops. Output validated
 * **ADR-025:** Teacher token *issuance* separated from the public demo passcode (`EDUAGENT_TEACHER_PASSWORD`), closing the half of ADR-016 that stayed open.
 * **ADR-026:** Rate-limit key taken from the **last** `X-Forwarded-For` hop; the first entry is caller-supplied and made the limiter bypassable with one header.
 * **ADR-027:** Session reads prefer Firestore; a second unbounded in-process cache had shadowed ADR-015's 3-second bound on the path every request takes.
+* **ADR-028:** The OCR cross-check's second pass runs **Gemma 4** (a different model family), not a second Gemini call; the cross-model similarity threshold is a separate constant (0.50) because 0.75 sits inside the cross-model legible cluster.
+* **ADR-029:** Image/Doc ingest split into `extract` then `start`, so a student reads and corrects the transcription before it becomes the essay of record. `cross_check_model` is surfaced by the `extract-image` response.
+* **ADR-030:** The teacher dashboard renders the Gmail draft's own body (`digest_html`) plus a deep link, because the draft is created in the system mailbox. Auto-send was rejected as it would remove the ADR-001 gate.
 
 ---
 

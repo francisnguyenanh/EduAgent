@@ -11,7 +11,7 @@
 - [ ] **Eligibility First:** Tuyệt đối không copy-paste code từ repo cũ (`CritqAI-main`). Viết mới từ architecture, prompt, data schema đến function node. Repo cũ chỉ là case study để học pattern và học lỗi đã gặp.
 - [ ] **Deterministic-First (ADK2 Standard):** Bất kỳ logic nào không cần LLM reasoning (regex validator, heuristic scoring, rule engine, sanitize, ranking) → BẮT BUỘC là Python Function Node. LLM chỉ dùng khi thực sự cần suy luận/diễn đạt.
 - [ ] **Validator Độc lập:** Validator chạy logic path riêng, zero-trust với Generator — không share context, không nằm chung LLM turn.
-- [ ] **HITL & Least-Privilege:** Đúng 1 điểm Human-In-The-Loop tại hành động rủi ro cao nhất (gửi Teacher Digest). OAuth scope chỉ `gmail.compose`, chặn `send` ở tầng credential chứ không phải ở tầng prompt.
+- [ ] **HITL & Least-Privilege:** Đúng 1 điểm Human-In-The-Loop tại hành động rủi ro cao nhất (gửi Teacher Digest). OAuth scope chỉ `gmail.compose`. ⚠️ **Đính chính bởi ADR-001** (test thật 2026-08-24): scope này **KHÔNG** chặn `send()` ở tầng credential — Google cấp quyền gửi kèm theo nó. Bảo đảm least-privilege ở đây là **kỷ luật code**: `gmail_mcp.py` không bao giờ gọi `.send()`, gác bằng AST test `tests/test_gmail_mcp_never_sends.py`.
 - [ ] **Data Mutation & Synthesis (Track Mandate):** Agent phải biến đổi dữ liệu (tổng hợp Cognitive Profile, phát hiện cụm lỗi cả lớp, thích ứng độ khó tranh biện), không chỉ đọc/lưu.
 - [ ] **Failure-tolerant by default:** Mọi call ra ngoài (Gemini, Firestore, Pub/Sub, MCP) đều phải có timeout + retry + đường thoát khi lỗi. Không có happy-path-only code.
 - [ ] **Mọi quyết định kiến trúc phải giải thích được trong 1 câu** — nếu không, ghi vào ADR để suy nghĩ lại.
@@ -4202,3 +4202,124 @@ POST extract-image, đầy đủ (như UI đã sửa)        -> HTTP 200, 1200 k
 pytest -q -m "not e2e"      -> 320 passed   (trước review: 309)
 run_eval_suite --strict     -> 50/50
 ```
+
+---
+
+# ĐỢT 26 — Hàng đợi (chưa thực thi, làm ngày 2026-08-29)
+
+## 🟡 #1 — Ô "Digest notification email" đang hứa sai, và giám khảo không kiểm chứng được draft
+
+**Triệu chứng người dùng báo:** điền email lên UI xong thì *không ai nhận được gì*. Giám khảo test
+cũng không thấy email nào.
+
+**Chẩn đoán (đã verify bằng code, không phải suy đoán):**
+
+- `class_aggregator.py:236-247` — giá trị `digest_notify_email` chỉ được gán vào `to_address`, tức
+  header `To:` của một **draft nằm trong Drafts của `eikitomobe@gmail.com`**. Không gói tin nào rời
+  hộp thư đó. Đây là hành vi ĐÚNG theo ADR-001 (`gmail_mcp.py` không bao giờ được gọi `.send()`;
+  `tests/test_gmail_mcp_never_sends.py` parse AST chặn cứng ở tầng build).
+- `demo_page.py:274` — label ghi *"Digest **notification** email"*. Chữ "notification" là lời hứa
+  sai: hệ thống không notify ai cả. **Lỗi nằm ở label, không nằm ở việc thiếu `.send()`.**
+
+**Đã cân nhắc và BÁC BỎ phương án auto-send** (đề xuất "Full Agentic Mode" từ một AI review khác):
+thêm `messages().send()` sẽ (a) vi phạm ADR-001, (b) làm đỏ 2 test hard-gate, (c) mâu thuẫn với
+README bảng ADR + kiến trúc diagram *"teacher clicks Send (HITL human gate)"* + `For_notebookLM.md`
++ `PROJECT_WIKI.md §319` đã công bố. Đây là bài toán **chứng minh cho giám khảo**, không phải bài
+toán kiến trúc — không đánh đổi một trụ bảo mật để lấy tiện lợi demo.
+
+**4 việc phải làm (không đụng `gmail_mcp.py`, không sửa test nào):**
+
+- [x] **1.1 Sửa label + helper text** ở `demo_page.py:274`. Thay bằng đúng sự thật:
+      `Digest recipient — the To: address on the Gmail draft the agent composes for you to review
+      and send`. Ô email lấy lại ý nghĩa: nó là **người nhận mà giáo viên sẽ gửi tới** (phụ huynh,
+      hiệu trưởng), không phải người được notify.
+- [x] **1.2 Deep link tới draft.** `gmail_draft_id` đã có sẵn tới tận response API
+      (`class_aggregator.py:315`) và Firestore (`digest_store.py:50`) — **không cần đổi backend**.
+      Render nút *"Open the draft in Gmail →"* trỏ
+      `https://mail.google.com/mail/u/0/#drafts?compose=<gmail_draft_id>`.
+- [x] **1.3 Preview digest ngay trên trang.** `format_digest_email_html()` đã dựng sẵn HTML — render
+      thẳng vào Teacher Dashboard. Giám khảo đọc được **nội dung y hệt nội dung draft** mà không cần
+      quyền vào hộp thư nào. Đây là thứ thật sự giải quyết "giám khảo không nhận được email".
+- [x] **1.4 Badge HITL.** `Draft created ✓ — awaiting human Send (ADR-001)` cạnh preview. Biến giới
+      hạn thành **bằng chứng Responsible AI nhìn thấy được**, thay vì một thứ giám khảo phải tin lời.
+
+**DoD:** giám khảo chạy debate → thấy digest render trên trang + badge + nút mở draft → không cần
+đăng nhập Gmail nào để tin rằng agent đã soạn thư · `pytest -q -m "not e2e"` vẫn xanh, số test
+**không giảm** (không được xoá test bảo mật nào).
+
+---
+
+# ĐỢT 26 — Nhật ký thi công (2026-08-28) ✅ HOÀN THÀNH
+
+## Đã làm — cả 4 sub-task, không xoá một test bảo mật nào
+
+| # | Thay đổi | File |
+|---|---|---|
+| 1.1 | Nhãn Settings nói đúng sự thật + hint giải thích agent chỉ soạn, không gửi | `demo_page.py` |
+| 1.2 | Deep link `#drafts?compose=<gmail_draft_id>` | `demo_page.py::digestDraftPreview` |
+| 1.3 | `digest_html` trong response `/analytics` + render dưới bảng Analytics | `server.py`, `demo_page.py` |
+| 1.4 | Badge `Draft created ✓ — awaiting human Send (ADR-001)` | `demo_page.py::digestDraftPreview` |
+
+## 🔴 Một quyết định phát sinh giữa chừng: escape tại nguồn, KHÔNG viết renderer thứ hai
+
+Kế hoạch ban đầu ghi *"render thẳng `format_digest_email_html()` vào trang"*. Làm đúng như thế thì
+**mở XSS trong chính origin của mình**: hàm đó nội suy `headline`, `why`, `mini_lesson_suggestion`,
+toàn bộ `actionable_lesson_plan` — **tất cả đều do LLM sinh** — mà không escape. Điều này vô hại
+suốt thời gian Gmail là consumer duy nhất (Gmail tự sanitize), nên nó chưa từng là bug; nó **trở
+thành** bug đúng vào lúc chuỗi đó đi vào `innerHTML` của trang mình.
+
+Hai đường sửa, và lý do chọn đường thứ hai:
+
+1. ~~Viết renderer client-side riêng từ `digest_text`, dùng `esc()` sẵn có.~~ An toàn, nhưng sinh
+   **hai** renderer cho cùng một nội dung. Chúng sẽ lệch nhau, và cái lệch đó rơi đúng vào chỗ tệ
+   nhất: một panel tự nhận là *"exactly what the Gmail draft contains"*.
+2. ✅ **Escape tại nguồn** (`_h()` trong `class_aggregator.py`) rồi phục vụ **cùng một chuỗi** cho
+   cả email lẫn trang. Một renderer, không thể lệch, và đường email cũng được vá cứng thêm.
+
+## Test: +3 (320 → 323), sabotage cả 3
+
+| Sabotage | Test đỏ |
+|---|---|
+| Bỏ `_h()` khỏi ô `why` | `test_format_digest_email_html_escapes_model_generated_text` |
+| Bỏ khối gán `digest_html` | `test_api_class_analytics_attaches_the_draft_body_as_digest_html` |
+| Digest cũ thiếu field | `test_api_class_analytics_survives_a_digest_it_cannot_render` (200 + `None`, không 500) |
+
+**Sabotage bắt được một test hỏng sẵn có.** `test_api_class_analytics_returns_digests` assert
+`response.json() == fake_digests`. Route enrich **in-place** chính dict mà mock trả về, nên object
+của mock cũng mọc thêm `digest_html` — assertion vẫn xanh **kể cả khi xoá sạch phần enrichment**.
+Đã thay bằng so sánh với literal từng field. Đây là lần thứ tư trong ba ngày sabotage bắt được một
+assertion đang kể lại chính setup của nó (ADR-019).
+
+## Tài liệu đã đồng bộ
+
+- `README.md` — thêm **ADR-029** (ingest hai bước, việc đã commit hôm 27/8) và **ADR-030** (digest
+  preview), cả dòng bảng lẫn phần chi tiết; sửa `ADR-001 through ADR-028` → `ADR-030`; sửa đoạn
+  đóng ghi xuất xứ ADR-029/030.
+- `overview/PROJECT_WIKI.md` §12 — narrative đầy đủ ADR-028/029/030 (trước đó §12 dừng ở ADR-027
+  trong khi README trỏ tới đây, tức con trỏ đang gãy).
+- `docs/For_notebookLM.md` — ADR-028/029/030 vào SECTION 7; sơ đồ luồng ở dòng 68 và 73 nay có bước
+  học sinh duyệt bản chép.
+- `docs/video_script.md` — Golden Path thêm 2 beat mới; cảnh báo Wave 25/26 rằng **hai beat đã đổi
+  hình dạng kể từ lần quay trước** (Extract là 2 click; digest xem được ngay trên dashboard, không
+  cần cắt sang Gmail để chứng minh); thêm một câu thoại on-screen cho beat digest.
+- `TODO.md` mục 0 — **sửa một invariant đã lỗi thời**: dòng *"chặn `send` ở tầng credential"* mâu
+  thuẫn trực tiếp với chính ADR-001 nằm cách đó ~100 dòng. Đây là câu chữ trước-Phase-0 sót lại;
+  ADR-001 đã đính chính từ 24/8 nhưng mục 0 chưa được cập nhật theo.
+
+## Đã cân nhắc và LOẠI trong đợt này
+
+- **Auto-send ("Full Agentic mode")** — xem ADR-030. Giải bài toán trình diễn bằng cách xoá một
+  thuộc tính bảo mật; làm đỏ 2 hard-gate test; mâu thuẫn 4 tài liệu đã công bố.
+- **Panel "backend evidence" query GCP live** — cần cấp `logging.viewer`/`run.viewer` cho service
+  account runtime, tức mở rộng quyền để chứng minh least-privilege; thêm attack surface trên site
+  public; và một panel do chính app tự khai luôn yếu hơn console thật. **Quyết định của tác giả:**
+  demo bằng màn hình GCP thật + commit history.
+
+## Kiểm chứng
+
+```
+pytest -q -m "not e2e"                      -> 323 passed  (trước đợt: 320)
+pytest -q tests/test_gmail_mcp_never_sends.py -> 3 passed   (hard gate ADR-001 còn nguyên)
+```
+
+⚠️ **Chưa deploy.** Các số trên đo trên máy local. Cần chạy lại trên revision mới trước khi quay.
