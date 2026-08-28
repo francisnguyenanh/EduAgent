@@ -147,7 +147,7 @@ DEMO_PAGE_HTML = """<!doctype html>
       <input id="login_user_id" placeholder="c1_stu01">
       <label for="login_password">Passcode / Password</label>
       <input id="login_password" type="password" placeholder="eduagent2026">
-      <div class="hint">Demo build: mock login, shared passcode: <strong>eduagent2026</strong> (for both Student &amp; Teacher).</div>
+      <div class="hint" id="login-hint">Demo build: Student passcode: <strong>eduagent2026</strong> | Teacher passcode: <strong>eduagent-teacher-2026</strong></div>
       <button class="action" id="login-btn" onclick="doLogin()">Sign in</button>
       <button class="small" style="margin-top:0.75rem;" onclick="backToRolePick()">Back</button>
       <div id="login-error" class="error hidden"></div>
@@ -318,6 +318,17 @@ function pickRole(role) {
     idInput.value = '';
     idInput.placeholder = role === 'student' ? 'c1_stu01' : 'c1_teacher';
   }
+  const passInput = document.getElementById('login_password');
+  if (passInput) {
+    passInput.value = '';
+    passInput.placeholder = role === 'student' ? 'eduagent2026' : 'eduagent-teacher-2026';
+  }
+  const hintEl = document.getElementById('login-hint');
+  if (hintEl) {
+    hintEl.innerHTML = role === 'student'
+      ? 'Demo build: Student passcode is <strong>eduagent2026</strong>.'
+      : 'Demo build: Teacher passcode is <strong>eduagent-teacher-2026</strong> (ADR-025 separated).';
+  }
   const errEl = document.getElementById('login-error');
   if (errEl) errEl.classList.add('hidden');
 }
@@ -332,13 +343,14 @@ function backToRolePick() {
 
 async function autoLogin(userId, role, displayName) {
   try {
+    const autoPass = role === 'teacher' ? 'eduagent-teacher-2026' : 'eduagent2026';
     const resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         role: role,
         user_id: userId,
-        password: 'eduagent2026',
+        password: autoPass,
       }),
     });
     if (resp.ok) {
@@ -363,8 +375,11 @@ async function doLogin() {
   errEl.classList.add('hidden');
   btn.disabled = true;
   try {
-    const enteredId = (document.getElementById('login_user_id').value || '').trim() || (auth && auth.role === 'teacher' ? 'c1_teacher' : 'c1_stu01');
-    const enteredPass = (document.getElementById('login_password').value || '').trim() || 'eduagent2026';
+    const isTeacher = auth && auth.role === 'teacher';
+    const defaultId = isTeacher ? 'c1_teacher' : 'c1_stu01';
+    const defaultPass = isTeacher ? 'eduagent-teacher-2026' : 'eduagent2026';
+    const enteredId = (document.getElementById('login_user_id').value || '').trim() || defaultId;
+    const enteredPass = (document.getElementById('login_password').value || '').trim() || defaultPass;
     const resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
