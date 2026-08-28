@@ -2797,7 +2797,7 @@ Còn lại chỉ **Veo** (video) và **Lyria** (nhạc) — Imagen không tồn 
 nào để một app tranh luận văn nghị luận dùng model sinh video/nhạc mà không lộ ra là gắn cho có.
 Điều lệ chấm **Innovation & Operational Utility 40%** hỏi *"Does the system eliminate real-world
 friction?"*. Một giám khảo hỏi *"vì sao có Veo trong app này?"* và nghe *"để lấy 0.2"* sẽ trừ ở trục
-40% nhiều hơn 0.4 kiếm được ở Stage Three. **Trần điểm thực tế nên nhắm: 5.8/6.0, không phải 6.0.**
+40% nhiều hơn 0.4 kiếm được ở Stage Three. **Trần điểm thực tế nên nhắm: 5.6/6.0 *(ĐỢT 27 đính chính: dòng này từng ghi **5.8** — sai số học. 5.0 Stage Two + 0.2 blog + 0.2 social + 0.2 Gemma = **5.6**, không phải 5.8)*, không phải 6.0.**
 
 Đây cũng đúng bài học ĐỢT 7 đã ghi: *"ưu tiên làm cho cái đang có KHÔNG THỂ BỊ BẺ GÃY hơn là thêm
 tính năng nửa vời"*.
@@ -2908,7 +2908,7 @@ hai lỗi **không còn tương quan**. Đây là **nâng cấp luận điểm s
 
 Imagen **không tồn tại** trong project (đã kiểm mọi location). Chỉ còn Veo (video) + Lyria (nhạc),
 không cách nào hợp lý trong app tranh luận văn nghị luận. Tiêu chí Innovation **40%** trừ điểm nặng
-hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.8/6.0.**
+hơn 0.4 kiếm được ở Stage Three. **Trần nhắm tới: 5.6/6.0 *(ĐỢT 27 đính chính: dòng này từng ghi **5.8** — sai số học. 5.0 Stage Two + 0.2 blog + 0.2 social + 0.2 Gemma = **5.6**, không phải 5.8)*.**
 
 ---
 
@@ -4628,7 +4628,7 @@ smoke chạy vào `c1` sẽ đẻ ra một học sinh giả xuất hiện trong 
 | Đổi `secrets/` sang đọc trực tiếp Secret Manager để `doctor.py` không còn giả dương | Thay đổi kiến trúc credential ở ngày cuối. Rủi ro làm hỏng thứ đang chạy > lợi ích. Beat đó có thể bỏ (finding #2 đường 1) |
 | Reseed lại DB về bộ tên cũ ("Binh") để kịch bản khỏi phải sửa | Sửa 13 dòng doc rẻ và an toàn hơn ghi lại Firestore. Reseed còn có thể làm đổi `priority` và đẻ dữ liệu lạ vào `c1` lúc quay |
 | Thêm `pytest-cov` vào `requirements.txt` | Đổi dependency của môi trường deploy ở ngày cuối — sửa câu chữ đạt cùng mục tiêu (finding #6) |
-| Veo / Lyria lấy +0.4 | Đã từ chối 2 lần (ĐỢT 22, 23). Trần nhắm 5.8/6.0 vẫn là quyết định đúng |
+| Veo / Lyria lấy +0.4 | Đã từ chối 2 lần (ĐỢT 22, 23). Trần nhắm **5.6/6.0** (không phải 5.8 — xem đính chính cuối ĐỢT 27) vẫn là quyết định đúng |
 | Auto-send Gmail | Đã từ chối 3 lần (gần nhất ĐỢT 26/ADR-030). Ở đợt này còn phải sửa code + test + 4 tài liệu + kịch bản |
 | Panel "backend evidence" query GCP live | Đã từ chối ĐỢT 26 (phá least-privilege) |
 | Viết lại timeline video | Đã từ chối 2 lần — làm mất cao trào "persona đổi vì nó nhớ" |

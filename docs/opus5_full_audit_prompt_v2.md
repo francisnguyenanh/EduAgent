@@ -69,7 +69,7 @@ Tối đa hoá điểm số thật theo **điều lệ chính thức** (`Rules`,
 `TRACKS`, `What_to_Submit_` trong project knowledge) — không theo trực giác "dự án hackathon tốt"
 chung chung. Thang điểm xác nhận ở ĐỢT 21: **Final score 1–6** = Stage Two (1–5, chia Innovation
 40% / Architecture 30% / Demo 30%) **+ tối đa 1.0 bonus** (blog +0.2, social +0.2, mỗi model Google
-AI phụ +0.2 tới tối đa +0.6). Trần điểm dự án đang nhắm: **5.8/6.0** (ĐỢT 22 — không lấy Veo/Lyria
+AI phụ +0.2 tới tối đa +0.6). Trần điểm dự án đang nhắm: **5.6/6.0** *(ĐỢT 27 đính chính: trước ghi 5.8 — sai số học; 5.0 + 0.2 blog + 0.2 social + 0.2 Gemma = 5.6)* (ĐỢT 22 — không lấy Veo/Lyria
 vì không hợp lý cho app tranh luận văn nghị luận).
 
 ## TRẠNG THÁI ĐÃ BIẾT NGAY TRƯỚC ĐỢT 24 — verify lại còn đúng không, đừng dò lại từ số 0
