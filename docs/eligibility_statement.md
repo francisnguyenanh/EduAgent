@@ -21,11 +21,26 @@ and pedagogical principle, not source code**:
 | The core pedagogical thesis — challenge the student's reasoning rather than correct their text | Any line of CritiqAI's source, prompts, schemas, or evals |
 | Architectural lessons learned — written out in full below, so this claim can be read rather than taken on trust | Its agent graph, persona definitions, data model, or infrastructure |
 
-CritiqAI's source was kept locally as reference material only and is excluded from this repository's
-git history by the **first rule** in `.gitignore` (`CritqAI-main/`). Verified 2026-08-27 —
-`git rev-list --all --objects | grep -i critq` returns **no results**, i.e. no object with that path
-has ever entered this repository at any commit on any branch. Everything in the table in §1 below was
-designed and built during this Submission Period.
+CritiqAI's source was kept on a local disk as reading material only. It is not in this repository,
+and **this is enforced by a test rather than asserted in prose** —
+`tests/test_prior_work_is_not_in_this_repo.py` fails the build if any tracked path, or any object
+anywhere in git history on any branch, carries the prior project's name. Reproduce it directly:
+
+```bash
+pytest -q tests/test_prior_work_is_not_in_this_repo.py   # 3 passed
+git ls-files | grep -i critq                             # (no output)
+git rev-list --all --objects | grep -i critq             # (no output)
+```
+
+The second and third commands are the two the test runs for you. The claim is therefore falsifiable
+by anyone reading this, which is the only kind of originality claim worth making. Everything in the
+table in §1 below was designed and built during this Submission Period.
+
+> *(Audit Wave 27: this previously rested on a `.gitignore` rule naming the prior project's
+> directory. An ignore rule only prevents a mistake — it never detects one, so a file added with
+> `git add -f` would have passed silently. It also meant a public file named the old project without
+> showing that it stayed out, which reads as an ambiguous hint rather than as evidence. A test that
+> goes red is both stronger and quieter.)*
 
 ### What exactly carried over: the design principles, stated in full
 

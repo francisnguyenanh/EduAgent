@@ -1,6 +1,3 @@
-# Reference-only old project — must NEVER enter this repo's history (eligibility rule)
-CritqAI-main/
-
 # Secrets
 .env
 .env.*
