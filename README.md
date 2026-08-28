@@ -173,10 +173,9 @@ src/eduagent/
   rate_limit.py   Per-IP token-bucket rate limiter
 eval/             ADK Eval Suite (evalset.py, results/) + eval/test_images/ (handwritten test assets)
 scripts/          Diagnostic tools (doctor.py), demos (demo_tier1_run.py), and deployment automation
-tests/            Pytest test suite (>240 tests, unit + integration)
+tests/            Pytest test suite (353 tests, unit + integration)
 docs/             Technical documentation (failure matrix, data lifecycle & privacy threat model,
                   eligibility statement, and the three generated evidence reports)
-docs/             Technical documentation and generated evidence reports
 assets/           gcp_evidence/ (Cloud Console screenshots) + sample_essays/
 ```
 
