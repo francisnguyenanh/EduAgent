@@ -33,6 +33,7 @@ def persist_digest(
     ranked_students: list[dict],
     common_fallacies: list[str],
     gmail_draft_id: str | None,
+    gmail_draft_message_id: str | None = None,
     now: datetime,
 ) -> None:
     doc_ref = (
@@ -48,6 +49,7 @@ def persist_digest(
             "ranked_students": ranked_students,
             "common_fallacies": common_fallacies,
             "gmail_draft_id": gmail_draft_id,
+            "gmail_draft_message_id": gmail_draft_message_id,
             "timestamp": now.isoformat(),
         }
     )

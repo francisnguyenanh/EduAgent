@@ -4322,4 +4322,45 @@ pytest -q -m "not e2e"                      -> 323 passed  (trước đợt: 320
 pytest -q tests/test_gmail_mcp_never_sends.py -> 3 passed   (hard gate ADR-001 còn nguyên)
 ```
 
-⚠️ **Chưa deploy.** Các số trên đo trên máy local. Cần chạy lại trên revision mới trước khi quay.
+## 🔴 Deploy bắt được một lỗi mà local KHÔNG thể bắt: deep link trỏ sai id
+
+Revision đầu tiên (`00041-l28`) deploy xong, 13/13 check xanh — rồi kiểm tra id trong link bằng cách
+query **hộp thư thật**:
+
+```
+draft.id   = r328879860172231529     <- id API trả về, đang được dựng vào link
+message.id = 1a04055b6640d946        <- id HEX mà web UI Gmail thật sự dùng
+```
+
+`#drafts?compose=r3288…` mở ra một **cửa sổ soạn thư rỗng**. Đọc code thấy hoàn toàn đúng; unit test
+mock `create_digest_draft` nên cũng không thể thấy. Nếu không bắt bây giờ thì nó lộ ra **trên
+camera**, ngay tại beat mà cả ADR-030 tồn tại để phục vụ.
+
+**Đã sửa:** `create_digest_draft()` trả `{"draft_id", "message_id"}`; `gmail_draft_message_id` lưu
+song song vào Firestore; UI dựng link từ message id và **fallback về mở thư mục Drafts** cho digest
+cũ chưa có field. Test +1 (**324**), sabotage (`message_id` = `draft_id`) đỏ đúng chỗ.
+
+**Đã thêm `scripts/verify_digest_preview_live.py`** — bạn đồng của `smoke_live.py`, phủ nửa
+teacher-facing. Lý do nó tồn tại chính là lỗi trên: một khiếm khuyết **không nhìn thấy được từ code**.
+
+## Kiểm chứng LIVE — revision `00042-45b`, 100% traffic
+
+```
+python scripts/deploy_to_cloud_run.py        -> revision 00042-45b, serving 100%
+pytest -q -m "not e2e"                       -> 324 passed
+pytest -q tests/test_gmail_mcp_never_sends.py -> 4 passed   (hard gate ADR-001 còn nguyên)
+python scripts/smoke_live.py --student zz9_wave26 -> 13 passed, 0 failed
+python scripts/verify_digest_preview_live.py -> 14/14 passed
+```
+
+Digest thật sinh bởi revision mới (`zz9`, 2026-08-28T00:55:39Z):
+
+```
+gmail_draft_id         = r3145531461931291460
+gmail_draft_message_id = 1a045dda0b977752     <- đối chiếu drafts.get(): TRÙNG KHỚP
+labelIds               = ['DRAFT']            <- vẫn là nháp, chưa từng được gửi
+digest_html            = 3612 ký tự, không có <script / onerror=
+```
+
+⚠️ Chạy trên lớp rác `zz9`, **không** đụng lớp demo `c1` (`class_id` là tiền tố `student_id`, nên
+smoke chạy vào `c1` sẽ đẻ ra một học sinh giả xuất hiện trong bảng xếp hạng lúc quay).

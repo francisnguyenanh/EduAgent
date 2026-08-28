@@ -1174,11 +1174,17 @@ async function loadAnalytics() {
 function digestDraftPreview(latest) {
   if (!latest) return '';
   const draftId = latest.gmail_draft_id;
+  // Gmail's web UI addresses drafts by the HEX MESSAGE id, not the API draft
+  // id -- verified against the live mailbox in Wave 26 (draft id
+  // "r328879860172231529" vs message id "1a04055b6640d946"). Digests written
+  // before this field existed fall back to opening the Drafts folder, which
+  // still gets the teacher there.
+  const composeId = latest.gmail_draft_message_id;
   const badge = draftId
     ? '<span style="background:#dcfce7;color:#14532d;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">Draft created &#10003; &mdash; awaiting human Send (ADR-001)</span>'
     : '<span style="background:#e5e7eb;color:#374151;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">No draft for this digest &mdash; no recipient configured</span>';
   const link = draftId
-    ? `<a href="https://mail.google.com/mail/u/0/#drafts?compose=${encodeURIComponent(draftId)}" target="_blank" rel="noopener noreferrer" class="small" style="text-decoration:none;">Open the draft in Gmail &rarr;</a>`
+    ? `<a href="https://mail.google.com/mail/u/0/#drafts${composeId ? '?compose=' + encodeURIComponent(composeId) : ''}" target="_blank" rel="noopener noreferrer" class="small" style="text-decoration:none;">${composeId ? 'Open the draft in Gmail &rarr;' : 'Open Gmail Drafts &rarr;'}</a>`
     : '';
   const body = latest.digest_html
     ? `<div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:#fff;color:#111827;overflow-x:auto;">${latest.digest_html}</div>`

@@ -247,16 +247,22 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
 
     teacher_email = class_settings.get("digest_notify_email") or TEACHER.email
     draft_id = None
+    draft_message_id = None
     if teacher_email:
         try:
             from eduagent.integrations.gmail_mcp import create_digest_draft
 
-            draft_id = create_digest_draft(
+            draft = create_digest_draft(
                 to_address=teacher_email,
                 subject=f"[eduagent] Class digest for {class_id}: {digest['headline'][:60]}",
                 body_text=format_digest_email(digest, name_by_id),
                 body_html=format_digest_email_html(digest, ranked, name_by_id),
             )
+            draft_id = draft["draft_id"]
+            # ĐỢT 26 / ADR-030: the hex message id, not the API draft id, is
+            # what Gmail's web UI addresses -- kept separately so the
+            # dashboard's "open the draft" link resolves.
+            draft_message_id = draft["message_id"]
         except Exception:
             _logger.exception("Failed to create Gmail draft -- digest still returned/logged", extra={"class_id": class_id, "event_id": event_id})
 
@@ -302,6 +308,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
                 ranked_students=ranked,
                 common_fallacies=fallacies,
                 gmail_draft_id=draft_id,
+                gmail_draft_message_id=draft_message_id,
                 now=now,
             )
         except Exception:
@@ -325,4 +332,5 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
         "common_fallacies": fallacies,
         "digest": digest,
         "gmail_draft_id": draft_id,
+        "gmail_draft_message_id": draft_message_id,
     }

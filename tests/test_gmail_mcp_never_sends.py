@@ -68,3 +68,40 @@ def test_gmail_mcp_credentials_from_env(monkeypatch):
     assert creds is not None
     assert creds.token == "fake-token"
     gmail_mcp._credentials.cache_clear()
+
+
+def test_create_digest_draft_returns_both_ids(monkeypatch):
+    """ĐỢT 26 / ADR-030: `drafts.create()` returns an API draft id
+    ("r328879860172231529") AND a hex message id ("1a04055b6640d946"). Gmail's
+    web UI addresses a draft by the SECOND one, so the dashboard's
+    "open the draft" link needs it. Verified against the live mailbox --
+    building the URL from the draft id opens an empty compose window.
+
+    Sabotage check: return only `draft["id"]` and this goes red."""
+    captured = {}
+
+    class _Drafts:
+        def create(self, *, userId, body):
+            captured["userId"] = userId
+
+            class _Exec:
+                def execute(inner_self):
+                    return {"id": "r328879860172231529", "message": {"id": "1a04055b6640d946"}}
+
+            return _Exec()
+
+    class _Users:
+        def drafts(self):
+            return _Drafts()
+
+    class _Service:
+        def users(self):
+            return _Users()
+
+    monkeypatch.setattr(gmail_mcp, "_service", lambda: _Service())
+    result = gmail_mcp.create_digest_draft(
+        to_address="teacher@example.com", subject="s", body_text="t", body_html="<p>t</p>"
+    )
+
+    assert result == {"draft_id": "r328879860172231529", "message_id": "1a04055b6640d946"}
+    assert captured["userId"] == "me"

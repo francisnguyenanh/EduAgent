@@ -98,7 +98,7 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
         patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
         patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
         patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
-        patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value="draft123") as mock_gmail,
+        patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value={"draft_id": "draft123", "message_id": "1a04055b6640d946"}) as mock_gmail,
         patch("eduagent.integrations.sheets_mcp.append_audit_row") as mock_sheets_append,
         patch("eduagent.aggregator.class_aggregator.persist_digest") as mock_persist_digest,
         patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
@@ -110,6 +110,10 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
 
     assert result["status"] == "processed"
     assert result["gmail_draft_id"] == "draft123"
+    # ĐỢT 26: the hex message id is carried separately -- Gmail's web UI
+    # addresses drafts by that, not by the API draft id, so collapsing the two
+    # gives the teacher a link that opens an empty compose window.
+    assert result["gmail_draft_message_id"] == "1a04055b6640d946"
     assert result["ranked_students"][0]["student_id"] == "stu_stuck"
     mock_gmail.assert_called_once()
     mock_sheets_append.assert_called_once()

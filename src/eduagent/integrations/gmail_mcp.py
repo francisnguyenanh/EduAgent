@@ -84,9 +84,21 @@ def _service():
 
 
 @with_google_api_retry
-def create_digest_draft(*, to_address: str, subject: str, body_text: str, body_html: str | None = None) -> str:
-    """Creates a Gmail draft. Returns the draft id. Never sends -- see module
-    docstring; this function has no path to messages.send/drafts.send.
+def create_digest_draft(*, to_address: str, subject: str, body_text: str, body_html: str | None = None) -> dict:
+    """Creates a Gmail draft. Never sends -- see module docstring; this
+    function has no path to messages.send/drafts.send.
+
+    Returns BOTH ids, because they are not interchangeable and each has a
+    consumer (ĐỢT 26, verified against the live mailbox):
+
+      draft_id    "r328879860172231529"  -- the API handle; what drafts.get()
+                                           and the cleanup script address.
+      message_id  "1a04055b6640d946"     -- the hex id Gmail's own WEB UI uses
+                                           in `#drafts?compose=<id>`.
+
+    ADR-030's deep link is a teacher clicking through to review the draft, so
+    it needs the message id. Building that URL from the draft id opens an empty
+    compose window -- caught here rather than on camera.
 
     When body_html is given, the draft is a multipart/alternative message
     (plain text kept as the fallback part -- some clients/screen readers
@@ -103,4 +115,4 @@ def create_digest_draft(*, to_address: str, subject: str, body_text: str, body_h
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
     draft = _service().users().drafts().create(userId="me", body={"message": {"raw": raw}}).execute()
-    return draft["id"]
+    return {"draft_id": draft["id"], "message_id": (draft.get("message") or {}).get("id")}
