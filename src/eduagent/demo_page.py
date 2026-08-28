@@ -155,7 +155,7 @@ DEMO_PAGE_HTML = """<!doctype html>
   </section>
 
   <section id="app" class="hidden">
-    <div class="tabs" id="student-tabs">
+    <div class="tabs hidden" id="student-tabs">
       <button id="tab-student" class="active" onclick="showTab('student')">Submit &amp; Debate</button>
     </div>
     <div class="tabs hidden" id="teacher-tabs">
@@ -178,8 +178,9 @@ DEMO_PAGE_HTML = """<!doctype html>
         <label for="gdoc_url">Or Google Doc share link (Anyone with link can view)</label>
         <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
           <input id="gdoc_url" style="flex:1; min-width:260px;" placeholder="https://docs.google.com/document/d/1A2B3C.../edit" oninput="updateGDocPreviewBtn()">
-          <a id="btn_open_gdoc" href="https://docs.google.com/document/d/11Zm7Y5xBd5hzvSXr5WcfS4QyozCg7kfZGfIT1Me4TBY/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style="text-decoration:none; display:none; align-items:center; gap:0.3rem; padding:0.5rem 0.8rem; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:var(--accent); font-weight:600; font-size:0.8rem;">
-            📄 Open Google Doc ↗
+          <button type="button" id="btn_extract_gdoc" class="small" style="display:none;" onclick="extractGDoc()">📄 View Essay</button>
+          <a id="btn_open_gdoc" href="https://docs.google.com/document/d/11Zm7Y5xBd5hzvSXr5WcfS4QyozCg7kfZGfIT1Me4TBY/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style="text-decoration:none; display:none; align-items:center; gap:0.3rem; padding:0.5rem 0.8rem; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:var(--accent); font-weight:600; font-size:0.8rem;" title="Open in Google Docs">
+            ↗
           </a>
         </div>
         <label for="essay_image">Or upload a photo of a handwritten essay</label>
@@ -188,7 +189,10 @@ DEMO_PAGE_HTML = """<!doctype html>
         <div id="ocr_preview_container" class="hidden" style="margin-top:0.6rem; padding:0.6rem; border:1px dashed var(--border); border-radius:8px; background:rgba(0,0,0,0.02);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
             <span style="font-size:0.78rem; font-weight:600; color:var(--muted);" id="ocr_preview_label">📷 Handwritten Essay Preview:</span>
-            <button type="button" class="small" style="padding:0.2rem 0.5rem; font-size:0.72rem;" onclick="clearOcrPreview()">Remove image</button>
+            <div style="display:flex; gap:0.3rem;">
+              <button type="button" class="small" style="padding:0.2rem 0.5rem; font-size:0.72rem; color:var(--accent); border-color:var(--accent);" id="btn_extract_image" onclick="extractImage()">📄 View Essay</button>
+              <button type="button" class="small" style="padding:0.2rem 0.5rem; font-size:0.72rem;" onclick="clearOcrPreview()">Remove image</button>
+            </div>
           </div>
           <img id="ocr_preview_img" src="" alt="Handwritten Essay Preview" style="max-width:100%; max-height:260px; object-fit:contain; border-radius:6px; border:1px solid var(--border); display:block; margin:0 auto; background:#fff;">
           <div id="ocr_sample_note" class="hint" style="text-align:center; margin-top:0.3rem;">Real handwriting sample with cross-outs and natural paper angle.</div>
@@ -405,7 +409,7 @@ function enterApp() {
   document.getElementById('who-box').classList.remove('hidden');
   document.getElementById('who-label').textContent = `${auth.display_name} -- class ${auth.class_id} (${auth.role})`;
   const isTeacher = auth.role === 'teacher';
-  document.getElementById('student-tabs').classList.toggle('hidden', isTeacher);
+  document.getElementById('student-tabs').classList.add('hidden');
   document.getElementById('teacher-tabs').classList.toggle('hidden', !isTeacher);
   showTab(isTeacher ? 'priority' : 'student');
   if (isTeacher) loadPriority();
@@ -548,12 +552,15 @@ function fileToBase64(file) {
 function updateGDocPreviewBtn() {
   const val = (document.getElementById('gdoc_url').value || '').trim();
   const btn = document.getElementById('btn_open_gdoc');
-  if (btn) {
+  const extractBtn = document.getElementById('btn_extract_gdoc');
+  if (btn && extractBtn) {
     if (val.startsWith('http')) {
       btn.href = val;
       btn.style.display = 'inline-flex';
+      extractBtn.style.display = 'inline-flex';
     } else {
       btn.style.display = 'none';
+      extractBtn.style.display = 'none';
     }
   }
 }
@@ -602,6 +609,83 @@ function clearEssayForm() {
   document.getElementById('essay_image').value = '';
   clearOcrPreview();
   updateGDocPreviewBtn();
+}
+
+async function extractGDoc() {
+  const gdocUrl = (document.getElementById('gdoc_url').value || '').trim();
+  if (!gdocUrl) return;
+  const btn = document.getElementById('btn_extract_gdoc');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Extracting...';
+  btn.disabled = true;
+  const errEl = document.getElementById('start-error');
+  errEl.classList.add('hidden');
+  try {
+    const resp = await fetch('/api/debate/extract-gdoc', {
+      method: 'POST',
+      headers: authHeaders(),
+      // Identity is REQUIRED: the route runs _verify_student_auth() on it, exactly
+      // like /start-with-gdoc. Sending only gdoc_url returns 422 Unprocessable Entity.
+      body: JSON.stringify({gdoc_url: gdocUrl, student_id: auth.user_id, name: auth.display_name, class_id: auth.class_id}),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    document.getElementById('essay_text').value = data.text;
+    document.getElementById('gdoc_url').value = '';
+    updateGDocPreviewBtn();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+async function extractImage() {
+  const imageFile = document.getElementById('essay_image').files[0];
+  if (!imageFile && !presetImageBase64) return;
+  const btn = document.getElementById('btn_extract_image');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Extracting OCR...';
+  btn.disabled = true;
+  const errEl = document.getElementById('start-error');
+  errEl.classList.add('hidden');
+  try {
+    const imageBase64 = imageFile ? await fileToBase64(imageFile) : presetImageBase64;
+    const mimeType = imageFile ? (imageFile.type || 'image/jpeg') : 'image/jpeg';
+    const resp = await fetch('/api/debate/extract-image', {
+      method: 'POST',
+      headers: authHeaders(),
+      // Identity is REQUIRED here too -- see the note in extractGDoc().
+      body: JSON.stringify({
+        image_base64: imageBase64,
+        image_mime_type: mimeType,
+        student_id: auth.user_id, name: auth.display_name, class_id: auth.class_id,
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    document.getElementById('essay_text').value = data.text;
+    // Must cover 'unavailable' and `degraded` too, not just 'low': on a Vertex
+    // outage transcribe_essay_image() returns EMPTY text with
+    // confidence='unavailable' (ADR-008: never fabricate a transcription). Warning
+    // only on 'low' left the student staring at an empty box with no explanation.
+    if (data.ocr && (data.ocr.degraded || data.ocr.confidence === 'unavailable')) {
+      errEl.textContent = `We could not read that photo right now -- the transcription service is temporarily unavailable. Try again shortly, or type the essay in yourself.`;
+      errEl.classList.remove('hidden');
+    } else if (data.ocr && data.ocr.confidence === 'low') {
+      errEl.textContent = `Heads up: the photo was hard to read (confidence: low). Please review and fix any transcription errors.`;
+      errEl.classList.remove('hidden');
+    }
+    clearOcrPreview();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 
 function loadSampleReply() {
@@ -923,13 +1007,13 @@ function printReport() {
 
 async function presetScenario(scenario) {
   if (scenario === 'stuck') {
-    await autoLogin('c1_stu02', 'student', 'Binh (Stuck Streak)');
+    await autoLogin('c1_stu02', 'student', 'Bob (Stuck Streak)');
     enterApp();
     showTab('student');
     clearEssayForm();
     document.getElementById('essay_text').value = 'Electric vehicles completely eliminate environmental pollution because they have zero tailpipe emissions. Therefore, if everyone switches to electric cars immediately, global climate change will be entirely solved.';
   } else if (scenario === 'ocr') {
-    await autoLogin('c1_stu01', 'student', 'An');
+    await autoLogin('c1_stu01', 'student', 'Alice');
     enterApp();
     showTab('student');
     clearEssayForm();
@@ -946,7 +1030,7 @@ async function presetScenario(scenario) {
       console.error('Failed to load sample OCR image:', e);
     }
   } else if (scenario === 'gdoc') {
-    await autoLogin('c1_stu01', 'student', 'An');
+    await autoLogin('c1_stu01', 'student', 'Alice');
     enterApp();
     showTab('student');
     clearEssayForm();
@@ -954,10 +1038,10 @@ async function presetScenario(scenario) {
     document.getElementById('gdoc_url').value = gdocLink;
     updateGDocPreviewBtn();
   } else if (scenario === 'teacher') {
-    await autoLogin('c1_teacher', 'teacher', 'Mr. Minh');
-    enterApp();
-    showTab('priority');
-    loadPriority();
+    pickRole('teacher');
+    document.getElementById('login_user_id').value = 'c1_teacher';
+    document.getElementById('login_password').value = '';
+    document.getElementById('login_password').focus();
   }
 }
 
@@ -1063,7 +1147,7 @@ async function loadAnalytics() {
       return;
     }
     let rows = data.digests.map(d => {
-      const miniLessonText = d.digest?.mini_lesson_suggestion || d.digest?.actionable_lesson_plan?.title || d.actionable_lesson_plan?.title || 'None';
+      const miniLessonText = d.digest_text?.mini_lesson_suggestion || d.digest_text?.actionable_lesson_plan?.title || 'None';
       return `
       <tr>
         <td>${esc(formatShortTimestamp(d.timestamp))}</td>
