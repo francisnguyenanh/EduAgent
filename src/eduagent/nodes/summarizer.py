@@ -1,7 +1,7 @@
 """Summarizer -- agent node (Gemini Flash). Compresses the essay into a
 structured claim/evidence/fallacy map that downstream nodes consume.
 
-Kept to ONE narrow job (PROJECT_WIKI.md 9.1 principle #1: single-prompt
+Kept to ONE narrow job (design principle #1: single-prompt
 chatbots fail when asked to hold persona + history + scoring + formatting at
 once). This node never argues with the student and never scores -- it only
 extracts structure.

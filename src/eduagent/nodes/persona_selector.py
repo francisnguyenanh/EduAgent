@@ -1,6 +1,6 @@
 """Persona Selector -- deterministic FUNCTION NODE, not an agent node.
 
-PROJECT_WIKI.md 7.5.3: prefer function/deterministic logic wherever LLM
+Deterministic-first (design principle #3): prefer function/deterministic logic wherever LLM
 reasoning isn't required. Matching a weakness keyword to a persona focus is a
 lookup problem, not a reasoning problem -- so it stays rule-based and
 auditable ("why was Skeptic chosen for this student?" has a real answer).
@@ -19,6 +19,11 @@ from eduagent.memory.student_profile import persona_history_from_profile, weakne
 from eduagent.skills.personas import PERSONA_IDS, get_persona
 from eduagent.tracing import traced_node
 
+# NOTE (Audit Wave 27): the Vietnamese below is FUNCTIONAL, not untranslated
+# documentation. This project accepts essays in Vietnamese as well as English
+# (skills/language.py detects which), and persona routing here is ZERO-LLM:
+# it is literally these keyword alternations. Dropping the Vietnamese half
+# would make every Vietnamese essay fall through to the default persona.
 _FALLACY_KEYWORDS: dict[str, str] = {
     "skeptic": (
         "evidence|source|unsourced|citation|proof|statistic|data|"

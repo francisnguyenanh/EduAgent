@@ -7,7 +7,7 @@ this generates ONE short, encouraging note text for the teacher to
 review and copy themselves -- the LLM only phrases what the deterministic
 Priority Engine (priority_engine.py) already computed; it never decides
 WHO gets flagged (that stays 100% rule-engine, zero-LLM, per
-PROJECT_WIKI.md 7.5.3) or sends anything itself.
+deterministic-first, design principle #3) or sends anything itself.
 """
 
 from __future__ import annotations

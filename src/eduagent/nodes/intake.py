@@ -1,6 +1,6 @@
 """Intake + Sanitizer -- pure function nodes, zero LLM calls.
 
-Deterministic-first (PROJECT_WIKI.md 7.5.3 / 9.2 principle #3): stripping
+Deterministic-first (design principle #3, docs/eligibility_statement.md): stripping
 injection attempts is a pattern-matching problem, not a reasoning problem, so
 it stays a regex function node rather than an "ask the LLM to ignore bad
 instructions" prompt (which is not reliable).

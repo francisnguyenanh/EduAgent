@@ -79,3 +79,11 @@ docs/For_notebookLM.md
 # Official contest rules are Google's text, not this project's documentation
 overview/rule.txt
 overview/intro.txt
+
+# Wave 27: scratch analysis output, never part of the project
+_*.txt
+_*.log
+
+# Wave 27: internal Vietnamese design narrative + AI-agent briefing (see
+# docs/eligibility_statement.md for the English design principles it carried)
+overview/PROJECT_WIKI.md

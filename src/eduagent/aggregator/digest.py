@@ -1,6 +1,6 @@
 """Teacher Digest Synthesizer -- agent node (heavy Gemini model).
 
-PROJECT_WIKI.md 8.3: this node ONLY turns already-computed ranking data into
+Architecture (README.md section 2): this node ONLY turns already-computed ranking data into
 natural-language prose for a teacher. It never re-ranks, never re-weighs --
 the ranked list and common fallacies it receives are the ground truth; the
 LLM's job is exposition, not decision-making. If the digest text and the

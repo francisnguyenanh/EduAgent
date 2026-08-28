@@ -1,6 +1,6 @@
 """Firestore-backed long-term memory for student profiles.
 
-This is the ADK "Memory" side (cross-session, PROJECT_WIKI.md 7.5.6), as
+This is the ADK "Memory" side (cross-session), as
 opposed to Context.state which only lives for the duration of one pipeline
 run. Read-modify-write is done via a Firestore transaction so two essays
 graded for the same student around the same time can't clobber each other's

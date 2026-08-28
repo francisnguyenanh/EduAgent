@@ -5,7 +5,7 @@ prompt + schema. No shared conversation state between nodes here -- that
 lives in Context.state, not in this client. This is what keeps the
 Summarizer, Persona Selector, Debate Loop, and Cognitive Scorer as
 independently testable calls rather than one giant multi-turn chat (the
-single-prompt-chatbot failure mode from PROJECT_WIKI.md 9.1 principle #1).
+single-prompt-chatbot failure mode; design principle #1, docs/eligibility_statement.md).
 """
 
 from __future__ import annotations

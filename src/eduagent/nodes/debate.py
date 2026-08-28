@@ -1,6 +1,6 @@
 """Debate Loop -- agent node, 3-turn escalation with persona anchoring.
 
-Persona anchoring fix (PROJECT_WIKI.md 9.3): the persona.anchor text is
+Persona anchoring fix (the prior project drifted out of persona mid-debate -- see the known-limitations table in docs/eligibility_statement.md): the persona.anchor text is
 re-injected into EVERY turn's prompt, not just a system prompt set once at
 the start -- this is the concrete fix for the old project's "persona drift
 into an agreeable assistant" failure mode.
@@ -40,6 +40,11 @@ _PERSONA_FALLBACK_QUESTIONS: dict[str, str] = {
 }
 _DEFAULT_FALLBACK_QUESTION = "That's an interesting point -- what evidence led you to that conclusion?"
 
+# NOTE (Audit Wave 27): the Vietnamese below is FUNCTIONAL, not untranslated
+# documentation. This project accepts essays in Vietnamese as well as English
+# (skills/language.py detects which), and these are the graceful-degradation
+# questions served when Vertex AI is unavailable (failure_matrix row 3). A
+# Vietnamese student must not get an English fallback mid-debate.
 _PERSONA_FALLBACK_QUESTIONS_VI: dict[str, str] = {
     "skeptic": "Bằng chứng hay số liệu cụ thể nào dẫn bạn đến kết luận đó, và nguồn thông tin này đến từ đâu?",
     "devils_advocate": "Những người phản đối quan điểm của bạn sẽ đưa ra lý lẽ gì, và bạn sẽ phản hồi lại như thế nào?",

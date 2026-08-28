@@ -1,7 +1,7 @@
 # PHASE 7: multi-stage build for the Cloud Run Class Aggregator push
 # subscriber (src/eduagent/server.py). Multi-stage keeps the final image free
 # of build tooling/pip cache; non-root user follows least-privilege the same
-# way the rest of this project does (see PROJECT_WIKI.md 9.1 principle #5).
+# way the rest of this project does (see design principle #5 in docs/eligibility_statement.md).
 
 # ---- Builder: resolve + install Python dependencies only ----
 FROM python:3.12-slim AS builder

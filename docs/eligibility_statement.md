@@ -19,13 +19,59 @@ and pedagogical principle, not source code**:
 | Carried over | Not carried over |
 |---|---|
 | The core pedagogical thesis — challenge the student's reasoning rather than correct their text | Any line of CritiqAI's source, prompts, schemas, or evals |
-| Architectural lessons learned, documented as a case study in `overview/PROJECT_WIKI.md` §9 | Its agent graph, persona definitions, data model, or infrastructure |
+| Architectural lessons learned — written out in full below, so this claim can be read rather than taken on trust | Its agent graph, persona definitions, data model, or infrastructure |
 
 CritiqAI's source was kept locally as reference material only and is excluded from this repository's
 git history by the **first line** of `.gitignore` (`CritqAI-main/`). Verified 2026-08-27 —
 `git rev-list --all --objects | grep -i critq` returns **no results**, i.e. no object with that path
 has ever entered this repository at any commit on any branch. Everything in the table in §1 below was
 designed and built during this Submission Period.
+
+### What exactly carried over: the design principles, stated in full
+
+*(Audit Wave 27: these were previously kept in `overview/PROJECT_WIKI.md` §9, an internal
+Vietnamese design document that has since been removed from this repository. Citing a
+Vietnamese file that a judge could not read — to substantiate a disclosure claim — was the
+weakest part of this statement, so the substance is reproduced here in English instead. Nothing
+below is source code; every item is a lesson about *how to structure* a system.)*
+
+**Verified design principles carried forward from CritiqAI:**
+
+1. **A single-prompt chatbot always fails** once it must hold a persona, track history, score, and
+   format output at the same time. This is *why* the work is split across agents — not because
+   multi-agent sounds more impressive.
+2. **The validator must be independent, in reasoning path, from the generator.** The Debate Agent and
+   the Challenge Validator must not share one LLM call; otherwise the thing doing the checking carries
+   the same risk as the thing being checked.
+3. **Deterministic-first.** Prefer rule-based/regex/keyword logic over an LLM call wherever it is
+   possible — it saves tokens and, more importantly, makes the result auditable: a teacher can see
+   *why* a score or a ranking came out the way it did.
+4. **Exactly one human-in-the-loop gate, placed at the highest-risk step** — not approval scattered
+   across every intermediate stage. Here that is the teacher pressing Send on an email; no internal
+   step asks for sign-off.
+5. **Least-privilege has to be enforced somewhere real.** CritiqAI assumed the OAuth scope
+   `gmail.compose` made `send()` technically impossible. **Phase 0 of this project tested that
+   assumption and it is false** — Google documents that scope as including send, and a token holding
+   only `gmail.compose` sends mail successfully. So least-privilege for the digest mailer is enforced
+   in *code discipline* instead (this codebase never calls `messages.send`, and an AST test fails the
+   build if that ever changes), and the real gate is a human action outside every code path. See
+   ADR-001 in `README.md`. Correcting an inherited assumption rather than repeating it is the clearest
+   evidence that this was prior *experience*, not prior *code*.
+6. **Agents communicate through shared session state, not by calling each other directly** — which
+   keeps data lineage legible and lets each agent be tested or replaced on its own.
+
+**The reusable pattern, as a concept:** *Generate → Validate → Escalate*, where the orchestrator only
+routes (it never generates risky content itself), the validator is logically independent of what it
+checks, deterministic logic runs before any LLM, and there is a single HITL gate at the riskiest step.
+
+**Known limitations of the prior project, which this one was built to address:**
+
+| CritiqAI limitation | How EduAgent answers it |
+|---|---|
+| Text-only essays, no multimodal ingestion | Handwritten-photo OCR with a cross-**model** consistency check (ADR-007, ADR-028) |
+| Rule-based scorer gameable by keyword stuffing | Independent zero-LLM validator plus server-side scoring the client cannot influence |
+| **No long-term memory across sessions** | The Tier-2 Firestore memory layer — this was the single largest gap, and closing it is the core of this submission |
+| Debate agent drifting out of persona mid-conversation | Explicit persona anchoring carried into every turn's prompt (`nodes/debate.py`) |
 
 ---
 

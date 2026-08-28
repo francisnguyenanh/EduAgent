@@ -1,6 +1,6 @@
 """Gmail MCP integration -- compose-only by CODE DISCIPLINE, not OAuth scope.
 
-ADR-001 (see README.md's ADR table / PROJECT_WIKI.md 9.1): real testing proved
+ADR-001 (see README.md's ADR table): real testing proved
 `gmail.compose` does NOT block `messages.send()` at the credential layer --
 Google's own docs describe the scope as including send. So the least-
 privilege guarantee here is enforced by never calling `.send()` anywhere in

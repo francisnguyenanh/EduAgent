@@ -1,5 +1,5 @@
 """Escalation logic for the 3-turn Debate Loop, kept in its own module
-(PROJECT_WIKI.md 8.1: "escalation logic to be in a separate skill file").
+(the architecture calls for escalation logic to live in a separate skill file).
 
 Turn 1 opens with a targeted question. Turn 2 pushes on the weakest point of
 whatever the student answered in turn 1. Turn 3 forces a final defense or

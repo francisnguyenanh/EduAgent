@@ -1,8 +1,8 @@
 """Student profile merge logic -- kept as PURE FUNCTIONS separate from the
-Firestore client (PROJECT_WIKI.md 7.5.6: this is the ADK "Memory" layer,
+Firestore client (this is the ADK "Memory" layer,
 distinct from per-session state -- it must survive across many essays/weeks).
 
-Schema (PROJECT_WIKI.md 8.2), one document per student:
+Schema (see README.md section 2), one document per student:
     student_profiles/{student_id}
       name, class_id
       essay_history: [{essay_id, timestamp, persona_used, scores, avg_score,

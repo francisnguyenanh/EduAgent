@@ -1,6 +1,6 @@
 """Class Cluster & Pattern Engine -- deterministic, ZERO LLM calls.
 
-PROJECT_WIKI.md 7.5.3 / 8.3: the ranking that decides which students a
+Deterministic-first (design principle #3, docs/eligibility_statement.md): the ranking that decides which students a
 teacher sees first must be a rule engine, not an LLM call -- "LLM tuyet doi
 khong tham gia xep hang... giao vien phai hieu duoc TAI SAO em A xep truoc
 em B." Every weight lives in config.PRIORITY_WEIGHTS, not a prompt.

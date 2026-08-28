@@ -1,7 +1,7 @@
 """Unit tests for the deterministic pieces -- no LLM/network calls, fast.
 
 These lock in the behavior that must stay auditable/deterministic per
-PROJECT_WIKI.md 9.2: Validator independence, Persona Selector rule-based
+Design principles #2 and #3 (docs/eligibility_statement.md): Validator independence, Persona Selector rule-based
 logic, and the Profile Mutator delta shape.
 """
 

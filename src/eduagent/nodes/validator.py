@@ -1,6 +1,6 @@
 """Challenge Validator -- pure function node, ZERO LLM calls.
 
-PROJECT_WIKI.md 9.1 principle #2: the Validator must be independent in logic
+Design principle #2 (docs/eligibility_statement.md): the Validator must be independent in logic
 path from the Debate Agent it checks -- if the same LLM call that generates a
 question also judges the question, the risk you're checking for IS the risk.
 This module never imports eduagent.llm.
@@ -23,6 +23,12 @@ from eduagent.config import VALIDATOR
 # safer than blocking legitimate Socratic prompts that happen to explain a
 # concept the student already raised. Bilingual (EN + VI) since essays and
 # debate turns may be in either language.
+# NOTE (Audit Wave 27): the Vietnamese below is FUNCTIONAL, not untranslated
+# documentation. This project accepts essays in Vietnamese as well as English
+# (skills/language.py detects which), and the zero-answer-leak guarantee
+# has to hold in BOTH. Translating these regexes to English would silently
+# stop the validator catching a Vietnamese answer leak -- the exact failure
+# the guarantee exists to prevent.
 _ANSWER_LEAK_PATTERNS = [
     re.compile(r"\bthe (correct|right) answer is\b", re.IGNORECASE),
     re.compile(r"\byou should (write|say|conclude|argue) that\b", re.IGNORECASE),

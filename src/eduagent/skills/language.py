@@ -1,4 +1,4 @@
-"""Language detection -- deterministic, ZERO LLM (PROJECT_WIKI.md 7.5.3:
+"""Language detection -- deterministic, ZERO LLM (deterministic-first, design principle #3:
 matching characters to an alphabet is a lookup problem, not a reasoning
 problem, so it stays a pure function like persona_selector's keyword match).
 

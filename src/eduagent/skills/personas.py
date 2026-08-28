@@ -1,6 +1,6 @@
 """Persona library for the Debate Loop.
 
-Written from scratch for this project. PROJECT_WIKI.md 9.3 notes the prior
+Written from scratch for this project. The known-limitations table in docs/eligibility_statement.md notes the prior
 project's debate agent sometimes "lost" its persona mid-conversation and
 drifted into an agreeable assistant tone -- each persona prompt below is
 written so its ANCHOR line can be re-injected on every turn (see

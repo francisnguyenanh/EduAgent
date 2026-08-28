@@ -56,8 +56,7 @@ load balancer, and a 3-turn debate is 3+ separate HTTP requests. With
 in-process-only state, turn 2 landing on a different instance than turn 1
 raised UnknownSessionError and lost the student's debate mid-conversation.
 
-This does NOT collapse the Session-vs-Memory distinction (PROJECT_WIKI.md
-7.5.6). `debate_sessions` is still *session* data: short-lived, keyed by
+This does NOT collapse the ADK Session-vs-Memory distinction. `debate_sessions` is still *session* data: short-lived, keyed by
 session_id, carrying a 24h `expire_at` for TTL deletion, and torn down by
 end_debate_session(). Durability here buys request-to-request continuity, not
 long-term recall. Long-term memory remains `student_profiles`, written only
