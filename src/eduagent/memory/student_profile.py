@@ -21,14 +21,14 @@ STUCK_STREAK_THRESHOLD = 3  # matches PRIORITY_WEIGHTS.stuck_streak semantics (P
 TREND_WINDOW = 3  # how many recent essays feed score_trend
 TREND_FLAT_BAND = 0.3  # avg-score-per-essay change smaller than this counts as "stagnant", not noise
 
-# ĐỢT 15 #3: how far the window may swing peak-to-trough before a flat slope is
+# Wave 15 #3: how far the window may swing peak-to-trough before a flat slope is
 # reported as "volatile" rather than "stagnant". 2.0 points on the 0-10 avg_score
 # scale is roughly a whole grade band collapsing and recovering -- large enough
 # not to fire on ordinary essay-to-essay noise, small enough to catch the [10, 0,
 # 10] case the audit raised.
 TREND_VOLATILITY_BAND = 2.0
 
-# ĐỢT 3 #3: cap essay_history so the Firestore document (1MB hard limit) stays
+# Wave 3 #3: cap essay_history so the Firestore document (1MB hard limit) stays
 # bounded across hundreds of essays. Everything score_trend/persona_streak
 # need only ever looks at the tail (TREND_WINDOW / the single previous
 # essay), so trimming the head is safe -- the two cumulative counters below
@@ -56,7 +56,7 @@ def _avg(scores: dict) -> float:
 def _trend_slope(recent: list[float]) -> float:
     """Least-squares slope (avg_score points gained per essay) over `recent`.
 
-    ĐỢT 15 #3 replaced `sum(diffs) / len(diffs)` here. That expression telescopes
+    Wave 15 #3 replaced `sum(diffs) / len(diffs)` here. That expression telescopes
     -- (x1-x0) + (x2-x1) collapses to x2-x0 -- so it was only ever reading the
     first and last essay in the window and every essay between them cancelled
     out. For TREND_WINDOW == 3 an OLS fit happens to give the identical number
@@ -79,7 +79,7 @@ def _score_trend(essay_history: list[dict]) -> str:
     over the last TREND_WINDOW essays' avg_score. Feeds directly into the
     Intervention Priority Index's score_decline / score_volatility weights.
 
-    'volatile' (ĐỢT 15 #3) exists because a slope alone cannot see a dip that
+    'volatile' (Wave 15 #3) exists because a slope alone cannot see a dip that
     recovered: a student scoring [10, 0, 10] has a genuinely flat trend, and the
     old code called that "stagnant" -- indistinguishable from [5, 5, 5], with the
     same zero contribution to the teacher's ranking. But the flat one deserves

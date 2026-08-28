@@ -1,4 +1,4 @@
-"""Unit tests for ĐỢT 4 #3 Parent Communication Co-Pilot (parent_note.py).
+"""Unit tests for Wave 4 #3 Parent Communication Co-Pilot (parent_note.py).
 Mocks generate_text -- must never touch real Vertex AI."""
 
 from __future__ import annotations

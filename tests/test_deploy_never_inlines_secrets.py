@@ -1,4 +1,4 @@
-"""ĐỢT 14 / ADR-020 -- hard gate: the deploy script must never pass a credential
+"""Wave 14 / ADR-020 -- hard gate: the deploy script must never pass a credential
 to Cloud Run as a plain environment variable.
 
 This is the same style of guard as tests/test_gmail_mcp_never_sends.py, and it

@@ -1,4 +1,4 @@
-"""Unit tests for ĐỢT 4 #1 mock role-based login (auth.py) -- zero network/LLM calls."""
+"""Unit tests for Wave 4 #1 mock role-based login (auth.py) -- zero network/LLM calls."""
 
 from __future__ import annotations
 

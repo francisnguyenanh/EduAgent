@@ -1,4 +1,4 @@
-"""ĐỢT 4 #1 -- Role-based Simple Login (mock multi-tenant auth).
+"""Wave 4 #1 -- Role-based Simple Login (mock multi-tenant auth).
 
 Not a real auth system (no Firebase Auth/Keycloak, no session tokens,
 no password hashing/storage) -- deliberately so, per the hackathon-scope
@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 _MOCK_PASSWORD = os.getenv("EDUAGENT_MOCK_PASSWORD", "eduagent2026")
 
-# ĐỢT 16 #6: ADR-016 described the exposure it was closing as "anyone who reads
+# Wave 16 #6: ADR-016 described the exposure it was closing as "anyone who reads
 # the repo can mint a role=teacher token for any class_id and read that class's
 # students' names, scores and weakness history". It closed the *forgery* route
 # (the signing key). It did not close the *issuance* route: `/api/auth/login`
@@ -53,7 +53,7 @@ def teacher_password_is_shared_with_students() -> bool:
     """
     return _TEACHER_PASSWORD == _MOCK_PASSWORD
 
-# ADR-016 (ĐỢT 12 NHÓM 2): this default is committed to a public repo, so it is
+# ADR-016 (Wave 12 Group 2): this default is committed to a public repo, so it is
 # a PUBLICLY KNOWN signing key. Anyone who reads the repo can mint a valid
 # `role=teacher` token for any class_id and read that class's students' names,
 # scores and weakness history -- which silently voids ADR-013's tenancy

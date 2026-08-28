@@ -34,7 +34,7 @@ from eduagent.tracing import traced_node
 
 _logger = logging.getLogger(__name__)
 
-# ĐỢT 3 latency optimization: keeps references to the fire-and-forget publish
+# Wave 3 latency optimization: keeps references to the fire-and-forget publish
 # tasks below alive -- asyncio.create_task() only holds a WEAK reference, so
 # without this the task object can be garbage-collected mid-flight and
 # silently never run (a known asyncio gotcha, not paranoia).
@@ -61,7 +61,7 @@ def _resolve_essay_id(ctx: Context) -> str:
 
 
 async def _publish_essay_evaluated_background(*, event_id: str, student_id: str, class_id: str, essay_id: str) -> None:
-    """ĐỢT 3 latency optimization: the Tier 1 pipeline's own result to the
+    """Wave 3 latency optimization: the Tier 1 pipeline's own result to the
     student is already fully decided by this point (Firestore write done) --
     the Tier 2 Pub/Sub handoff is a separate concern the student shouldn't
     have to wait on. Runs the existing blocking publish_essay_evaluated()

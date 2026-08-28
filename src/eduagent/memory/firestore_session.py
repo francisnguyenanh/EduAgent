@@ -6,7 +6,7 @@ Solves the multi-instance Cloud Run session state problem:
 - Supports Firestore TTL deletion via the `expire_at` timestamp
 - Falls back to the local tier if Firestore is unavailable
 
-ĐỢT 12 NHÓM 4 -- the bug this file used to have, and why the fix looks like this
+Wave 12 Group 4 -- the bug this file used to have, and why the fix looks like this
 --------------------------------------------------------------------------------
 `load_session()` previously returned any cached entry whose *session* TTL (24h)
 had not passed, before ever consulting Firestore, with no versioning or
@@ -85,7 +85,7 @@ def save_session(session_id: str, data: dict, ttl_seconds: int = _DEFAULT_SESSIO
     """Saves session state to Firestore and refreshes the local cache.
 
     `client` is injectable so tests can assert the write really happens with the
-    right payload (ĐỢT 12 NHÓM 4: previously the only way to keep tests off real
+    right payload (Wave 12 Group 4: previously the only way to keep tests off real
     Firestore was the PYTEST_CURRENT_TEST early-return below, which meant no test
     covered this code path at all).
     """
@@ -154,7 +154,7 @@ _META_FIELDS = ("_session_id", "_updated_at", "expire_at")
 def claim_reflection_atomically(session_id: str, *, client=None) -> tuple[str, dict | None]:
     """Compare-and-set the `has_reflected` flag inside a Firestore transaction.
 
-    ĐỢT 16 #4: `interactive.claim_reflection()` used to read the session, check
+    Wave 16 #4: `interactive.claim_reflection()` used to read the session, check
     the flag, then write it back -- three separate operations. ADR-022 and the
     README claimed that "prevents double-click race condition exploits", but two
     POSTs landing on two Cloud Run instances (maxScale is 5) both read
@@ -231,7 +231,7 @@ def delete_session(session_id: str, *, client=None) -> None:
 def store_is_authoritative(*, client=None) -> bool:
     """True when a real Firestore client backs this store.
 
-    ĐỢT 17 #2: `load_session()` returns None both for "this session genuinely
+    Wave 17 #2: `load_session()` returns None both for "this session genuinely
     does not exist" and for "there is no durable store configured at all"
     (local dev, pytest). A caller that treats those the same either resurrects
     a session another instance already deleted, or refuses to serve one that
@@ -245,7 +245,7 @@ def _default_client():
 
     Returns None under pytest so a test that does not inject a fake client stays
     offline. Tests that DO care about the Firestore path inject one explicitly
-    (see tests/test_firestore_session.py) -- that is the ĐỢT 12 NHÓM 4 fix for
+    (see tests/test_firestore_session.py) -- that is the Wave 12 Group 4 fix for
     "the durable path had no test coverage because it was switched off by an
     environment variable".
     """

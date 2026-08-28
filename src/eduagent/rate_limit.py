@@ -1,14 +1,14 @@
-"""In-process token-bucket rate limiter (ĐỢT 12 NHÓM 2, ADR-017).
+"""In-process token-bucket rate limiter (Wave 12 Group 2, ADR-017).
 
 WHY THIS EXISTS: `docs/data_lifecycle_and_privacy.md`'s STRIDE table listed
-"Token bucket rate limiting" as the Denial-of-Service mitigation. The ĐỢT 12
+"Token bucket rate limiting" as the Denial-of-Service mitigation. The Wave 12
 audit grepped for it and found nothing -- `grep -rniE "rate.?limit|token.?bucket|
 slowapi|throttl" src/` returned zero results. The claim was false, and it was
 false in a security table, which is the worst place for a claim to be false.
 
 Rather than delete the claim, the mechanism is implemented here, because the
 exposure it describes is real: the student-facing debate endpoints each trigger
-several Gemini calls, and before ĐỢT 12 they were unauthenticated on a public
+several Gemini calls, and before Wave 12 they were unauthenticated on a public
 URL. A `while true; do curl ...; done` loop was a direct route to draining the
 project's Vertex AI quota (a cost-DoS), with no per-caller ceiling anywhere in
 the stack.
@@ -27,7 +27,7 @@ HONEST SCOPE -- read this before citing it as a mitigation:
     "as fast as curl can loop". It is 5x weaker than the per-instance numbers
     suggest, which is exactly why the multiplier is written out here.
 
-    ĐỢT 17 review note: an external reviewer argued this makes the limiter
+    Wave 17 review note: an external reviewer argued this makes the limiter
     "meaningless under autoscaling, and you chose --max-instances 5 yourself".
     Half right, and worth recording both halves. The contradiction is real --
     we opted into the horizontal scaling that weakens this control. But a 5x
@@ -81,7 +81,7 @@ class RateLimitPolicy:
 
 
 DEBATE_POLICY = RateLimitPolicy(capacity=10, refill_per_second=0.2)
-# ĐỢT 27 / ADR-032: deliberately loosened from (5, 0.1) to (15, 0.5) so a judge
+# Wave 27 / ADR-032: deliberately loosened from (5, 0.1) to (15, 0.5) so a judge
 # exploring both portals over a month-long window is not locked out mid-review.
 #
 # Why this does not weaken the system (reviewed Wave 27, and the reasoning is
@@ -164,7 +164,7 @@ login_limiter = TokenBucketLimiter(LOGIN_POLICY)
 def client_key(*, x_forwarded_for: str | None, peer_host: str | None) -> str:
     """Derives the rate-limit key from a request.
 
-    ĐỢT 17 #1 -- this function previously took the FIRST entry of
+    Wave 17 #1 -- this function previously took the FIRST entry of
     X-Forwarded-For, with a docstring asserting that the proxy appends and so
     "later entries are attacker-supplied". That was backwards, and it made the
     whole limiter bypassable with one header.

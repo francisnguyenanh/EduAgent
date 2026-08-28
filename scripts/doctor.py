@@ -97,7 +97,7 @@ def check_pubsub_topology() -> tuple[str, str]:
             f"Dead-letter max_delivery_attempts={subscription.dead_letter_policy.max_delivery_attempts}, "
             f"expected {PUBSUB.max_delivery_attempts} (config.py PUBSUB.max_delivery_attempts)."
         )
-    # ĐỢT 16 #7: the single worst regression this project has had (ĐỢT 8) was
+    # Wave 16 #7: the single worst regression this project has had (Wave 8) was
     # the subscription sitting in PULL mode while every document described a
     # push pipeline -- "event-driven" only because a human was running a pull
     # script beside the demo. Doctor checked topic/DLQ/subscription existence
@@ -139,7 +139,7 @@ def check_gmail_oauth_token() -> tuple[str, str]:
     if creds.valid:
         return PASS, "Gmail compose-only token present and valid."
     if creds.expired and creds.refresh_token:
-        # ĐỢT 27: a dead refresh token here is a fact about THIS LAPTOP's copy,
+        # Wave 27: a dead refresh token here is a fact about THIS LAPTOP's copy,
         # not about the deployed service. Cloud Run mounts
         # GMAIL_COMPOSE_TOKEN_JSON from Secret Manager (see the "No plaintext
         # credentials" check), which is a separate, independently-rotated
@@ -169,7 +169,7 @@ def check_sheets_permission() -> tuple[str, str]:
 
     from eduagent.integrations.sheets_mcp import _service
 
-    # ĐỢT 27: same reasoning as the Gmail check above -- this exercises the
+    # Wave 27: same reasoning as the Gmail check above -- this exercises the
     # laptop's Sheets token, not the SHEETS_TOKEN_JSON the revision mounts.
     # The Sheets audit row is also an append-only side channel: PHASE 4 already
     # guarantees a failure there cannot affect the digest a judge sees.
@@ -197,7 +197,7 @@ def check_vertex_ai_reachability() -> tuple[str, str]:
 
 
 def check_cloud_run_deployment() -> tuple[str, str]:
-    """ĐỢT 3 #5: the other 6 checks only verify local-SA reachability to each
+    """Wave 3 #5: the other 6 checks only verify local-SA reachability to each
     GCP service -- none of them prove the deployed Cloud Run revision is
     actually up and serving. Fetches a real Google-signed IAM identity token
     (not an OAuth access token -- that's what Cloud Run's IAM invoker check
@@ -228,7 +228,7 @@ def check_cloud_run_deployment() -> tuple[str, str]:
 
 
 def check_session_secret() -> tuple[str, str]:
-    """ĐỢT 12 NHÓM 2 / ADR-016: surface the signing-key state BEFORE a demo.
+    """Wave 12 Group 2 / ADR-016: surface the signing-key state BEFORE a demo.
 
     The audit's worst finding was invisible precisely because nothing reported
     it: the live service was signing teacher tokens with the repo's committed
@@ -279,19 +279,19 @@ def _live_revision_env() -> tuple[list | None, str]:
 
 
 def check_teacher_password_separation() -> tuple[str, str]:
-    """ĐỢT 16 #6 / ADR-025: is a teacher token still obtainable with the public
+    """Wave 16 #6 / ADR-025: is a teacher token still obtainable with the public
     demo passcode?
 
     ADR-016 closed token *forgery*; this reports on token *issuance*, the other
     half of the same exposure.
 
-    ĐỢT 19 #1 -- this check used to read `eduagent.auth` in the LOCAL process,
+    Wave 19 #1 -- this check used to read `eduagent.auth` in the LOCAL process,
     which answered a question nobody was asking. Running it on a laptop said
     WARN while production was correctly configured, and -- far worse -- it
     would have said PASS if someone unmounted the secret from Cloud Run while
     the developer happened to have the env var exported. A pre-demo check that
     reports on the machine you are standing at rather than the service the
-    judges will open is the ĐỢT 8 failure all over again. It now inspects the
+    judges will open is the Wave 8 failure all over again. It now inspects the
     deployed revision, exactly like check_no_plaintext_credentials_on_cloud_run().
     """
     env, skip_reason = _live_revision_env()
@@ -329,7 +329,7 @@ def check_teacher_password_separation() -> tuple[str, str]:
 
 
 def check_firestore_ttl_policy() -> tuple[str, str]:
-    """ĐỢT 12 NHÓM 3: firestore_session.py writes `expire_at`, but Firestore only
+    """Wave 12 Group 3: firestore_session.py writes `expire_at`, but Firestore only
     deletes documents when a TTL POLICY exists on that field. Without it, the
     documented "TTL 24h then permanently deleted" retention behaviour silently
     does not happen and sessions accumulate forever."""
@@ -343,7 +343,7 @@ def check_firestore_ttl_policy() -> tuple[str, str]:
     field_path = (
         f"projects/{project_id}/databases/(default)/collectionGroups/debate_sessions/fields/expire_at"
     )
-    # ĐỢT 27: PermissionDenied here says the CALLER may not read the field
+    # Wave 27: PermissionDenied here says the CALLER may not read the field
     # config -- it says nothing about whether the TTL policy exists. Letting it
     # fall through to _check()'s blanket `except` reported FAIL ("documents are
     # not being deleted"), which is a claim this run has no evidence for.
@@ -383,7 +383,7 @@ _CREDENTIAL_ENV_VARS = ("EDUAGENT_SESSION_SECRET", "GMAIL_COMPOSE_TOKEN_JSON", "
 def _gcloud_executable() -> str | None:
     """Absolute path to the gcloud launcher, or None if it is not on PATH.
 
-    ĐỢT 15 #5: this used to be the bare string "gcloud" passed to
+    Wave 15 #5: this used to be the bare string "gcloud" passed to
     subprocess.run(). On Windows gcloud installs as `gcloud.cmd` (a batch
     wrapper) and there is no extension-less `gcloud` binary, so CreateProcess
     raised FileNotFoundError and the whole doctor run died with a traceback
@@ -398,7 +398,7 @@ def _gcloud_executable() -> str | None:
 
 
 def check_no_plaintext_credentials_on_cloud_run() -> tuple[str, str]:
-    """ĐỢT 14 / ADR-020: verify no credential is stored as a plain env var on the
+    """Wave 14 / ADR-020: verify no credential is stored as a plain env var on the
     deployed revision.
 
     Cloud Run keeps plain env vars in the revision spec in cleartext, so anyone

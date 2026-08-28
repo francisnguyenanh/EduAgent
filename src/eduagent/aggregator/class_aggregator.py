@@ -65,7 +65,7 @@ def _display_name(student_id: str, name_by_id: dict[str, str]) -> str:
 
 
 def _h(value) -> str:
-    """ĐỢT 26 #1.3: HTML-escapes every model- or user-derived string before it
+    """Wave 26 #1.3: HTML-escapes every model- or user-derived string before it
     lands in format_digest_email_html(). Gmail sanitizes what it renders, so
     this was invisible on the email path -- but the same HTML is now served to
     the Teacher Dashboard preview, where an unescaped `<` out of an LLM field
@@ -96,7 +96,7 @@ def _priority_badges(reason: dict) -> str:
     if reason.get("score_trend") == "declining":
         badges.append('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:12px;">declining</span>')
     if reason.get("score_trend") == "volatile":
-        # ĐỢT 15 #3 -- a collapse-and-recover inside the trend window. Its own
+        # Wave 15 #3 -- a collapse-and-recover inside the trend window. Its own
         # badge, not folded into "declining": the teacher is being told the
         # scores are unstable, not that they are heading down.
         badges.append('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:12px;">volatile</span>')
@@ -216,7 +216,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
         last_digest_at = None
 
     if should_coalesce_digest(last_digest_at=last_digest_at, now=now, window_seconds=DIGEST_DEBOUNCE.window_seconds):
-        # ĐỢT 3 high-load resiliency: e.g. a whole class of 50 submitting
+        # Wave 3 high-load resiliency: e.g. a whole class of 50 submitting
         # near-simultaneously would otherwise generate 50 near-identical
         # digests/Gmail drafts in a few minutes. This event's profile write
         # already happened in Tier 1 (unaffected); the NEXT event for this
@@ -248,7 +248,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
     teacher_email = class_settings.get("digest_notify_email") or TEACHER.email
     draft_id = None
     draft_message_id = None
-    # ĐỢT 27 / ADR-031: WHY the draft is missing, not just THAT it is missing.
+    # Wave 27 / ADR-031: WHY the draft is missing, not just THAT it is missing.
     # Before this the dashboard rendered one fallback badge -- "no recipient
     # configured" -- for both causes, so an expired Gmail OAuth token showed a
     # judge a message contradicted by the recipient sitting in their own
@@ -266,7 +266,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
                 body_html=format_digest_email_html(digest, ranked, name_by_id),
             )
             draft_id = draft["draft_id"]
-            # ĐỢT 26 / ADR-030: the hex message id, not the API draft id, is
+            # Wave 26 / ADR-030: the hex message id, not the API draft id, is
             # what Gmail's web UI addresses -- kept separately so the
             # dashboard's "open the draft" link resolves.
             draft_message_id = draft["message_id"]
@@ -275,7 +275,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
             draft_status = "failed"
             _logger.exception("Failed to create Gmail draft -- digest still returned/logged", extra={"class_id": class_id, "event_id": event_id})
 
-    # ĐỢT 3 latency optimization: Sheets append and the Firestore
+    # Wave 3 latency optimization: Sheets append and the Firestore
     # class_analytics write are each independent network round-trips that
     # both only depend on `draft_id` (Gmail must run first for that reason)
     # -- not on each other -- so dispatch them concurrently instead of

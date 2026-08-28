@@ -136,7 +136,7 @@ def _transcribe_once(*, image_bytes: bytes, image_mime_type: str) -> dict:
         image_bytes=image_bytes,
         image_mime_type=image_mime_type,
         response_schema=_SCHEMA,
-        # ĐỢT 3 token/latency optimization: verbatim transcription is a
+        # Wave 3 token/latency optimization: verbatim transcription is a
         # perception task, not a reasoning task -- extended thinking adds
         # latency/cost here without improving transcription accuracy.
         thinking_budget=0,
@@ -237,7 +237,7 @@ def _cross_check_consistency(first: dict, second_text: str, *, cross_model: bool
 
 def transcribe_essay_image(image_bytes: bytes, image_mime_type: str, *, essay_id: str | None = None, student_id: str | None = None) -> dict:
     """Pure(ish) core of the node below -- preprocess, transcribe twice,
-    cross-check -- factored out so callers outside the ADK graph (ĐỢT 3 #2/#7's
+    cross-check -- factored out so callers outside the ADK graph (Wave 3 #2/#7's
     interactive REST API image-upload path) run the EXACT same production OCR
     logic instead of a second, divergent implementation. Returns
     {transcribed_text, confidence, uncertain_segments, degraded}."""
@@ -245,7 +245,7 @@ def transcribe_essay_image(image_bytes: bytes, image_mime_type: str, *, essay_id
         _logger.error("transcribe_essay_image called with no image bytes", extra={"essay_id": essay_id})
         return {"transcribed_text": "", "confidence": _DEGRADED_CONFIDENCE, "uncertain_segments": [], "degraded": True, "cross_check_model": None}
 
-    # ĐỢT 3 #1: normalize EXIF rotation + downscale large phone-camera photos
+    # Wave 3 #1: normalize EXIF rotation + downscale large phone-camera photos
     # BEFORE either Vision call -- both cross-check calls below see the same
     # prepped bytes, so the similarity comparison stays apples-to-apples.
     image_bytes, image_mime_type = preprocess_image_bytes(image_bytes, image_mime_type)

@@ -6,9 +6,9 @@ dimensions by running the REAL production scorer on both texts:
     initial_thesis  --summarize_essay()--> summary --score_essay()--> before
     revised_thesis  --summarize_essay()--> summary --score_essay()--> after
 
-ĐỢT 12 NHÓM 1 fix (option A): this script previously carried `before_scores`
+Wave 12 Group 1 fix (option A): this script previously carried `before_scores`
 and `after_scores` as hand-typed literals and merely subtracted them, then the
-report called the result "Giá Trị Đo Được" / "Chấm lại độc lập". Nothing was
+report called the result a "Measured Value" from an "independent re-score". Nothing was
 measured and nothing was re-scored -- the headline number was the mean of 16
 integers chosen by the author. Every number below now comes from a live
 Gemini call through `nodes/scorer.py::score_essay()`, the exact same prompt,

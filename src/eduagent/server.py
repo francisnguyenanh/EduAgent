@@ -74,7 +74,7 @@ _google_auth_request = google_auth_requests.Request()
 
 
 def _verify_pubsub_push_auth(authorization: str | None) -> None:
-    """ĐỢT 8 / ADR-014: this service is deployed --allow-unauthenticated so
+    """Wave 8 / ADR-014: this service is deployed --allow-unauthenticated so
     judges can open the Web UI without a GCP identity, which means Cloud Run
     IAM no longer protects `POST /` -- this endpoint must authenticate the
     Pub/Sub push subscription's own OIDC token itself, at the application
@@ -129,7 +129,7 @@ def _require_token(authorization: str | None) -> dict:
 
 
 def _verify_class_auth(class_id: str, authorization: str | None, required_role: str | None = None) -> dict:
-    """ĐỢT 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
+    """Wave 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
     for the exact class_id in the URL path, and verifies role if required."""
     claims = _require_token(authorization)
 
@@ -147,7 +147,7 @@ def _verify_class_auth(class_id: str, authorization: str | None, required_role: 
 
 
 def _verify_student_auth(*, student_id: str, class_id: str, authorization: str | None) -> dict:
-    """ĐỢT 12 NHÓM 2 / ADR-018: authorizes a student-facing debate action.
+    """Wave 12 Group 2 / ADR-018: authorizes a student-facing debate action.
 
     Before this existed, all five debate endpoints (`start`, `start-with-image`,
     `start-with-gdoc`, `turn`, `reflect`) took an arbitrary caller-supplied
@@ -212,7 +212,7 @@ def _enforce_rate_limit(request: Request, limiter) -> None:
 @app.get("/", response_class=HTMLResponse)
 @app.get("/demo", response_class=HTMLResponse)
 async def demo_page() -> HTMLResponse:
-    """ĐỢT 3 #2: a human (or a judge) opening the live Cloud Run URL in a
+    """Wave 3 #2: a human (or a judge) opening the live Cloud Run URL in a
     browser previously got nothing but the Pub/Sub push endpoint's own
     handler (POST-only, so GET / fell through to FastAPI's default 404).
     This is a GET route -- it does not collide with the POST / push
@@ -276,7 +276,7 @@ async def api_test_sheets(class_id: str, payload: TestSheetsRequest | None = Non
 
 @app.post("/api/parent-note")
 async def api_parent_note(request: Request, payload: ParentNoteRequest, authorization: str | None = Header(None)) -> dict:
-    # ĐỢT 16 #5: this was the one Gemini-invoking route with no bucket. ADR-017
+    # Wave 16 #5: this was the one Gemini-invoking route with no bucket. ADR-017
     # exists because "each call fans out into Gemini requests on a public URL,
     # so a curl loop was an unmetered spend channel" -- that reasoning applies
     # here verbatim: draft_parent_note() calls generate_text(), and the route
@@ -395,10 +395,10 @@ async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
 
 @app.post("/api/debate/reflect")
 async def api_debate_reflect(request: Request, payload: DebateReflectionRequest) -> dict:
-    """ĐỢT 7: Metacognitive self-correction loop -- evaluates the student's
+    """Wave 7: Metacognitive self-correction loop -- evaluates the student's
     post-debate revised claim and updates their profile with growth bonus.
 
-    ĐỢT 15 #2: the payload is now session-only, so this route resolves ownership
+    Wave 15 #2: the payload is now session-only, so this route resolves ownership
     the same way /api/debate/turn does -- from the session's own stored
     student_id/class_id, authenticating BEFORE the lookup so the 403-vs-404
     split cannot be used to probe which session ids are real.
@@ -441,7 +441,7 @@ async def api_class_analytics(class_id: str, limit: int = 10, authorization: str
     except Exception:
         _logger.exception("list_recent_digests failed for class_id=%s", class_id)
         raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
-    # ĐỢT 26 #1.3: attach the SAME HTML body that went into the Gmail draft, so
+    # Wave 26 #1.3: attach the SAME HTML body that went into the Gmail draft, so
     # a judge can read the digest without access to the mailbox that holds it.
     # Rendered from the stored digest_text/ranked_students -- not re-generated
     # and not re-worded -- so "what the page shows" and "what the teacher will
@@ -462,7 +462,7 @@ async def api_class_analytics(class_id: str, limit: int = 10, authorization: str
 
 @app.get("/api/classes/{class_id}/students")
 async def api_class_students(class_id: str, limit: int = 50, authorization: str | None = Header(None)) -> dict:
-    """ĐỢT 3: class roster ordered by most-recently-active student, backed
+    """Wave 3: class roster ordered by most-recently-active student, backed
     by the composite index in firestore.indexes.json -- see
     memory/firestore_memory.py::list_students_by_class."""
     _verify_class_auth(class_id, authorization, required_role="teacher")

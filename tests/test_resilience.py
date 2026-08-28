@@ -184,7 +184,7 @@ def test_mutator_parks_pending_essay_when_ocr_confidence_is_low():
 
 
 def test_mutator_publish_runs_in_background_without_blocking_node_return():
-    """ĐỢT 3 latency optimization: profile_mutator must return WITHOUT
+    """Wave 3 latency optimization: profile_mutator must return WITHOUT
     waiting on publish_essay_evaluated() -- verified by making the mocked
     publish call block on an Event that's only set AFTER profile_mutator()
     has already returned."""

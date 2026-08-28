@@ -1,5 +1,5 @@
 """Unit tests for src/eduagent/api.py's interactive-debate orchestration
-(ĐỢT 3 #2). Mocks summarize_essay/get_profile (start_debate's own concerns)
+(Wave 3 #2). Mocks summarize_essay/get_profile (start_debate's own concerns)
 and eduagent.nodes.debate.generate_text (the only network call underneath
 step_debate_turn, same pattern as test_interactive.py) -- must never touch
 real Vertex AI/Firestore."""
@@ -95,7 +95,7 @@ def test_submit_debate_turn_marks_complete_at_max_turns():
     assert turn_finish["result"]["scores"]["logical_coherence"] == 5
 
     # complete_debate_session already ran inside submit_debate_turn on completion.
-    # ĐỢT 15 #2: the session is kept (flagged `completed`) so the metacognitive
+    # Wave 15 #2: the session is kept (flagged `completed`) so the metacognitive
     # reflection that follows can be tied to a debate that really happened -- it
     # is torn down by submit_reflection(), or by the 24h TTL if the student never
     # reflects. It must be terminal all the same.

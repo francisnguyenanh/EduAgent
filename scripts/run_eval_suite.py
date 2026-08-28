@@ -2,7 +2,7 @@
 
 Executes all 4 layers (50 test cases total) and writes a JSON + Markdown report to eval/results/.
 Design Principle: ZERO LLM-as-judge. Every metric is deterministic, auditable and
-reproducible -- and, after ĐỢT 12, every case is capable of FAILING (see below).
+reproducible -- and, after Wave 12, every case is capable of FAILING (see below).
 
 4 Layers:
   - Layer 1: Safety & Security Guardrails (15 cases) -- real validator/sanitizer/auth
@@ -12,7 +12,7 @@ reproducible -- and, after ĐỢT 12, every case is capable of FAILING (see belo
     metacognitive growth logic, 4 against the measured artifact produced by
     scripts/evaluate_learning_outcomes.py
 
-ĐỢT 12 NHÓM 1: two groups of cases were previously unfalsifiable and have been
+Wave 12 Group 1: two groups of cases were previously unfalsifiable and have been
 rewritten to drive production code instead:
   - Layer 4's 8 "growth" cases subtracted integer literals declared in
     eval/evalset.py (`8 - 2 >= 4`), passing even with src/ deleted.
@@ -115,7 +115,7 @@ def run_prompt_injection_cases() -> list[CaseResult]:
 
 
 def run_tenancy_security_cases() -> list[CaseResult]:
-    """ĐỢT 12 NHÓM 4: this runner used to re-implement the authorization check
+    """Wave 12 Group 4: this runner used to re-implement the authorization check
     (`claims.get("class_id") == case["target_class_id"]`) instead of calling it.
     That protected a COPY of the logic -- a bug in the real
     `server._verify_class_auth` (a forgotten role check, say) would have left
@@ -163,7 +163,7 @@ def _matches_signature(text: str, keywords: list[str]) -> bool:
 
 
 def run_persona_fidelity_cases(*, live: bool = False) -> list[CaseResult]:
-    """ĐỢT 12 NHÓM 1 rework.
+    """Wave 12 Group 1 rework.
 
     Default (deterministic, zero LLM) mode asserts against the REAL production
     prompt builder, `nodes/debate.py::build_system_instruction()` -- the same
@@ -442,7 +442,7 @@ def _load_measured_artifact() -> dict | None:
     """Loads the learning-outcome measurement produced by
     scripts/evaluate_learning_outcomes.py. Returns None if it is absent or
     unreadable -- the Group B cases then FAIL loudly rather than silently
-    passing, which is the whole point of the ĐỢT 12 rework."""
+    passing, which is the whole point of the Wave 12 rework."""
     if not _MEASURED_ARTIFACT.exists():
         return None
     try:
@@ -650,19 +650,19 @@ def render_markdown(report: dict) -> str:
 
     md = f"""# 4-Layer Deterministic ADK Eval Suite Report
 
-> **Methodological Mandate (ZERO LLM-as-Judge):** cả {total} test case được đánh giá bằng **quy tắc kiểm chứng tất định (deterministic rules)** — validator regex, thuật toán xếp hạng và các hàm thuần trong `src/` — không có LLM nào đóng vai giám khảo, nên không tồn tại đường *Reward Hacking* qua LLM-as-judge.
+> **Methodological Mandate (ZERO LLM-as-Judge):** all {total} cases are decided by **deterministic rules** — validator regexes, the ranking algorithm, and pure functions in `src/`. No LLM acts as a judge anywhere in this suite, so there is no LLM-as-judge path to reward-hack.
 >
-> **Cách đọc con số này:** đây là **{report['overall']['passed']}/{total} test case tất định PASS**, tức "test suite xanh", KHÔNG phải "hệ thống đúng {report['overall']['pass_rate']:.0%}". Hai phát biểu khác nhau.
+> **How to read this number:** it means **{report['overall']['passed']}/{total} deterministic test cases passed** — i.e. "the suite is green", NOT "the system is {report['overall']['pass_rate']:.0%} correct". Those are two different claims.
 >
-> **Điểm cần biết về Layer 4:** 6 case chạy trực tiếp logic metacognitive growth thật (`memory/student_profile.py`); 4 case còn lại assert lên **kết quả đo thật** trong `eval/results/learning_outcome_measured.json` do `scripts/evaluate_learning_outcomes.py` sinh ra bằng cách gọi scorer production qua Vertex AI. Nếu file đo đó thiếu hoặc phép đo không cho thấy tăng trưởng, các case này **FAIL** — chúng không phải phép trừ trên hằng số.
+> **What to know about Layer 4:** 6 cases exercise the real metacognitive growth logic directly (`memory/student_profile.py`); the other 4 assert against **actually measured results** in `eval/results/learning_outcome_measured.json`, produced by `scripts/evaluate_learning_outcomes.py` calling the production scorer through Vertex AI. If that measurement file is missing, or the measurement shows no growth, those cases **FAIL** — they are not arithmetic on hard-coded constants.
 
 ---
 
-## 1. Tổng Kết 4 Tầng Kiểm Thử (4-Layer Summary)
+## 1. Four-Layer Summary
 
-**Tổng số:** **{report['overall']['passed']}/{total} deterministic test cases passed ({report['overall']['pass_rate']:.0%})**
+**Total:** **{report['overall']['passed']}/{total} deterministic test cases passed ({report['overall']['pass_rate']:.0%})**
 
-| Tầng Kiểm Thử (Evaluation Layer) | Số Test Case PASS | Tổng Test Case | Tỷ Lệ Đạt (Pass Rate) |
+| Evaluation Layer | Cases Passed | Total Cases | Pass Rate |
 |---|:---:|:---:|:---:|
 """
     for layer, s in report["layers"].items():
@@ -671,9 +671,9 @@ def render_markdown(report: dict) -> str:
     md += """
 ---
 
-## 2. Chi Tiết Từng Ca Kiểm Thử (Detailed Test Matrix)
+## 2. Detailed Test Matrix
 
-| Mã Kiểm Thử (Case ID) | Tầng (Layer) | Nhóm (Group) | Kết Quả | Chi Tiết Thực Thi |
+| Case ID | Layer | Group | Result | Execution Detail |
 |---|---|---|:---:|---|
 """
     for c in report["cases"]:

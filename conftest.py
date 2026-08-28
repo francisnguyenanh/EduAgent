@@ -18,7 +18,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiters():
-    """ĐỢT 12 NHÓM 2: the token-bucket limiters (rate_limit.py) are module-level
+    """Wave 12 Group 2: the token-bucket limiters (rate_limit.py) are module-level
     singletons, so without this the buckets drain across the whole test session
     and later tests fail with 429 for reasons that have nothing to do with what
     they assert. Resetting per test keeps the limiter itself exercised (the
@@ -33,7 +33,7 @@ def _reset_rate_limiters():
 @pytest.fixture
 def student_token():
     """Bearer token for the default demo student, for the debate endpoints that
-    became authenticated in ĐỢT 12 NHÓM 2."""
+    became authenticated in Wave 12 Group 2."""
     from eduagent.auth import create_access_token
 
     def _make(student_id="c1_stu01", role="student", class_id=None):

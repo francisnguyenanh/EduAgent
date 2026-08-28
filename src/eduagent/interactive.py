@@ -8,7 +8,7 @@ accepts the essay text once, so there is no way to inject the student's reply
 between turns from inside the graph. PHASE 1 recorded this as a limitation to
 be removed later "using ADK2 Workflow's interrupt/resume (`RequestInput`)".
 
-That plan was based on a factual error, corrected in ĐỢT 15: **`RequestInput`
+That plan was based on a factual error, corrected in Wave 15: **`RequestInput`
 is not a `Workflow` primitive at all.** In the installed ADK
 (`google-adk` 2.3.0) `google.adk.workflow` exports only BaseNode, Edge,
 FunctionNode, JoinNode, Node, NodeTimeoutError, RetryConfig, START and
@@ -39,7 +39,7 @@ an in-process dict (`_sessions`) behind it. **Reads prefer Firestore**; the
 dict is a fallback for when no durable store is configured at all (local runs,
 pytest). Writes go to both.
 
-ĐỢT 17 #2 corrected this paragraph together with the code under it: it used to
+Wave 17 #2 corrected this paragraph together with the code under it: it used to
 say "Reads prefer the local tier and fall back to Firestore", which was both
 what the code did and the exact failure ADR-015 exists to prevent -- see
 get_debate_session() for why preferring the local tier loses turns across
@@ -48,7 +48,7 @@ Cloud Run instances.
 The original docstring here said the opposite -- "intentionally NOT a durable
 store (no Firestore)" -- and that stayed in the file after ADR-015 added the
 Firestore calls that this module now makes on every session operation (see the
-`_firestore_*` imports below). ĐỢT 12 NHÓM 3 corrected it: a comment that
+`_firestore_*` imports below). Wave 12 Group 3 corrected it: a comment that
 contradicts the code twenty lines under it is worse than no comment.
 
 WHY the durable tier was needed: Cloud Run runs multiple instances behind a
@@ -63,7 +63,7 @@ end_debate_session(). Durability here buys request-to-request continuity, not
 long-term recall. Long-term memory remains `student_profiles`, written only
 through the profile-mutation path.
 
-SESSION LIFETIME AFTER SCORING (ADR-022, ĐỢT 15).
+SESSION LIFETIME AFTER SCORING (ADR-022, Wave 15).
 
 complete_debate_session() used to delete the session as its last act. It no
 longer does: it marks the session `completed` and leaves it in place, because the
@@ -96,7 +96,7 @@ _logger = logging.getLogger(__name__)
 _sessions: dict[str, dict] = {}
 
 
-# ĐỢT 3 resource hygiene: an abandoned debate (student opens the page, never
+# Wave 3 resource hygiene: an abandoned debate (student opens the page, never
 # finishes) would otherwise sit in this in-process dict forever -- a slow
 # memory leak on a long-lived Cloud Run instance. 24h is generous for a
 # real debate session while still bounding worst-case growth.
@@ -117,7 +117,7 @@ class DebateNotComplete(ValueError):
 
 
 class ReflectionAlreadySubmitted(ValueError):
-    """Raised on a second reflection for the same session. ĐỢT 15 #2: one debate
+    """Raised on a second reflection for the same session. Wave 15 #2: one debate
     earns at most one growth bonus, and this is the flag that enforces it."""
 
 
@@ -181,7 +181,7 @@ def evict_stale_sessions(ttl_seconds: float = _SESSION_TTL_SECONDS, *, now: floa
 def get_debate_session(session_id: str) -> dict:
     """Reads prefer Firestore; the in-process dict is a failure fallback only.
 
-    ĐỢT 17 #2 -- this used to be `_sessions.get()` first, consulting Firestore
+    Wave 17 #2 -- this used to be `_sessions.get()` first, consulting Firestore
     only when the dict held nothing. That is precisely the bug ADR-015 says it
     fixed, reintroduced one layer up: there are TWO caches here, and the outer
     one had no freshness bound at all (only `evict_stale_sessions`, a 24h
@@ -201,7 +201,7 @@ def get_debate_session(session_id: str) -> dict:
     """
     fs_session = _firestore_get_session(session_id)
     if fs_session is not None:
-        # ĐỢT 19 #4: do NOT populate the local dict on a Firestore hit. Once
+        # Wave 19 #4: do NOT populate the local dict on a Firestore hit. Once
         # reads prefer Firestore, caching here buys nothing -- the next read
         # goes to Firestore anyway (that is the whole point of ADR-027) -- while
         # every read of every session would grow a dict that is only swept on a
@@ -244,7 +244,7 @@ def step_debate_turn(session_id: str, student_reply: str | None = None) -> dict:
     turns: list[dict] = session["turns"]
     turn_number = len(turns) + 1
 
-    # ĐỢT 15 #2: a scored session is terminal, and the flag says so
+    # Wave 15 #2: a scored session is terminal, and the flag says so
     # independently of the turn count. Completion normally coincides with
     # max_debate_turns, but the session now outlives completion (so the
     # reflection can be tied to it), and re-opening a debate whose score has
@@ -279,7 +279,7 @@ def claim_reflection(session_id: str) -> dict:
     """Atomically-enough claims the one reflection a finished debate is entitled
     to, and returns the session it belongs to.
 
-    ĐỢT 15 #2/#4: this is the single place that decides a reflection is
+    Wave 15 #2/#4: this is the single place that decides a reflection is
     legitimate, so the caller never has to trust the request body for *any* of
     it. It rejects a session that has not finished (`DebateNotComplete`) and a
     session whose reflection was already spent (`ReflectionAlreadySubmitted`),
@@ -287,7 +287,7 @@ def claim_reflection(session_id: str) -> dict:
     a double-clicked "Submit Revised Claim" must not be able to bank two growth
     bonuses while the first request is still waiting on Gemini.
     """
-    # ĐỢT 16 #4: prefer a real Firestore transaction so the check and the write
+    # Wave 16 #4: prefer a real Firestore transaction so the check and the write
     # cannot be split by a concurrent request on another instance. Falls back to
     # the read-modify-write below only when there is no Firestore client at all
     # (local dev, pytest), where there is exactly one process and therefore no
@@ -323,7 +323,7 @@ def claim_reflection(session_id: str) -> dict:
 def release_reflection_claim(session_id: str) -> None:
     """Gives back the one reflection a session is entitled to.
 
-    ĐỢT 16 #1: `claim_reflection()` deliberately spends the claim BEFORE the
+    Wave 16 #1: `claim_reflection()` deliberately spends the claim BEFORE the
     LLM call, so a double-click cannot bank two growth bonuses. The cost of
     that ordering is that a Vertex AI outage would otherwise burn the
     student's only attempt on a request that never got evaluated. Releasing
@@ -357,11 +357,11 @@ def record_student_reply(session_id: str, student_reply: str) -> None:
 def _default_persist_essay_result(**kwargs) -> None:
     """Real Firestore write, or a no-op under pytest.
 
-    ĐỢT 12 NHÓM 4: this used to be an inline `and not os.getenv(
+    Wave 12 Group 4: this used to be an inline `and not os.getenv(
     "PYTEST_CURRENT_TEST")` in the condition below, which had a nasty property --
     it did not just keep tests offline, it made the write path *unreachable* from
-    any test. So the feature ĐỢT 9 declared "fixed" (wiring the interactive
-    debate into Firestore + Pub/Sub) and ĐỢT 10's Task 10.5 had precisely zero
+    any test. So the feature Wave 9 declared "fixed" (wiring the interactive
+    debate into Firestore + Pub/Sub) and Wave 10's Task 10.5 had precisely zero
     tests behind them, and "190/190 passed" said nothing about either.
 
     Hoisting the decision into injectable seams keeps the offline-by-default
@@ -392,7 +392,7 @@ def complete_debate_session(
     publish_event=None,
     run_publish_in_thread: bool = True,
 ) -> dict:
-    """ĐỢT 5 -- scores the finished debate (same cognitive_scorer prompt/
+    """Wave 5 -- scores the finished debate (same cognitive_scorer prompt/
     schema the batch graph uses, via scorer.py's shared score_essay()) and
     tears the session down. Also persists to Firestore and publishes a Pub/Sub
     event to trigger class aggregation / Sheets logging for live web sessions.
@@ -461,7 +461,7 @@ def complete_debate_session(
         except Exception:
             _logger.exception("Failed to persist interactive debate results to Firestore for student %s", student_id)
 
-    # ĐỢT 15 #2: this used to call end_debate_session() here, which deleted the
+    # Wave 15 #2: this used to call end_debate_session() here, which deleted the
     # only server-side record that the debate had ever happened -- and the
     # metacognitive reflection step comes AFTER completion. That is precisely why
     # /api/debate/reflect had to accept student_id/original_claim from the client,

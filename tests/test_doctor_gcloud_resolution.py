@@ -1,4 +1,4 @@
-"""ĐỢT 15 #5 -- the preflight scripts must not die on a Windows machine.
+"""Wave 15 #5 -- the preflight scripts must not die on a Windows machine.
 
 `scripts/doctor.py` and `scripts/deploy_to_cloud_run.py` invoked the gcloud CLI
 as the bare string "gcloud". On Windows the SDK installs `gcloud.cmd` and there

@@ -13,7 +13,7 @@ SECRETS_DIR = ROOT / "secrets"
 PROJECT_ID = "project-4fc36103-f4ca-49f6-883"
 SERVICE_ACCOUNT = f"eduagent-sa@{PROJECT_ID}.iam.gserviceaccount.com"
 
-# ĐỢT 14 / ADR-020: every credential reaches the container as a Secret Manager
+# Wave 14 / ADR-020: every credential reaches the container as a Secret Manager
 # reference, never as a plain env var. Mapping is {ENV_VAR: secret name}.
 #
 # WHY (this was a live vulnerability, not a theoretical one): an earlier version
@@ -33,7 +33,7 @@ SECRET_ENV_VARS = {
     "SHEETS_TOKEN_JSON": "eduagent-sheets-token",
 }
 
-# ĐỢT 17 #3: mounted only when the secret already exists, and never a reason to
+# Wave 17 #3: mounted only when the secret already exists, and never a reason to
 # fail a deploy.
 #
 # ADR-025 added EDUAGENT_TEACHER_PASSWORD so teacher login can stop accepting
@@ -41,7 +41,7 @@ SECRET_ENV_VARS = {
 # all -- this script builds its env from a hardcoded dict, so the variable could
 # be set locally and would silently never reach Cloud Run. An ADR that describes
 # a capability production cannot reach is the same failure mode as ADR-016
-# before ĐỢT 12: documented, believed, and not actually in effect.
+# before Wave 12: documented, believed, and not actually in effect.
 #
 # It stays OPTIONAL rather than joining SECRET_ENV_VARS above because the
 # shared-passcode fallback is the deliberate judging default; making it required
@@ -83,7 +83,7 @@ def _report_optional_secrets() -> None:
 
 
 def _gcloud() -> str:
-    """Absolute path to the gcloud launcher. Same ĐỢT 15 #5 Windows fix as
+    """Absolute path to the gcloud launcher. Same Wave 15 #5 Windows fix as
     scripts/doctor.py::_gcloud_executable(): on Windows gcloud is `gcloud.cmd`,
     so the bare string "gcloud" made subprocess.run() raise FileNotFoundError."""
     import shutil

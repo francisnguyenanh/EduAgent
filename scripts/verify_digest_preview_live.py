@@ -61,7 +61,7 @@ rec("GET /analytics returns digests", bool(digests), f"HTTP {st}, {len(digests)}
 if digests:
     d = digests[0]
     html = d.get("digest_html")
-    rec("ĐỢT 26 #1.3 -- digest_html present on the live revision",
+    rec("Wave 26 #1.3 -- digest_html present on the live revision",
         isinstance(html, str) and len(html) > 50,
         f"{len(html) if isinstance(html,str) else 'None'} chars")
     if isinstance(html, str):
@@ -75,32 +75,32 @@ if digests:
         rec("digest_html keeps the table chrome the renderer writes",
             "<table" in html or "priority_students" not in json.dumps(d.get("digest_text")),
             "table present (or this digest ranked nobody)")
-    rec("ĐỢT 26 #1.2 -- gmail_draft_id available for the deep link",
+    rec("Wave 26 #1.2 -- gmail_draft_id available for the deep link",
         bool(d.get("gmail_draft_id")),
         f"gmail_draft_id={d.get('gmail_draft_id')!r}")
     # A draft written by THIS revision must carry the hex message id, since
     # that -- not the API draft id -- is what Gmail's web UI addresses.
     msg = d.get("gmail_draft_message_id")
-    rec("ĐỢT 26 -- newest digest carries a hex gmail_draft_message_id",
+    rec("Wave 26 -- newest digest carries a hex gmail_draft_message_id",
         bool(msg) and re.fullmatch(r"[0-9a-f]{12,20}", msg) is not None,
         f"gmail_draft_message_id={msg!r} (older digests legitimately have None)")
 
 # 4: the page itself
 st, page = req("/demo")
-rec("ĐỢT 26 #1.1 -- Settings label no longer promises a notification",
+rec("Wave 26 #1.1 -- Settings label no longer promises a notification",
     "notification email" not in page.lower(),
     "the string 'notification email' is gone from the served page")
-rec("ĐỢT 26 #1.1 -- label states the To: / never-sends contract",
+rec("Wave 26 #1.1 -- label states the To: / never-sends contract",
     "composes a draft, it never sends" in page and "the <code>To:</code> address" in page,
     "hint text present")
-rec("ĐỢT 26 #1.4 -- HITL badge shipped in the served page",
+rec("Wave 26 #1.4 -- HITL badge shipped in the served page",
     "awaiting human Send (ADR-001)" in page, "badge string present")
-rec("ĐỢT 26 #1.2 -- Gmail deep link shipped, built from the HEX MESSAGE id",
+rec("Wave 26 #1.2 -- Gmail deep link shipped, built from the HEX MESSAGE id",
     "mail.google.com/mail/u/0/#drafts" in page
     and "gmail_draft_message_id" in page
     and "'?compose=' + encodeURIComponent(composeId)" in page,
     "link uses composeId (message id), falls back to the Drafts folder for older digests")
-rec("ĐỢT 26 #1.3 -- preview renderer shipped in the served page",
+rec("Wave 26 #1.3 -- preview renderer shipped in the served page",
     "function digestDraftPreview" in page, "digestDraftPreview() present")
 
 failed = [n for ok, n, _ in results if not ok]

@@ -1,6 +1,6 @@
 """Deterministic image prep before a photo ever reaches Gemini Vision.
 
-ĐỢT 3 #1: a phone-camera photo of a handwritten essay can weigh 5-15MB and
+Wave 3 #1: a phone-camera photo of a handwritten essay can weigh 5-15MB and
 carry an EXIF rotation flag that most viewers auto-apply but the raw bytes
 never do -- sent as-is, that risks a sideways transcription and adds network
 latency/timeout risk (PHASE 6 real finding: a 2.6MB test photo, `stu_stuck_

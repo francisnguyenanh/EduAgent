@@ -114,7 +114,7 @@ def test_complete_debate_session_scores_and_closes_session():
     assert result["degraded"] is False
     assert result["class_id"] == "c1"
 
-    # ĐỢT 15 #2: the session is kept after scoring, flagged terminal, so the
+    # Wave 15 #2: the session is kept after scoring, flagged terminal, so the
     # metacognitive reflection can be bound to a debate that really happened.
     # It is closed all the same -- no further turn may be taken.
     assert interactive.get_debate_session("s7")["completed"] is True

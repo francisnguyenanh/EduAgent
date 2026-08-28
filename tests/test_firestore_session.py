@@ -1,6 +1,6 @@
 """Unit tests for the Distributed Firestore Session Store (Task 10.5).
 
-ĐỢT 12 NHÓM 4: the previous version of this file imported `MagicMock, patch`
+Wave 12 Group 4: the previous version of this file imported `MagicMock, patch`
 without using them, and its three tests all went through the same in-process
 `_LOCAL_SESSION_CACHE` -- so nothing exercised the Firestore path at all, and
 Task 10.5's stated DoD ("unit test simulating 2 consecutive requests hitting 2
@@ -147,7 +147,7 @@ def test_local_cache_eviction_on_expiry(db):
 
 
 def test_two_instances_do_not_lose_a_debate_turn(db):
-    """Task 10.5's DoD, and a direct regression test for the ĐỢT 12 NHÓM 4 bug.
+    """Task 10.5's DoD, and a direct regression test for the Wave 12 Group 4 bug.
 
     Instance A handles turn 1, instance B handles turn 2, then the load balancer
     sends turn 3 back to instance A. Before the fix, A served its stale cached
@@ -244,7 +244,7 @@ def test_default_client_is_none_under_pytest():
 
 
 # ---------------------------------------------------------------------------
-# ĐỢT 16 #4: transactional reflection claim
+# Wave 16 #4: transactional reflection claim
 # ---------------------------------------------------------------------------
 
 
@@ -305,7 +305,7 @@ def txn_db(monkeypatch):
 
 
 def test_concurrent_reflection_claims_yield_exactly_one_winner(txn_db):
-    """ĐỢT 16 #4 -- ADR-022 / README claimed the reflection flag "prevents
+    """Wave 16 #4 -- ADR-022 / README claimed the reflection flag "prevents
     double-click race condition exploits". It did not: the claim was a
     read-then-write, so two POSTs on two Cloud Run instances both read
     `has_reflected=False`, both proceeded, and both banked a growth bonus.

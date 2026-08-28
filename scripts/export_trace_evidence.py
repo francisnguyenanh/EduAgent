@@ -132,11 +132,11 @@ def simulate_traced_pipeline() -> dict:
 def generate_trace_markdown(results: dict) -> str:
     md = f"""# Google Cloud Trace Evidence: End-to-End Distributed Telemetry
 
-> **Observability Architecture:** Toàn bộ luồng xử lý từ lúc học sinh gửi bài luận đến khi tổng hợp báo cáo lớp học được gắn nhãn phân tán qua OpenTelemetry, xuất trực tiếp sang **Google Cloud Trace & Cloud Logging**.
+> **Observability Architecture:** The end-to-end flow from initial student essay submission to class-wide synthesis is instrumented with distributed OpenTelemetry spans exported directly to **Google Cloud Trace & Cloud Logging**.
 
 ---
 
-## 1. Biểu Đồ Phân Bổ Thời Gian & Phân Cấp Span (Trace Span Tree)
+## 1. Trace Span Hierarchy Diagram
 
 ```mermaid
 gantt
@@ -160,7 +160,7 @@ gantt
 
 ---
 
-## 2. Bảng Thống Kê Độ Trễ & Thuộc Tính Từng Node (Span Metric Details)
+## 2. Node Execution Order & Span Attributes
 
 | Span Name | Latency (ms) | Status | Key OpenTelemetry Attributes |
 |---|:---:|:---:|---|
@@ -170,14 +170,14 @@ gantt
         md += f"| `{n['node']}` | **{n['latency_ms']} ms** | `{n['status']}` | {attr_str} |\n"
 
     md += f"""
-* **Tổng thời gian xử lý toàn tuyến (End-to-End Latency):** **{results['total_latency_ms']} ms**
+* **End-to-End Latency:** **{results['total_latency_ms']} ms**
 * **Trace Standard:** W3C Trace Context (`traceparent` header propagation)
 
 ---
 
-## 3. Nhật Ký Truy Vết Tích Hợp (Structured Cloud Logging Integration)
+## 3. Structured Cloud Logging Integration
 
-Mọi log entry trong Cloud Run tự động liên kết với Trace ID thông qua trường `logging.googleapis.com/trace`:
+All Cloud Run log entries automatically correlate with Trace IDs via the `logging.googleapis.com/trace` field:
 ```json
 {{
   "severity": "INFO",

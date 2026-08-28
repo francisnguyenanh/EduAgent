@@ -1,4 +1,4 @@
-"""ĐỢT 3 GCP hygiene -- one CLI to sweep up leftover cloud resources this
+"""Wave 3 GCP hygiene -- one CLI to sweep up leftover cloud resources this
 project accumulates over repeated dev/demo/chaos-test cycles:
 
   1. Stale Pub/Sub subscriptions matching `chaos-test-*` -- scripts/
@@ -227,7 +227,7 @@ def delete_gmail_drafts(drafts: list[dict]) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="ĐỢT 3 GCP hygiene sweep -- dry-run by default.")
+    parser = argparse.ArgumentParser(description="Wave 3 GCP hygiene sweep -- dry-run by default.")
     parser.add_argument("--apply", action="store_true", help="Actually delete what's listed (default: dry-run/list only).")
     parser.add_argument("--region", default="asia-southeast1", help="Cloud Run / Artifact Registry region (default: asia-southeast1).")
     parser.add_argument("--keep-revisions", type=int, default=5, help="Cloud Run revisions to keep per service (default: 5).")

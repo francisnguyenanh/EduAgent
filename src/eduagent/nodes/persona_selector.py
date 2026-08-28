@@ -58,7 +58,7 @@ def choose_persona(
     signal at all) AND the student has no history to rotate from -- i.e. a
     brand-new student whose essay matched none of the fallacy keywords. Without
     it, that case always returns PERSONA_IDS[0]. Callers should pass the essay
-    text (or any stable per-essay string); see ĐỢT 12 NHÓM 4 below.
+    text (or any stable per-essay string); see Wave 12 Group 4 below.
     """
     persona_history = persona_history or []
     last_used = persona_history[-1] if persona_history else None
@@ -68,7 +68,7 @@ def choose_persona(
     # Never repeat the immediately previous persona. This is unconditional
     # streak-breaking: even if `last_used` scores highest, it is excluded, so a
     # student who is stuck gets a genuinely different angle rather than the same
-    # question louder. (ĐỢT 12 NHÓM 4: this comment previously read "unless every
+    # question louder. (Wave 12 Group 4: this comment previously read "unless every
     # other persona scores strictly lower", describing a fallback branch that
     # does not exist in the code -- there is no path back to `last_used`.)
     candidates = [pid for pid in PERSONA_IDS if pid != last_used] or list(PERSONA_IDS)
@@ -102,7 +102,7 @@ async def persona_selector(ctx: Context) -> dict:
     ctx.state["persona_history"] = persona_history  # audit trail for this run
     ctx.state["prior_weakness_taxonomy"] = prior_weaknesses  # consumed by debate_loop for memory injection
 
-    # ĐỢT 12 NHÓM 4 fix: `essay_seed` was a dead parameter on this call path --
+    # Wave 12 Group 4 fix: `essay_seed` was a dead parameter on this call path --
     # declared by choose_persona() and used by its no-keyword-signal branch, but
     # never passed by the graph node. The result was that a FIRST-TIME student
     # (no persona_history to rotate from) whose essay matched no fallacy keyword

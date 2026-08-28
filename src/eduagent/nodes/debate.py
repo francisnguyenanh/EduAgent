@@ -48,7 +48,7 @@ _PERSONA_FALLBACK_QUESTIONS_VI: dict[str, str] = {
 }
 _DEFAULT_FALLBACK_QUESTION_VI = "Đó là một lập luận đáng chú ý -- bằng chứng nào dẫn bạn đến kết luận này?"
 
-# ĐỢT 3 #1 (token optimization): only the fields the Debate Loop actually
+# Wave 3 #1 (token optimization): only the fields the Debate Loop actually
 # reasons over -- dropping `evidence` here (still used by cognitive_scorer)
 # keeps the compacted summary small without losing anything this node reads.
 _SUMMARY_FIELDS_FOR_PROMPT = ("main_claim", "claims", "fallacies_draft")
@@ -77,7 +77,7 @@ def _build_prompt(
     if turn == 1:
         # Only turn 1 needs the student's actual raw writing -- from turn 2
         # onward the debate argues against the extracted claims + the
-        # transcript so far, not the source text verbatim again (ĐỢT 3 #1:
+        # transcript so far, not the source text verbatim again (Wave 3 #1:
         # re-sending a long raw essay on every turn was pure repeated token
         # cost with no reasoning benefit turns 2+ actually used).
         parts.insert(0, f"Original essay:\n<student_essay>\n{essay_text}\n</student_essay>")
@@ -105,7 +105,7 @@ def build_system_instruction(*, persona_id: str, turn_number: int, language: str
     """The persona-anchoring system instruction, exactly as generate_debate_turn
     sends it to Gemini.
 
-    Factored out (ĐỢT 12 NHÓM 1) so the eval suite's persona-fidelity layer can
+    Factored out (Wave 12 Group 1) so the eval suite's persona-fidelity layer can
     assert against the REAL production builder. Previously that eval rebuilt
     the string itself (`f"{persona.anchor}\\n\\n{get_escalation_instruction(1)}"`)
     and then checked `persona.anchor in system_instruction` -- a tautology that

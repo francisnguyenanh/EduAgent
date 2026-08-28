@@ -198,47 +198,47 @@ def generate_markdown_report(data: dict) -> str:
 
     md = f"""# Memory A/B Experiment: Empirical Proof of Pedagogical Adaptation
 
-> **Evaluation Hypothesis:** Trí nhớ dài hạn (Long-Term Memory) không chỉ lưu trữ dữ liệu thụ động, mà **trực tiếp thay đổi quyết định sư phạm**, triệt tiêu can thiệp lặp vô ích và tiêm ngữ cảnh lịch sử vào cuộc tranh biện.
+> **Evaluation Hypothesis:** Long-Term Memory is not merely passive data storage; it **directly guides pedagogical decisions**, eliminates unproductive repeated interventions, and injects historical context into the debate.
 
 ---
 
-## 1. Kết Quả Định Lượng Tổng Hợp (Summary Metrics)
+## 1. Summary Evaluation Metrics
 
-| Chỉ số Đánh Giá (Metric) | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: eduagent (Trí Nhớ Dài Hạn) | Ý Nghĩa Sư Phạm |
+| Metric | Branch A: Stateless Baseline (No Memory) | Branch B: EduAgent (Long-Term Memory) | Pedagogical Impact |
 |---|:---:|:---:|---|
-| **Chuỗi Persona Can Thiệp** | `{ ' → '.join(a_personas) }` | `{ ' → '.join(b_personas) }` | Nhánh B tự động thích ứng luân phiên persona khi phát hiện điểm yếu cũ |
-| **Số lần can thiệp lặp bế tắc (Repeated Stagnant Interventions)** | **{a_repeated} lần** (Lặp Skeptic) | **{b_repeated} lần** (0% lặp) | Loại bỏ tình trạng hỏi cùng 1 góc nhìn khiến học sinh nản lòng |
-| **Tiêm Ngữ Cảnh Điểm Yếu Cũ vào Prompt** | **{a_injections}/3 bài** (0%) | **{b_injections}/3 bài** (100% khi có lịch sử) | Agent nhắc nhở học sinh về lỗi đã gặp ở bài trước |
-| **Nhận diện Xu hướng Điểm số (Score Trend)** | `{branch_a[-1]['score_trend']}` (Mù lịch sử) | `{branch_b[-1]['score_trend']}` (Nhận diện chính xác) | Cung cấp dữ liệu cho giáo viên can thiệp kịp thời |
-| **Intervention Priority Index (Sau 3 Bài)** | **{final_a_priority}** (Đánh giá cô lập) | **{final_b_priority}** (Tổng hợp đa chiều) | Giáo viên biết chính xác học sinh nào cần hỗ trợ |
+| **Intervention Persona Sequence** | `{ ' → '.join(a_personas) }` | `{ ' → '.join(b_personas) }` | Branch B adapts and rotates persona once it detects a prior weakness |
+| **Repeated Stagnant Interventions** | **{a_repeated} occurrence(s)** (Repeated Skeptic) | **{b_repeated} occurrence(s)** (0% repetition) | Eliminates repetitive questioning angles that cause student fatigue |
+| **Prior Weakness Context Injected into Prompt** | **{a_injections}/3 essays** (0%) | **{b_injections}/3 essays** (100% when history exists) | Agent reminds the student of mistakes made in earlier essays |
+| **Score Trend Identification** | `{branch_a[-1]['score_trend']}` (History-blind) | `{branch_b[-1]['score_trend']}` (Accurately identified) | Equips teachers with actionable trajectory data |
+| **Intervention Priority Index (After 3 Essays)** | **{final_a_priority}** (Isolated evaluation) | **{final_b_priority}** (Multi-dimensional synthesis) | Accurately flags which students need attention first |
 
 ---
 
-## 2. Chi Tiết Tiến Trình Từng Bài Luận (Essay Trajectory Breakdown)
+## 2. Longitudinal Essay Trajectory Breakdown
 
-### 📝 Bài Luận 1: `{branch_a[0]['title']}`
-* **Nội dung:** Bài viết thiếu hoàn toàn dẫn chứng về xe điện, lập luận cảm tính.
-* **Nhánh A (No Memory):** Chọn `{branch_a[0]['persona_selected']}` ({branch_a[0]['persona_name']}). Không có lịch sử.
-* **Nhánh B (Memory ON):** Chọn `{branch_b[0]['persona_selected']}` ({branch_b[0]['persona_name']}). Ghi nhận điểm yếu ban đầu: `unsupported claim`.
+### 📝 Essay 1: `{branch_a[0]['title']}`
+* **Content:** Essay lacks empirical evidence regarding electric vehicles, relying on emotional assertions.
+* **Branch A (No Memory):** Selects `{branch_a[0]['persona_selected']}` ({branch_a[0]['persona_name']}). No prior history.
+* **Branch B (Memory ON):** Selects `{branch_b[0]['persona_selected']}` ({branch_b[0]['persona_name']}). Stores initial diagnosis in profile: `unsupported claim`.
 
-### 📝 Bài Luận 2: `{branch_a[1]['title']}`
-* **Nội dung:** Học sinh vẫn mắc lỗi thiếu dẫn chứng, lấy ví dụ cá nhân (anecdotal evidence) để khái quát hóa.
-* **Nhánh A (No Memory):** Tiếp tục chọn `{branch_a[1]['persona_selected']}` ({branch_a[1]['persona_name']}) một cách máy móc. **Không nhận ra học sinh đang kẹt ở điểm yếu này**.
-* **Nhánh B (Memory ON):** Nhận diện học sinh vừa dùng Skeptic ở bài 1, tự thích ứng chuyển sang `{branch_b[1]['persona_selected']}` ({branch_b[1]['persona_name']}) để tiếp cận từ góc độ phản biện đối lập.
-* **Prompt Injection (Nhánh B):**
+### 📝 Essay 2: `{branch_a[1]['title']}`
+* **Content:** Student continues to lack evidence, citing personal anecdotes to make broad generalizations.
+* **Branch A (No Memory):** Mechanically selects `{branch_a[1]['persona_selected']}` ({branch_a[1]['persona_name']}) again. **Fails to recognize that the student is stuck on this weakness**.
+* **Branch B (Memory ON):** Detects that Skeptic was used in Essay 1; applies the streak-breaking algorithm to rotate to `{branch_b[1]['persona_selected']}` ({branch_b[1]['persona_name']}) and probe from an opposing angle.
+* **Context Injected into LLM Prompt (Branch B):**
   > *"This student has previously struggled with: unsupported claim, hasty generalization, anecdotal evidence. If this essay repeats one of these patterns, consider probing it directly..."*
 
-### 📝 Bài Luận 3: `{branch_a[2]['title']}`
-* **Nội dung:** Học sinh đã biết trích dẫn nghiên cứu Stanford 2025 (Evidence tăng vọt từ 1 lên 8 điểm), nhưng phạm lỗi khái quát hóa vội vàng (hasty generalization).
-* **Nhánh A (No Memory):** Chọn `{branch_a[2]['persona_selected']}`. Không biết rằng học sinh vừa có bước tiến lớn về dẫn chứng.
-* **Nhánh B (Memory ON):** Chọn `{branch_b[2]['persona_selected']}` ({branch_b[2]['persona_name']}) tập trung rèn tính chặt chẽ logic. Nhận diện `score_trend: improving`.
+### 📝 Essay 3: `{branch_a[2]['title']}`
+* **Content:** Student successfully cites a Stanford 2025 study (Evidence score surges from 1 to 8), but makes a hasty generalization.
+* **Branch A (No Memory):** Selects `{branch_a[2]['persona_selected']}`. Unaware that the student made significant progress in evidence retrieval.
+* **Branch B (Memory ON):** Selects `{branch_b[2]['persona_selected']}` ({branch_b[2]['persona_name']}) to refine logical tightness. Evaluates longitudinal trajectory as `score_trend: improving`.
 
 ---
 
-## 3. Kết Luận Kiến Trúc (Architectural Conclusion)
+## 3. Architectural Takeaways
 
-1. **Proof of Adaptive Partnership:** eduagent đã chứng minh tính năng cốt lõi của *Collaborative Partner*: agent **học từ tương tác quá khứ** để điều chỉnh phương pháp sư phạm thay vì hoạt động như một chatbot stateless trả lời từng lượt đơn lẻ.
-2. **Deterministic Governance:** Toàn bộ quá trình chọn persona và tính toán Priority Index hoàn toàn **deterministic (ZERO LLM-as-judge)**, bảo đảm 100% khả năng tái lập và minh bạch kiểm toán.
+1. **Empirical Proof of Adaptive Partnership:** `EduAgent` demonstrates the defining characteristic of a *Collaborative Partner*: the agent **adapts from past interactions** to adjust its pedagogical strategy rather than functioning as a stateless chatbot responding in isolation.
+2. **Deterministic Governance:** Persona routing and Priority Index calculations remain completely **deterministic (ZERO LLM-as-judge)**, guaranteeing 100% reproducibility and auditability.
 """
     return md
 

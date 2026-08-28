@@ -102,7 +102,7 @@ def _strip_markdown_fence(text: str) -> str:
 
 
 def _config_with_thinking_budget(config: dict[str, Any], thinking_budget: int | None) -> dict[str, Any]:
-    """ĐỢT 3 token-optimization: a fast structural-extraction call (OCR
+    """Wave 3 token-optimization: a fast structural-extraction call (OCR
     transcription, Summarizer's claim/evidence extraction) doesn't need the
     model's extended reasoning mode -- only nodes that pass an explicit
     `thinking_budget` (0 = off) get it added; every other caller (Scorer,

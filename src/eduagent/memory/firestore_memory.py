@@ -31,7 +31,7 @@ def get_profile(student_id: str) -> dict | None:
 
 @with_gcp_retry
 def list_students_by_class(class_id: str, *, limit: int = 50) -> list[dict]:
-    """ĐỢT 3 storage/retrieval optimization: a class roster view (Teacher Web
+    """Wave 3 storage/retrieval optimization: a class roster view (Teacher Web
     UI) ordered by most-recently-active student. Sorted in memory to avoid
     requiring a GCP composite index."""
     docs = (

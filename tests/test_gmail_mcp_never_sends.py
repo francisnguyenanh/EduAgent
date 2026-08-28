@@ -71,7 +71,7 @@ def test_gmail_mcp_credentials_from_env(monkeypatch):
 
 
 def test_create_digest_draft_returns_both_ids(monkeypatch):
-    """ĐỢT 26 / ADR-030: `drafts.create()` returns an API draft id
+    """Wave 26 / ADR-030: `drafts.create()` returns an API draft id
     ("r328879860172231529") AND a hex message id ("1a04055b6640d946"). Gmail's
     web UI addresses a draft by the SECOND one, so the dashboard's
     "open the draft" link needs it. Verified against the live mailbox --

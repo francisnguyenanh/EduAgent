@@ -1,6 +1,6 @@
 """Live smoke test -- exercises the DEPLOYED service end to end, not a local process.
 
-ĐỢT 19 #8. `scripts/doctor.py` answers "are the dependencies healthy?"; this
+Wave 19 #8. `scripts/doctor.py` answers "are the dependencies healthy?"; this
 answers the different and equally important question "does a student's whole
 journey actually work on the URL a judge will open?" Every audit wave that
 found a real blocker (Pub/Sub pull mode in Wave 8, the fabricated breakthrough

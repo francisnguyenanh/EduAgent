@@ -1,6 +1,6 @@
 """Unit tests for Task 10.2: Learning-Outcome MEASUREMENT harness.
 
-ĐỢT 12 NHÓM 1: the previous version of this file asserted that hand-typed
+Wave 12 Group 1: the previous version of this file asserted that hand-typed
 `before_scores`/`after_scores` literals differed by >= 4 -- i.e. it asserted
 `8 - 2 >= 4`, which passes even if the entire `src/` tree is deleted. These
 tests instead exercise the measurement machinery itself (with the LLM mocked,
@@ -52,7 +52,7 @@ def _fake_score_degraded(**_kwargs):
 
 
 def test_no_scenario_declares_its_own_scores():
-    """Regression guard for the ĐỢT 12 finding: a scenario must only carry
+    """Regression guard for the Wave 12 finding: a scenario must only carry
     INPUT text. If `before_scores`/`after_scores` ever reappear as literals,
     the report stops being a measurement again."""
     for s in BENCHMARK_SCENARIOS:
@@ -126,7 +126,7 @@ def test_report_states_its_limitations():
     assert "not 8 students" in md
     assert "No control group" in md
     assert "non-deterministic" in md
-    # The old report claimed "Chấm lại độc lập ... Zero Leak | PASS" for a
+    # The old report claimed an "independent re-score ... Zero Leak | PASS" for a
     # behaviour that did not exist; make sure that exact over-claim is gone.
     assert "Zero Grade Inflation" not in md
 

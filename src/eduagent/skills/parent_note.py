@@ -1,4 +1,4 @@
-"""ĐỢT 4 #3 -- Parent Communication Co-Pilot ("Copy Parent Update Note").
+"""Wave 4 #3 -- Parent Communication Co-Pilot ("Copy Parent Update Note").
 
 This project's own risk analysis rules out auto-sending email to parents
 (mass mailing 40+ inboxes on every submission is a FERPA/COPPA risk and
@@ -58,7 +58,7 @@ def draft_parent_note(*, student_name: str, reason: dict, language: str = "en") 
         facts.append(f"has repeated the same type of debate challenge {reason['stuck_streak_count']} times without a breakthrough yet")
     if reason.get("score_trend") == "declining":
         facts.append("has seen scores dip over their last few essays")
-    # ĐỢT 15 #3: phrased as unevenness, not decline -- "volatile" means the
+    # Wave 15 #3: phrased as unevenness, not decline -- "volatile" means the
     # scores swung and recovered, so telling a parent their child is slipping
     # would be false.
     if reason.get("score_trend") == "volatile":

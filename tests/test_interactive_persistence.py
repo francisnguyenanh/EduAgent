@@ -1,9 +1,9 @@
-"""ĐỢT 12 NHÓM 4 -- tests for the interactive debate's write-back path.
+"""Wave 12 Group 4 -- tests for the interactive debate's write-back path.
 
 The audit's finding: `interactive.complete_debate_session()` wrapped its
 Firestore write and Pub/Sub publish in `... and not os.getenv(
 "PYTEST_CURRENT_TEST")`. That does not merely keep tests offline -- it makes the
-code unreachable from any test. So the feature ĐỢT 9 declared "fixed" (wiring
+code unreachable from any test. So the feature Wave 9 declared "fixed" (wiring
 the live web debate into Firestore + Pub/Sub) had no test behind it at all, and
 the headline "190/190 passed" carried no information about it.
 
@@ -174,7 +174,7 @@ def test_persist_failure_still_returns_feedback_to_the_student():
 
 
 def test_completion_leaves_the_session_in_a_terminal_reflection_only_state():
-    """ĐỢT 15 #2 changed this: completion used to delete the session outright.
+    """Wave 15 #2 changed this: completion used to delete the session outright.
 
     It cannot, because the metacognitive reflection happens AFTER completion and
     is the only thing that proves a debate took place -- deleting the record here
@@ -228,7 +228,7 @@ def test_default_seams_are_offline_under_pytest():
 
 
 # ---------------------------------------------------------------------------
-# ĐỢT 17 #2 -- multi-instance regression AT THE interactive LAYER.
+# Wave 17 #2 -- multi-instance regression AT THE interactive LAYER.
 #
 # tests/test_firestore_session.py already has a two-instance test, but it drives
 # firestore_session.load_session() directly -- the inner tier, which owns the 3s
@@ -311,7 +311,7 @@ def _start(session_id):
 
 
 def test_interactive_layer_does_not_serve_a_stale_session_to_a_warm_instance(shared_db):
-    """ĐỢT 17 #2: instance A keeps its dict warm across requests. When the load
+    """Wave 17 #2: instance A keeps its dict warm across requests. When the load
     balancer sends a later turn back to A, A must not serve the copy it made
     before instance B wrote to Firestore."""
     _start("s-multi")
@@ -373,7 +373,7 @@ def test_without_a_durable_store_the_in_process_dict_still_serves(monkeypatch):
 
 
 def test_reads_backed_by_firestore_do_not_grow_the_in_process_dict(shared_db):
-    """ĐỢT 19 #4: after ADR-027 made reads prefer Firestore, caching every read
+    """Wave 19 #4: after ADR-027 made reads prefer Firestore, caching every read
     into `_sessions` bought nothing (the next read goes to Firestore anyway) and
     cost an unbounded dict swept only on a 24h TTL, on a 512Mi instance."""
     _start("s-nogrow")

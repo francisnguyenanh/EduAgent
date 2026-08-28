@@ -69,7 +69,7 @@ class PubSubConfig:
     # the original plan's "fail 3 times -> DLQ" is implemented as 5, the
     # platform floor, not a design choice.
     max_delivery_attempts: int = 5
-    # ĐỢT 8: the Cloud Run service is deployed --allow-unauthenticated (so
+    # Wave 8: the Cloud Run service is deployed --allow-unauthenticated (so
     # judges can open the Web UI without a GCP identity), which means the
     # `POST /` Pub/Sub push endpoint itself is no longer protected by Cloud
     # Run IAM -- it must verify the push subscription's own OIDC token at
@@ -110,7 +110,7 @@ class PriorityWeights:
     score_decline: float = 2.5
     inactivity_days: float = 1.0
     shared_fallacy_weight: float = 1.5
-    # ĐỢT 15 #3: a score that collapsed and recovered inside the trend window
+    # Wave 15 #3: a score that collapsed and recovered inside the trend window
     # (score_trend == "volatile"). Weighted BELOW score_decline on purpose: an
     # unstable student needs a look, but a student on a sustained downward slope
     # needs it more, and the two are mutually exclusive by construction (a
@@ -120,7 +120,7 @@ class PriorityWeights:
 
 @dataclass(frozen=True)
 class DigestDebounceConfig:
-    """ĐỢT 3 high-load resiliency: if a whole class submits within a short
+    """Wave 3 high-load resiliency: if a whole class submits within a short
     window of each other, one digest per essay would spam the teacher's
     inbox. `window_seconds` bounds how often a NEW digest is generated per
     class_id -- a coalesced event still has its underlying student_profile
@@ -137,7 +137,7 @@ class DigestDebounceConfig:
 @dataclass(frozen=True)
 class CloudRunConfig:
     """PHASE 7 deployed service, referenced only by scripts/doctor.py's remote
-    health check (ĐỢT 3 #5) -- never by application code, so a missing/stale
+    health check (Wave 3 #5) -- never by application code, so a missing/stale
     URL degrades that one check to WARN, not a pipeline failure."""
 
     service_url: str = os.getenv("EDUAGENT_CLOUD_RUN_URL", "https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app")

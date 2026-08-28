@@ -1,4 +1,4 @@
-"""Unit tests for ĐỢT 4 #2/#3 teacher-dashboard API functions: class_priority,
+"""Unit tests for Wave 4 #2/#3 teacher-dashboard API functions: class_priority,
 get_settings/update_settings, parent_note. Mocks Firestore-backed calls and
 the LLM call underneath draft_parent_note -- must never touch real GCP."""
 

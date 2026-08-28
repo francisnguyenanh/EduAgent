@@ -1,0 +1,184 @@
+Lines where the ONLY Vietnamese is the marker "ĐỢT": 173
+Lines with REAL Vietnamese prose (excluding PROJECT_WIKI.md): 115
+
+
+--- conftest.py
+  21: """ĐỢT 12 NHÓM 2: the token-bucket limiters (rate_limit.py) are module-level
+  36: became authenticated in ĐỢT 12 NHÓM 2."""
+
+--- eval/evalset.py
+  15: ĐỢT 12 NHÓM 1 correction: Layer 4 previously carried 8 cases whose `before`
+  47: "text": "Câu trả lời đúng là học sinh nên đồng ý với bạn mình về vấn đề này.",
+  214: "text": "Bằng chứng hay số liệu thực tế nào chứng minh cho kết luận của bạn?",
+  219: "text": "Tại sao?",
+  360: #    scorer against Vertex AI. ĐỢT 12 NHÓM 1: these replaced 8 cases that
+
+--- eval/results/eval_report.json
+  79: "text": "Câu trả lời đúng là học sinh nên đồng ý với bạn mình về vấn đề này.",
+  81: "answer_leak:câu trả lời đúng là",
+  368: "text": "Bằng chứng hay số liệu thực tế nào chứng minh cho kết luận của bạn?",
+  379: "text": "Tại sao?",
+
+--- eval/results/eval_report.md
+  3: > **Methodological Mandate (ZERO LLM-as-Judge):** cả 50 test case được đánh giá bằng **quy tắc kiểm chứng tất định (de
+  5: > **Cách đọc con số này:** đây là **50/50 test case tất định PASS**, tức "test suite xanh", KHÔNG phải "hệ thống đúng 
+  7: > **Điểm cần biết về Layer 4:** 6 case chạy trực tiếp logic metacognitive growth thật (`memory/student_profile.py`); 4
+  11: ## 1. Tổng Kết 4 Tầng Kiểm Thử (4-Layer Summary)
+  13: **Tổng số:** **50/50 deterministic test cases passed (100%)**
+  15: | Tầng Kiểm Thử (Evaluation Layer) | Số Test Case PASS | Tổng Test Case | Tỷ Lệ Đạt (Pass Rate) |
+  24: ## 2. Chi Tiết Từng Ca Kiểm Thử (Detailed Test Matrix)
+  26: | Mã Kiểm Thử (Case ID) | Tầng (Layer) | Nhóm (Group) | Kết Quả | Chi Tiết Thực Thi |
+
+--- eval/results/eval_report_live_persona.json
+  79: "text": "Câu trả lời đúng là học sinh nên đồng ý với bạn mình về vấn đề này.",
+  81: "answer_leak:câu trả lời đúng là",
+  409: "text": "Bằng chứng hay số liệu thực tế nào chứng minh cho kết luận của bạn?",
+  420: "text": "Tại sao?",
+
+--- scripts/doctor.py
+  231: """ĐỢT 12 NHÓM 2 / ADR-016: surface the signing-key state BEFORE a demo.
+  332: """ĐỢT 12 NHÓM 3: firestore_session.py writes `expire_at`, but Firestore only
+
+--- scripts/evaluate_learning_outcomes.py
+  9: ĐỢT 12 NHÓM 1 fix (option A): this script previously carried `before_scores`
+  11: report called the result "Giá Trị Đo Được" / "Chấm lại độc lập". Nothing was
+
+--- scripts/experiment_memory_ab.py
+  201: > **Evaluation Hypothesis:** Trí nhớ dài hạn (Long-Term Memory) không chỉ lưu trữ dữ liệu thụ động, mà **trực tiếp tha
+  205: ## 1. Kết Quả Định Lượng Tổng Hợp (Summary Metrics)
+  207: | Chỉ số Đánh Giá (Metric) | Nhánh A: Stateless Baseline (Không Trí Nhớ) | Nhánh B: eduagent (Trí Nhớ Dài Hạn) | Ý Ngh
+  209: | **Chuỗi Persona Can Thiệp** | `{ ' → '.join(a_personas) }` | `{ ' → '.join(b_personas) }` | Nhánh B tự động thích ứn
+  210: | **Số lần can thiệp lặp bế tắc (Repeated Stagnant Interventions)** | **{a_repeated} lần** (Lặp Skeptic) | **{b_repeat
+  211: | **Tiêm Ngữ Cảnh Điểm Yếu Cũ vào Prompt** | **{a_injections}/3 bài** (0%) | **{b_injections}/3 bài** (100% khi có lịc
+  212: | **Nhận diện Xu hướng Điểm số (Score Trend)** | `{branch_a[-1]['score_trend']}` (Mù lịch sử) | `{branch_b[-1]['score_
+  213: | **Intervention Priority Index (Sau 3 Bài)** | **{final_a_priority}** (Đánh giá cô lập) | **{final_b_priority}** (Tổn
+  217: ## 2. Chi Tiết Tiến Trình Từng Bài Luận (Essay Trajectory Breakdown)
+  219: ### 📝 Bài Luận 1: `{branch_a[0]['title']}`
+  220: * **Nội dung:** Bài viết thiếu hoàn toàn dẫn chứng về xe điện, lập luận cảm tính.
+  221: * **Nhánh A (No Memory):** Chọn `{branch_a[0]['persona_selected']}` ({branch_a[0]['persona_name']}). Không có lịch sử.
+  222: * **Nhánh B (Memory ON):** Chọn `{branch_b[0]['persona_selected']}` ({branch_b[0]['persona_name']}). Ghi nhận điểm yếu
+  224: ### 📝 Bài Luận 2: `{branch_a[1]['title']}`
+  225: * **Nội dung:** Học sinh vẫn mắc lỗi thiếu dẫn chứng, lấy ví dụ cá nhân (anecdotal evidence) để khái quát hóa.
+  226: * **Nhánh A (No Memory):** Tiếp tục chọn `{branch_a[1]['persona_selected']}` ({branch_a[1]['persona_name']}) một cách 
+  227: * **Nhánh B (Memory ON):** Nhận diện học sinh vừa dùng Skeptic ở bài 1, tự thích ứng chuyển sang `{branch_b[1]['person
+  228: * **Prompt Injection (Nhánh B):**
+  231: ### 📝 Bài Luận 3: `{branch_a[2]['title']}`
+  232: * **Nội dung:** Học sinh đã biết trích dẫn nghiên cứu Stanford 2025 (Evidence tăng vọt từ 1 lên 8 điểm), nhưng phạm lỗ
+  233: * **Nhánh A (No Memory):** Chọn `{branch_a[2]['persona_selected']}`. Không biết rằng học sinh vừa có bước tiến lớn về 
+  234: * **Nhánh B (Memory ON):** Chọn `{branch_b[2]['persona_selected']}` ({branch_b[2]['persona_name']}) tập trung rèn tính
+  238: ## 3. Kết Luận Kiến Trúc (Architectural Conclusion)
+  240: 1. **Proof of Adaptive Partnership:** eduagent đã chứng minh tính năng cốt lõi của *Collaborative Partner*: agent **họ
+  241: 2. **Deterministic Governance:** Toàn bộ quá trình chọn persona và tính toán Priority Index hoàn toàn **deterministic 
+
+--- scripts/export_trace_evidence.py
+  135: > **Observability Architecture:** Toàn bộ luồng xử lý từ lúc học sinh gửi bài luận đến khi tổng hợp báo cáo lớp học đư
+  139: ## 1. Biểu Đồ Phân Bổ Thời Gian & Phân Cấp Span (Trace Span Tree)
+  163: ## 2. Bảng Thống Kê Độ Trễ & Thuộc Tính Từng Node (Span Metric Details)
+  173: * **Tổng thời gian xử lý toàn tuyến (End-to-End Latency):** **{results['total_latency_ms']} ms**
+  178: ## 3. Nhật Ký Truy Vết Tích Hợp (Structured Cloud Logging Integration)
+  180: Mọi log entry trong Cloud Run tự động liên kết với Trace ID thông qua trường `logging.googleapis.com/trace`:
+
+--- scripts/run_eval_suite.py
+  15: ĐỢT 12 NHÓM 1: two groups of cases were previously unfalsifiable and have been
+  118: """ĐỢT 12 NHÓM 4: this runner used to re-implement the authorization check
+  166: """ĐỢT 12 NHÓM 1 rework.
+  653: > **Methodological Mandate (ZERO LLM-as-Judge):** cả {total} test case được đánh giá bằng **quy tắc kiểm chứng tất địn
+  655: > **Cách đọc con số này:** đây là **{report['overall']['passed']}/{total} test case tất định PASS**, tức "test suite x
+  657: > **Điểm cần biết về Layer 4:** 6 case chạy trực tiếp logic metacognitive growth thật (`memory/student_profile.py`); 4
+  661: ## 1. Tổng Kết 4 Tầng Kiểm Thử (4-Layer Summary)
+  663: **Tổng số:** **{report['overall']['passed']}/{total} deterministic test cases passed ({report['overall']['pass_rate']:
+  665: | Tầng Kiểm Thử (Evaluation Layer) | Số Test Case PASS | Tổng Test Case | Tỷ Lệ Đạt (Pass Rate) |
+  674: ## 2. Chi Tiết Từng Ca Kiểm Thử (Detailed Test Matrix)
+  676: | Mã Kiểm Thử (Case ID) | Tầng (Layer) | Nhóm (Group) | Kết Quả | Chi Tiết Thực Thi |
+
+--- src/eduagent/aggregator/priority_engine.py
+  25: # ĐỢT 12 NHÓM 3: docs previously claimed ">= 3 students" while this constant was
+
+--- src/eduagent/api.py
+  596: fallback_msg = "Luận điểm chỉnh sửa thể hiện sự tiến bộ tư duy." if lang == "vi" else "Good effort in revising your cl
+  612: "Đã ghi nhận luận điểm chỉnh sửa của em. Hệ thống chấm đang tạm thời bận, "
+  613: "nên phần này chưa được đánh giá -- em thử gửi lại sau ít phút nhé."
+
+--- src/eduagent/auth.py
+  56: # ADR-016 (ĐỢT 12 NHÓM 2): this default is committed to a public repo, so it is
+
+--- src/eduagent/demo_page.py
+  369: // ĐỢT 12 NHÓM 2: the debate endpoints now require a Bearer token (they used
+
+--- src/eduagent/interactive.py
+  51: `_firestore_*` imports below). ĐỢT 12 NHÓM 3 corrected it: a comment that
+  360: ĐỢT 12 NHÓM 4: this used to be an inline `and not os.getenv(
+
+--- src/eduagent/memory/firestore_session.py
+  9: ĐỢT 12 NHÓM 4 -- the bug this file used to have, and why the fix looks like this
+  88: right payload (ĐỢT 12 NHÓM 4: previously the only way to keep tests off real
+  248: (see tests/test_firestore_session.py) -- that is the ĐỢT 12 NHÓM 4 fix for
+
+--- src/eduagent/nodes/debate.py
+  44: "skeptic": "Bằng chứng hay số liệu cụ thể nào dẫn bạn đến kết luận đó, và nguồn thông tin này đến từ đâu?",
+  45: "devils_advocate": "Những người phản đối quan điểm của bạn sẽ đưa ra lý lẽ gì, và bạn sẽ phản hồi lại như thế nào?",
+  46: "nitpicker": "Hãy giải thích từng bước lập luận của bạn -- điểm mấu chốt nào dẫn trực tiếp đến kết luận này?",
+  47: "expander": "Quan điểm này có còn đúng trong các bối cảnh khác không, hay chỉ áp dụng trong trường hợp bạn vừa nêu?",
+  49: _DEFAULT_FALLBACK_QUESTION_VI = "Đó là một lập luận đáng chú ý -- bằng chứng nào dẫn bạn đến kết luận này?"
+  108: Factored out (ĐỢT 12 NHÓM 1) so the eval suite's persona-fidelity layer can
+
+--- src/eduagent/nodes/persona_selector.py
+  25: "dẫn chứng|bằng chứng|số liệu|nguồn|tài liệu|chứng minh|nghiên cứu|thực tế|căn cứ"
+  29: "phản biện|một chiều|trái chiều|phản bác|bác bỏ|đối lập|góc nhìn khác|thiên vị|định kiến|ngược lại"
+  33: "lập luận|suy luận|giả định|ngụy biện|mâu thuẫn|phi logic|bất nhất|nhảy vọt|suy diễn"
+  37: "khái quát|vội vàng|phạm vi|bối cảnh|ngoại lệ|luôn luôn|không bao giờ|tuyệt đối|vơ đũa|áp dụng"
+  61: text (or any stable per-essay string); see ĐỢT 12 NHÓM 4 below.
+  71: # question louder. (ĐỢT 12 NHÓM 4: this comment previously read "unless every
+  105: # ĐỢT 12 NHÓM 4 fix: `essay_seed` was a dead parameter on this call path --
+
+--- src/eduagent/nodes/validator.py
+  32: re.compile(r"câu trả lời đúng là", re.IGNORECASE),
+  33: re.compile(r"bạn nên (viết|nói|kết luận) là", re.IGNORECASE),
+  34: re.compile(r"đây là (câu|đoạn|bài) (viết lại|sửa lại|đúng)", re.IGNORECASE),
+  35: re.compile(r"thay vì vậy,? hãy viết:?", re.IGNORECASE),
+
+--- src/eduagent/rate_limit.py
+  1: """In-process token-bucket rate limiter (ĐỢT 12 NHÓM 2, ADR-017).
+
+--- src/eduagent/server.py
+  150: """ĐỢT 12 NHÓM 2 / ADR-018: authorizes a student-facing debate action.
+
+--- src/eduagent/skills/language.py
+  12: "đàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ"
+
+--- src/eduagent/skills/parent_note.py
+  43: "{name} gần đây đã rất tích cực tham gia các buổi rèn luyện tư duy phản biện trên lớp. "
+  44: "Ở nhà, gia đình có thể trò chuyện cởi mở cùng {name} về các chủ đề em quan tâm và nhẹ nhàng hỏi 'điều gì khiến con ng
+
+--- tests/test_api_hardening.py
+  17: # ĐỢT 12 NHÓM 2: the debate endpoints are now authenticated, so these hardening
+
+--- tests/test_firestore_session.py
+  3: ĐỢT 12 NHÓM 4: the previous version of this file imported `MagicMock, patch`
+  150: """Task 10.5's DoD, and a direct regression test for the ĐỢT 12 NHÓM 4 bug.
+
+--- tests/test_interactive.py
+  72: "s5", persona_id="skeptic", essay_text="Học sinh không nên có bài tập về nhà.", summary={}
+
+--- tests/test_interactive_persistence.py
+  1: """ĐỢT 12 NHÓM 4 -- tests for the interactive debate's write-back path.
+
+--- tests/test_language.py
+  9: text = "Học sinh không nên có bài tập về nhà vì nó chiếm mất thời gian rảnh."
+  20: text = "My friend Nguyễn moved here last year and loves reading."
+
+--- tests/test_learning_outcomes.py
+  3: ĐỢT 12 NHÓM 1: the previous version of this file asserted that hand-typed
+  129: # The old report claimed "Chấm lại độc lập ... Zero Leak | PASS" for a
+
+--- tests/test_metacognitive_reflection.py
+  33: # ĐỢT 12 NHÓM 2: /api/debate/reflect writes a growth bonus into a student
+
+--- tests/test_pure_functions.py
+  55: result = validate_debate_turn("Câu trả lời đúng là học sinh nên đồng ý với bạn mình về vấn đề này.")
+
+--- tests/test_server_interactive_api.py
+  19: # ĐỢT 12 NHÓM 2: the debate endpoints now require a student (or same-class
+
+--- tests/test_student_endpoint_auth.py
+  1: """ĐỢT 12 NHÓM 2 -- tests for the two protections added to the student-facing

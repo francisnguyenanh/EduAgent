@@ -55,7 +55,7 @@ def test_format_digest_email_html_includes_table_and_mini_lesson():
 
 
 def test_format_digest_email_html_escapes_model_generated_text():
-    """ĐỢT 26 #1.3: this HTML is no longer Gmail-only -- it is also injected into
+    """Wave 26 #1.3: this HTML is no longer Gmail-only -- it is also injected into
     the Teacher Dashboard preview. Gmail sanitizes; our own origin does not, so
     markup arriving in an LLM-written field must come out inert.
 
@@ -110,7 +110,7 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
 
     assert result["status"] == "processed"
     assert result["gmail_draft_id"] == "draft123"
-    # ĐỢT 26: the hex message id is carried separately -- Gmail's web UI
+    # Wave 26: the hex message id is carried separately -- Gmail's web UI
     # addresses drafts by that, not by the API draft id, so collapsing the two
     # gives the teacher a link that opens an empty compose window.
     assert result["gmail_draft_message_id"] == "1a04055b6640d946"
@@ -189,7 +189,7 @@ def test_process_event_coalesces_digest_within_debounce_window():
     mock_synthesize.assert_not_awaited()  # never even got to the expensive LLM digest call
 
 
-# --- ĐỢT 27 / ADR-031: WHY the Gmail draft is missing, not just THAT it is ---
+# --- Wave 27 / ADR-031: WHY the Gmail draft is missing, not just THAT it is ---
 # Judging runs for a month and a Gmail refresh token can expire inside that
 # window. Before this, both causes rendered the same dashboard badge ("no
 # recipient configured"), so a judge with an address in their Settings box was
