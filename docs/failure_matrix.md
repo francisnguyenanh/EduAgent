@@ -1,6 +1,16 @@
 # Production Failure Matrix: Resilience & Graceful Degradation
 
-> **Architectural Guarantee:** No single point of failure (SPOF)—whether network partition, LLM rate limits, database transient errors, or hostile user input—can crash the `EduAgent` platform.
+> **Design intent:** every component in the matrix below degrades — network partition, LLM rate
+> limits, transient database errors and hostile input each have a named fallback rather than
+> taking the platform down. Each row states its own observable signal so the mitigation can be
+> checked rather than believed.
+>
+> **Scope of that statement (Audit Wave 27):** it is *per-component*, and is deliberately not a
+> no-single-point-of-failure guarantee. The Web API and the Pub/Sub consumer run in **one Cloud
+> Run service sharing one instance pool** (`--max-instances 5`, `--concurrency 80`, 512Mi,
+> 1 vCPU), so that shared instance *is* a common failure domain — enough large uploads in flight
+> on one instance can exhaust its memory. See "Architectural Limitations" in `README.md` for the
+> measured blast radius and why the split was not attempted before the deadline.
 >
 > **Intentional Exception (Audit Wave 13):** Component #14 (Session Signing Key) **does not degrade**; it terminates the process immediately (fail-fast). Running with a public default signing key in production is the worst possible failure mode, not a safe state. Graceful degradation applies everywhere else; here, fail-fast is the correct security posture.
 

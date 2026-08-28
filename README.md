@@ -284,7 +284,7 @@ The table below summarizes our 33 architectural decisions. Expand any section fo
 | **ADR-033** | Public For Reading Is Not A Licence To Reuse | IP / Licensing | MIT replaced with **All Rights Reserved** plus an explicit judging grant. The Rules require no licence for your own work; MIT invited the commercial reuse the author does not intend. Full rationale in §9. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-033)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (long-form entries for 18 of the 33; the remainder are summarised in the table above, and ADR-033 is covered in §9)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
 

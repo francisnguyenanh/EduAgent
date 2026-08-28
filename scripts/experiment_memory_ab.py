@@ -196,7 +196,14 @@ def generate_markdown_report(data: dict) -> str:
     final_a_priority = branch_a[-1]["priority_score"]
     final_b_priority = branch_b[-1]["priority_score"]
 
-    md = f"""# Memory A/B Experiment: Empirical Proof of Pedagogical Adaptation
+    md = f"""# Memory A/B Experiment: Behavioural Evidence of Pedagogical Adaptation
+
+> ⚠️ **Scope of this evidence: n = 1 trajectory (3 essays), one synthetic student profile.**
+> This is an engineering measurement showing that the streak-breaking logic *fires* and changes
+> which persona is selected. It is **not** evidence that students learn better — that would need a
+> real cohort and a control group, and no real student was involved here. The profile is built in
+> memory by `scripts/experiment_memory_ab.py` and never reads Firestore, so it is independent of
+> the seeded demo class.
 
 > **Evaluation Hypothesis:** Long-Term Memory is not merely passive data storage; it **directly guides pedagogical decisions**, eliminates unproductive repeated interventions, and injects historical context into the debate.
 
@@ -237,7 +244,7 @@ def generate_markdown_report(data: dict) -> str:
 
 ## 3. Architectural Takeaways
 
-1. **Empirical Proof of Adaptive Partnership:** `EduAgent` demonstrates the defining characteristic of a *Collaborative Partner*: the agent **adapts from past interactions** to adjust its pedagogical strategy rather than functioning as a stateless chatbot responding in isolation.
+1. **Behavioural Evidence of Adaptive Partnership:** `EduAgent` demonstrates the defining characteristic of a *Collaborative Partner*: the agent **adapts from past interactions** to adjust its pedagogical strategy rather than functioning as a stateless chatbot responding in isolation.
 2. **Deterministic Governance:** Persona routing and Priority Index calculations remain completely **deterministic (ZERO LLM-as-judge)**, guaranteeing 100% reproducibility and auditability.
 """
     return md
