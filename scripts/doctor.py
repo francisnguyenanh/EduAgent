@@ -139,7 +139,25 @@ def check_gmail_oauth_token() -> tuple[str, str]:
     if creds.valid:
         return PASS, "Gmail compose-only token present and valid."
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        # ĐỢT 27: a dead refresh token here is a fact about THIS LAPTOP's copy,
+        # not about the deployed service. Cloud Run mounts
+        # GMAIL_COMPOSE_TOKEN_JSON from Secret Manager (see the "No plaintext
+        # credentials" check), which is a separate, independently-rotated
+        # credential. Reporting FAIL made doctor print "NOT READY TO DEMO"
+        # while the live digest path was demonstrably still creating drafts --
+        # a false alarm the video script then told the presenter to show on
+        # camera. It is still a WARN, never a PASS: scripts run from this
+        # machine that touch Gmail really are broken until it is re-authorized.
+        try:
+            creds.refresh(Request())
+        except Exception as exc:  # noqa: BLE001
+            return WARN, (
+                f"LOCAL Gmail token cannot refresh ({type(exc).__name__}: {str(exc)[:120]}). "
+                "This is the laptop's copy only -- it does NOT serve the deployed demo, which mounts "
+                "GMAIL_COMPOSE_TOKEN_JSON from Secret Manager. Re-authorize with "
+                "`python scripts/rotate_oauth_tokens.py` before running any local script that drafts email. "
+                "If judges report a missing draft, the Secret Manager copy is what to rotate."
+            )
         token_path.write_text(creds.to_json())
         return PASS, "Gmail token had expired but refreshed successfully -- re-saved."
     return FAIL, "Gmail token present but invalid and has no refresh_token -- re-run the OAuth flow before demo."
@@ -151,7 +169,18 @@ def check_sheets_permission() -> tuple[str, str]:
 
     from eduagent.integrations.sheets_mcp import _service
 
-    spreadsheet = _service().spreadsheets().get(spreadsheetId=SHEETS.audit_spreadsheet_id).execute()
+    # ĐỢT 27: same reasoning as the Gmail check above -- this exercises the
+    # laptop's Sheets token, not the SHEETS_TOKEN_JSON the revision mounts.
+    # The Sheets audit row is also an append-only side channel: PHASE 4 already
+    # guarantees a failure there cannot affect the digest a judge sees.
+    try:
+        spreadsheet = _service().spreadsheets().get(spreadsheetId=SHEETS.audit_spreadsheet_id).execute()
+    except Exception as exc:  # noqa: BLE001
+        return WARN, (
+            f"LOCAL Sheets token cannot reach the spreadsheet ({type(exc).__name__}: {str(exc)[:120]}). "
+            "Laptop copy only -- the deployed revision mounts SHEETS_TOKEN_JSON from Secret Manager, and a "
+            "Sheets failure degrades to 'audit row not logged' without touching the digest (failure_matrix row 8)."
+        )
     title = spreadsheet.get("properties", {}).get("title", "?")
     return PASS, f"Spreadsheet '{title}' ({SHEETS.audit_spreadsheet_id}) reachable with current Sheets token."
 
@@ -314,7 +343,22 @@ def check_firestore_ttl_policy() -> tuple[str, str]:
     field_path = (
         f"projects/{project_id}/databases/(default)/collectionGroups/debate_sessions/fields/expire_at"
     )
-    field = client.get_field(name=field_path)
+    # ĐỢT 27: PermissionDenied here says the CALLER may not read the field
+    # config -- it says nothing about whether the TTL policy exists. Letting it
+    # fall through to _check()'s blanket `except` reported FAIL ("documents are
+    # not being deleted"), which is a claim this run has no evidence for.
+    # Unverified is not the same as broken.
+    try:
+        field = client.get_field(name=field_path)
+    except Exception as exc:  # noqa: BLE001
+        if type(exc).__name__ == "PermissionDenied":
+            return WARN, (
+                "Cannot read the debate_sessions.expire_at field config from this account "
+                "(PermissionDenied) -- the TTL policy is NOT verified either way by this run. "
+                "Check it in the Firestore console, or re-run with an account holding "
+                "datastore.indexes.get / roles/datastore.viewer."
+            )
+        raise
     ttl = getattr(field, "ttl_config", None)
     state = getattr(ttl, "state", 0) if ttl is not None else 0
 

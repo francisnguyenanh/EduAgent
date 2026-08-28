@@ -187,3 +187,62 @@ def test_process_event_coalesces_digest_within_debounce_window():
 
     assert result["status"] == "coalesced_skip_digest"
     mock_synthesize.assert_not_awaited()  # never even got to the expensive LLM digest call
+
+
+# --- ĐỢT 27 / ADR-031: WHY the Gmail draft is missing, not just THAT it is ---
+# Judging runs for a month and a Gmail refresh token can expire inside that
+# window. Before this, both causes rendered the same dashboard badge ("no
+# recipient configured"), so a judge with an address in their Settings box was
+# shown a message their own screen contradicted.
+
+
+def _run_with_gmail(gmail_patch, teacher_email="teacher@example.com"):
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
+        patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
+        patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+        patch("eduagent.aggregator.class_aggregator.persist_digest") as mock_persist,
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        gmail_patch,
+    ):
+        mock_teacher.email = teacher_email
+        mock_sheets.audit_spreadsheet_id = ""
+        result = asyncio.run(process_event({"event_id": "e_status", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+    return result, mock_persist
+
+
+def test_gmail_draft_status_is_created_on_success():
+    gmail = patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value={"draft_id": "d1", "message_id": "1a04055b6640d946"})
+    result, mock_persist = _run_with_gmail(gmail)
+
+    assert result["gmail_draft_status"] == "created"
+    assert mock_persist.call_args.kwargs["gmail_draft_status"] == "created"
+
+
+def test_gmail_draft_status_is_failed_when_the_token_is_dead():
+    """An expired/revoked OAuth refresh token is the realistic month-two
+    failure. The digest must still be composed and stored, and the status must
+    say `failed` -- NOT `no_recipient`, which would blame a recipient that is
+    plainly configured."""
+    gmail = patch(
+        "eduagent.integrations.gmail_mcp.create_digest_draft",
+        side_effect=Exception("invalid_grant: Token has been expired or revoked."),
+    )
+    result, mock_persist = _run_with_gmail(gmail)
+
+    assert result["status"] == "processed"  # the digest itself survives
+    assert result["digest"]["headline"]  # and still carries its analysis
+    assert result["gmail_draft_id"] is None
+    assert result["gmail_draft_status"] == "failed"
+    assert result["gmail_draft_status"] != "no_recipient"
+    assert mock_persist.call_args.kwargs["gmail_draft_status"] == "failed"
+
+
+def test_gmail_draft_status_is_no_recipient_when_no_address_is_configured():
+    gmail = patch("eduagent.integrations.gmail_mcp.create_digest_draft")
+    result, mock_persist = _run_with_gmail(gmail, teacher_email="")
+
+    assert result["gmail_draft_status"] == "no_recipient"
+    assert mock_persist.call_args.kwargs["gmail_draft_status"] == "no_recipient"

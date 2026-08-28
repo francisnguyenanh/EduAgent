@@ -267,7 +267,12 @@ def test_login_is_rate_limited_against_password_brute_force():
     login_limiter.reset()
     statuses = [
         client.post("/api/auth/login", json={"role": "student", "user_id": "c1_stu01", "password": f"guess{i}"}).status_code
-        for i in range(10)  # LOGIN_POLICY.capacity is 5
+        # ĐỢT 27 / ADR-032: LOGIN_POLICY.capacity went 5 -> 15 so judges are not
+        # locked out mid-review. The probe count is raised to stay ABOVE capacity
+        # -- the property under test (a burst eventually gets 429) is unchanged;
+        # only the burst size it must exceed moved. Sabotage-verified: setting
+        # capacity high enough to swallow 25 attempts turns this test red.
+        for i in range(25)  # LOGIN_POLICY.capacity is 15
     ]
     assert 401 in statuses, "wrong passwords should still be rejected as 401"
     assert 429 in statuses, f"brute-force attempt was never rate limited: {statuses}"

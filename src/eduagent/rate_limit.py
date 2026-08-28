@@ -81,9 +81,24 @@ class RateLimitPolicy:
 
 
 DEBATE_POLICY = RateLimitPolicy(capacity=10, refill_per_second=0.2)
-# Login is cheap (no LLM call) but is the brute-force surface for the shared
-# demo password, so it gets a tighter sustained rate and a smaller burst.
-LOGIN_POLICY = RateLimitPolicy(capacity=5, refill_per_second=0.1)
+# ĐỢT 27 / ADR-032: deliberately loosened from (5, 0.1) to (15, 0.5) so a judge
+# exploring both portals over a month-long window is not locked out mid-review.
+#
+# Why this does not weaken the system (reviewed Wave 27, and the reasoning is
+# the point -- not the numbers):
+#   * login() is pure in-process work -- hmac.compare_digest + create_access_token.
+#     No Firestore read, no LLM call, no network I/O. Raising its ceiling adds
+#     ZERO Vertex AI spend, which is what ADR-017 exists to bound.
+#   * Both passcodes are published in the README on purpose (ADR-025), so this
+#     bucket was never protecting a secret. It bounds abuse volume, not access.
+#   * The expensive surface is a DIFFERENT bucket: DEBATE_POLICY above, used by
+#     `debate_limiter` for the five debate routes and /api/parent-note. It is
+#     unchanged. A token obtained faster still meets those buckets downstream,
+#     and an attacker only ever needed one token anyway -- login rate was never
+#     the control on downstream cost.
+# Sustained rate goes 6/min -> 30/min per key per process; the bucket, the
+# bounded key set, and the last-hop X-Forwarded-For keying (ADR-026) all stay.
+LOGIN_POLICY = RateLimitPolicy(capacity=15, refill_per_second=0.5)
 
 
 class RateLimitExceeded(Exception):

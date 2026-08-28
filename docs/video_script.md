@@ -41,33 +41,31 @@ Two lines worth putting on screen as text, because they land harder read than he
 * *"The agent composed this. It did not send it."* (during the digest beat — pointing at the badge)
 * *"The agent doesn't replace the teacher or the student's thinking. It makes both more scalable."* (closing)
 
-**⏱️ Latency budget — measured, not estimated (Audit Wave 15).** The image path is the slowest thing in the demo. Measured on a real 958 KB handwritten photo against Vertex AI:
+**⏱️ Latency budget — re-measured on the live service (Audit Wave 27, 2026-08-28, revision `00053-hbq`).**
 
 | Step | Measured |
 |---|---|
-| `transcribe_essay_image()` — Gemini Vision + Gemma 4 cross-model check (ADR-028) | **22.5s** measured Wave 15 on the same-model version; **must be re-measured on the deployed service** — see the note below |
-| Full `/api/debate/start-with-image` (OCR + summarizer + persona + turn 1) | **24.2s** |
+| `POST /api/debate/extract-image` — Gemini Vision + Gemma 4 cross-model check (ADR-028) | **7s** (2 consecutive warm runs, both 7s) |
+| `POST /api/debate/start` on the approved transcription (summarizer + persona + turn 1) | fast — no image work left in this call |
 
-> ⚠️ **Audit Wave 24 — re-measure before you record.** ADR-028 moved the second transcription pass
-> to Gemma 4, which adds a call to the image path. Measured locally in a contemporaneous A/B (same
-> code, toggled by `EDUAGENT_OCR_CROSS_CHECK_GEMMA`) over the 12 real samples: mean per-image OCR
-> **7.30s → 8.82s, +21%**. The 22.5s / 24.2s figures above were measured at Wave 15 on the
-> *same-model* version against the deployed service and have **not** been re-measured since. Run the
-> image beat once on the live service and read the real number before you rehearse the timing —
-> per the numbers-discipline rule below, never say a figure you have not just seen.
+> ⚠️ **Audit Wave 27 — the old 22.5s / 24.2s figures are gone, and the reason matters.** Those were
+> measured at Wave 15 against `start-with-image`, a **single call** that carried OCR *and* the whole
+> Tier-1 pipeline. ADR-029 split ingest into two clicks, so the image wait is now just
+> `extract-image` — **7s measured today**, not 22.5s. Do not quote the old numbers; they describe an
+> endpoint the demo no longer uses on this path.
 
-An external review predicted a **504 Deadline Exceeded** here. That is not the real risk: the Cloud Run request timeout is **300s** and the per-call LLM timeout is 60s, so there is ~12x headroom and a 504 needs something far worse than a slow photo. The real risk is **24 seconds of dead air in a 240-second video** — 10% of the budget on a spinner.
+An external review once predicted a **504 Deadline Exceeded** here. That was never the real risk: the Cloud Run request timeout is **300s** and the per-call LLM timeout is 60s, so there is ~40x headroom at the measured 7s. That argument is still worth having ready for Q&A.
 
-Mitigations, in order of preference:
-1. **Talk over it.** Those 24 seconds are exactly when you explain *"we transcribe the photo twice — once with Gemini Vision, once with Gemma, a different model family — and compare them, because we don't trust a model's own confidence score, and two passes of the SAME model share the same blind spot"* — the OCR beat has the most to say and nothing to show. Rehearse it as narration over a progress state, not as a wait.
+What to do with the wait:
+1. **Talk over it — but plan for ~7 seconds, not 24.** That is roughly one sentence: *"we transcribe the photo twice — once with Gemini Vision, once with Gemma, a different model family — because two passes of the SAME model share the same blind spot."* Rehearse that one line to land as the transcription appears. Padding it to 24 seconds will leave you talking over a finished result.
 2. **Warm the service first** so cold start is not stacked on top: hit `/health-check` before recording.
-3. **If the timing still doesn't fit:** run the live beat with typed text (fast) and show the handwriting path in a second window that was started earlier. Do NOT cut the recording to hide the wait — "unedited live execution" is a scoring requirement.
+3. **Re-measure on the day, and do not pre-script a confidence level.** 7s is two warm samples on one image. That same image returned `confidence: high` on one run and `medium` with an `uncertain_segments` entry on another — that variation is the cross-check working, not a fault, but it means you must read what the screen says.
 
 **Numbers discipline for the whole recording:** never say a number that is not visible on screen at that moment. Every headline figure in this project is reproducible from a script (`run_eval_suite.py`, `evaluate_learning_outcomes.py`, `experiment_memory_ab.py`) — run it live or screenshot it beforehand, and read what it shows.
 
 ---
 
-## 🔑 Credentials & data you will actually type on camera (re-verified 2026-08-27 against live revision `00037-6h4`)
+## 🔑 Credentials & data you will actually type on camera (re-verified 2026-08-28 against live revision `00053-hbq`)
 
 **The two portals now take DIFFERENT passcodes (ADR-025, Audit Wave 18).** Typing the student
 passcode into the Teacher Portal returns `401 Incorrect password.` on camera.
@@ -77,17 +75,37 @@ passcode into the Teacher Portal returns `401 Incorrect password.` on camera.
 | Student | `c1_stu01` (or any `c1_<name>`) | `eduagent2026` |
 | Teacher | `c1_teacher` | `eduagent-teacher-2026` |
 
-**⚠️ There are TWO students named "Binh" in class `c1`.** The one the script is about is
-`stu_stuck` — 4 essays, all on The Skeptic, `needs_attention = true`, ranked **#1**. The other
-(`c1_stu02`, also "Binh") sits at #3. On the Teacher Dashboard, click the **top row**. Verified
-live ranking:
+**⚠️ Audit Wave 27 — the class was re-seeded with English names; every name in the previous cut of
+this script is dead.** The student the script is about is `stu_stuck`, now **"Tom"** — a 3-essay
+stuck streak on The Skeptic, `needs_attention = true`, ranked **#1**. On the Teacher Dashboard,
+click the **top row**. Re-measured live ranking (2026-08-28, revision `00053-hbq`):
 
 ```
-1. stu_stuck          | Binh | priority=14.29   <-- the story
-2. c1_stu01           | An   | priority=8.50
-3. c1_stu02           | Binh | priority=8.50    <-- NOT this one
-4. stu_inactive       | Duc  | priority=5.50
+1. stu_stuck          | Tom   | priority=14.57   <-- the story. STABLE.
+--- everything below this line moves between runs; do not memorise it ---
+2. stu_declining      | Jerry | priority=5.14
+3. stu_inactive       | David | priority=4.50
+4. stu_improving      | Mia   | priority=4.43
+5. stu_common_fallacy | Emma  | priority=3.21
+6. c1_stu01           | Alice | priority=3.00    <-- the login account
+7. c1_stu02           | Bob   | priority=3.00
 ```
+
+> **Only row #1 is safe to script.** Rows 2–7 were measured **twice within one hour** on 2026-08-28
+> and came out in a different order each time (Alice 1.50 → 3.00, David 5.50 → 4.50, Bob 5.29 → 3.00,
+> and #2 changed hands) — `inactivity` accrues by the day and `shared_fallacy` shifts as any student
+> submits. Tom's **14.57** is dominated by `stuck_streak 9.0`, which is why he stays #1 by a factor
+> of nearly three. Say "the top row", never "the second student".
+>
+> **Two traps this replaces.** (a) The old script warned about "two students named Binh" — there is
+> no Binh in `c1` any more; do not go looking for one. (b) `c1_stu01` is the account you *log in as*,
+> and it does **not** sit at #2 — so "click the second row" is wrong. The story is always the
+> **top** row, `stu_stuck` / Tom.
+>
+> *(The name "Binh" still appears in `docs/experiment_memory_ab.md` and
+> `scripts/experiment_memory_ab.py`. That is correct and must NOT be "fixed": the A/B experiment
+> builds its own synthetic 3-essay profile in memory and never touches Firestore, so the re-seed
+> does not affect it.)*
 
 Re-check on the day of recording (the ranking moves as data is added):
 
@@ -127,15 +145,15 @@ timeline
 
 ---
 
-### 🎬 Scene 2: Single-Student Adaptive Trajectory — "Binh's Journey" (0:40 - 1:45)
-* **Visual 1 (0:40 - 1:00):** Student Portal. Student "Binh" submits Essay 1 on Electric Vehicles. The system extracts claims and selects **The Skeptic**.
+### 🎬 Scene 2: Single-Student Adaptive Trajectory — "Tom's Journey" (0:40 - 1:45)
+* **Visual 1 (0:40 - 1:00):** Student Portal. Student "Tom" submits Essay 1 on Electric Vehicles. The system extracts claims and selects **The Skeptic**.
   - Socratic Turn 1 pops up: *"What empirical data accounts for battery manufacturing and regional power grids?"*
   - Show live debate exchange across 3 turns. Notice how the Independent Validator guarantees **ZERO answer leaks**.
-* **Visual 2 (1:00 - 1:25):** Fast forward to Essay 2. Binh repeats an unsupported claim.
-  - Show the **Long-Term Memory in action**: EduAgent recognizes Binh's repeated struggle, rotates persona to **The Expander**, and explicitly injects memory context:  
+* **Visual 2 (1:00 - 1:25):** Fast forward to Essay 2. Tom repeats an unsupported claim.
+  - Show the **Long-Term Memory in action**: EduAgent recognizes Tom's repeated struggle, rotates persona to **The Expander**, and explicitly injects memory context:  
     > *"This student has previously struggled with: unsupported claim. Probing broader context..."*
 * **Visual 3 (1:25 - 1:45):** **Metacognitive Reflection Node**.
-  - Binh submits a revised thesis statement based on the debate.
+  - Tom submits a revised thesis statement based on the debate.
   - The Scorer evaluates the cognitive delta — **read the delta the screen actually shows.** ⚠️ Do NOT say "2/10 to 8/10, +6.0": those were hand-typed constants in an earlier version of the evaluation script, not measured values (Audit Wave 12). Live scoring of a short revised thesis typically lands in the low single digits in absolute terms; the honest framing is *"the delta is positive on the axis the persona targeted"*, and the measured mean across our 8 benchmark scenarios is **+2.75**, not +5.62. If you want a number on screen here, run `scripts/evaluate_learning_outcomes.py` beforehand and show `docs/learning_outcome_eval.md`.
 
 ---
@@ -143,22 +161,24 @@ timeline
 ### 🎬 Scene 3: Autonomous Class Synthesis & Teacher Action Loop (1:45 - 2:45)
 * **Visual 1 (1:45 - 2:10):** Switch to Teacher Dashboard (`c1`). 
   - Show the **Intervention Priority Index**: Ranked strictly by a deterministic rule engine (ZERO LLM-as-judge).
-  - Binh (`stu_stuck`) is ranked **#1**. ⚠️ Do NOT say "Priority 1.5": `1.5` is only the
-    `shared_fallacy` *component* of the score, not the score. The measured total on 2026-08-26 was
-    **14.29**, broken down as `stuck_streak 9.0 + score_decline 2.5 + inactivity 1.29 +
+  - Tom (`stu_stuck`) is ranked **#1**. ⚠️ Do NOT say "Priority 1.5": `1.5` is only the
+    `shared_fallacy` *component* of the score, not the score. The measured total on 2026-08-28 was
+    **14.57**, broken down as `stuck_streak 9.0 + score_decline 2.5 + inactivity 1.57 +
     shared_fallacy 1.5`. Per the numbers-discipline rule above, read whatever total the screen shows
-    — the components move with the data, and `inactivity` grows every day you do not re-seed.
+    — the components move with the data, and `inactivity` grows every day you do not re-seed
+    (it was 1.29 on 08-26 and 1.57 on 08-28; that drift is the whole reason for the rule).
 * **Visual 2 (2:10 - 2:30):** **Actionable 15-Minute Mini-Lesson**.
   - Show the newly generated class digest, and read out whatever number the screen actually shows: the systemic-pattern threshold is **2 or more distinct students** sharing a fallacy (`priority_engine.MIN_STUDENTS_FOR_COMMON_FALLACY = 2`), counted per student rather than per essay. Don't say "3 students" unless the digest on screen says 3 — the earlier draft of this line hard-coded a number the run may not produce.
 * **Visual 3 (2:30 - 2:45):** **1-Click Parent Progress Note**.
-  - Click on Binh -> Generate Note. Gemini drafts an empathetic progress report citing Binh's cognitive breakthrough (do NOT say "FERPA-compliant" on camera — this is a privacy-by-design prototype, not a legally certified product).
+  - Click on Tom -> Generate Note. Gemini drafts an empathetic progress report citing Tom's cognitive breakthrough (do NOT say "FERPA-compliant" on camera — this is a privacy-by-design prototype, not a legally certified product).
 
 ---
 
 ### 🎬 Scene 4: Architectural Discipline & Empirical Evaluation (2:45 - 3:30)
 * **Visual 1 (2:45 - 3:05):** Architecture Diagram & Google Cloud Trace.
   - Show live Google Cloud Run deployment (`asia-southeast1`), Firestore Memory, Pub/Sub Event Ingestion, and W3C Trace context propagation across nodes.
-  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the **11-check** report land on screen (10 PASS / 1 WARN / 0 FAIL as of Audit Wave 18 — the WARN is the local signing key, which is correct for a laptop; say so if it is visible). It is a single command that shows the deployed revision is healthy, the Firestore TTL policy is ACTIVE, and no credential is stored in cleartext. If you'd rather say one sentence than show a table: *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."*
+  - **Optional 5-second security beat, if the pacing allows** — run `python scripts/doctor.py` and let the **11-check** report land on screen. **Audit Wave 27 re-measured this: 7 PASS / 4 WARN / 0 FAIL**, ending in `Ready to demo`. Do **not** quote the old "10 PASS / 1 WARN / 0 FAIL" — that figure predates the current check set and is no longer reproducible. The four WARNs are all *"not verified from this laptop"*, not *"broken"*: the local signing key (correct for a laptop), the two local OAuth token copies (the deployed revision mounts its own from Secret Manager), and the Firestore TTL policy (this account cannot read the field config). If any WARN is legible on screen, say that sentence — a judge who reads a WARN you did not explain will assume the worst.
+  - **Safer option, and the one to default to:** skip the table and say the one line instead — *"Every credential reaches the container as a Secret Manager reference, and a preflight check refuses to deploy without them."* The `No plaintext credentials on Cloud Run` check backs it, and the GCP console screenshots prove it without a terminal that might surprise you live.
 * **Visual 2 (3:05 - 3:20):** **4-Layer Deterministic ADK Eval Suite — 50/50 deterministic test cases passed**.
   - Show terminal output of `scripts/run_eval_suite.py --strict`:
     1. Safety & Security (15/15)

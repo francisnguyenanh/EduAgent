@@ -34,6 +34,10 @@ def persist_digest(
     common_fallacies: list[str],
     gmail_draft_id: str | None,
     gmail_draft_message_id: str | None = None,
+    # ĐỢT 27 / ADR-031: "created" | "no_recipient" | "failed". Defaulted so
+    # digests written before this field existed still load; the dashboard
+    # treats a missing value as "unknown" rather than inventing a cause.
+    gmail_draft_status: str | None = None,
     now: datetime,
 ) -> None:
     doc_ref = (
@@ -50,6 +54,7 @@ def persist_digest(
             "common_fallacies": common_fallacies,
             "gmail_draft_id": gmail_draft_id,
             "gmail_draft_message_id": gmail_draft_message_id,
+            "gmail_draft_status": gmail_draft_status,
             "timestamp": now.isoformat(),
         }
     )

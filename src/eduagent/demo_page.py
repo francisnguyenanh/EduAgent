@@ -41,10 +41,11 @@ DEMO_PAGE_HTML = """<!doctype html>
   .tabs button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
   .panel + .panel { margin-top: 1rem; }
-  #panel-student { max-height: calc(100vh - 180px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  #panel-student { max-height: calc(100vh - 250px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; position: relative; padding-bottom: 0; }
   #panel-student::-webkit-scrollbar { width: 6px; }
   #panel-student::-webkit-scrollbar-track { background: transparent; }
   #panel-student::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  #reply-area { position: sticky; bottom: 0; background: var(--panel); padding: 0.75rem 0 0.25rem 0; border-top: 1px solid var(--border); margin-top: 1rem; box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.05); z-index: 10; }
   label { display: block; font-size: 0.8rem; color: var(--muted); margin: 0.75rem 0 0.25rem; }
   input:not([type="checkbox"]), textarea { width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
   input[type="checkbox"] { cursor: pointer; }
@@ -81,7 +82,7 @@ DEMO_PAGE_HTML = """<!doctype html>
   .radar-fill { height: 100%; background: var(--accent); }
   .radar-value { flex: none; width: 2rem; text-align: right; font-size: 0.8rem; color: var(--muted); }
   .feedback-box { margin-top: 1rem; padding: 0.9rem 1rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
-  .reflection-card { margin-top: 1.25rem; padding: 1.1rem; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; }
+  .reflection-card { position: sticky; bottom: 0; margin-top: 1.25rem; padding: 1.1rem; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08); z-index: 10; }
   .judge-bar { background: linear-gradient(90deg, #1e3a8a, #3b82f6); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; font-size: 0.8rem; }
   .judge-bar-title { font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
   .judge-bar-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
@@ -1219,9 +1220,24 @@ function digestDraftPreview(latest) {
   // before this field existed fall back to opening the Drafts folder, which
   // still gets the teacher there.
   const composeId = latest.gmail_draft_message_id;
-  const badge = draftId
-    ? '<span style="background:#dcfce7;color:#14532d;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">Draft created &#10003; &mdash; awaiting human Send (ADR-001)</span>'
-    : '<span style="background:#e5e7eb;color:#374151;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">No draft for this digest &mdash; no recipient configured</span>';
+  // ĐỢT 27 / ADR-031: three outcomes, three honest badges. This used to be a
+  // boolean, so an expired Gmail OAuth token rendered "no recipient
+  // configured" -- a message the teacher's own Settings box contradicts. The
+  // digest itself is never affected: it is composed, stored and rendered
+  // below regardless of whether Gmail accepted the draft.
+  const status = latest.gmail_draft_status || (draftId ? 'created' : 'unknown');
+  const pill = (bg, fg, text) =>
+    `<span style="background:${bg};color:${fg};padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">${text}</span>`;
+  let badge;
+  if (status === 'created' || draftId) {
+    badge = pill('#dcfce7', '#14532d', 'Draft created &#10003; &mdash; awaiting human Send (ADR-001)');
+  } else if (status === 'failed') {
+    badge = pill('#fef3c7', '#78350f', 'Gmail draft unavailable &mdash; the digest below was still composed and stored');
+  } else if (status === 'no_recipient') {
+    badge = pill('#e5e7eb', '#374151', 'No draft for this digest &mdash; no recipient configured');
+  } else {
+    badge = pill('#e5e7eb', '#374151', 'Draft status not recorded for this digest');
+  }
   const link = draftId
     ? `<a href="https://mail.google.com/mail/u/0/#drafts${composeId ? '?compose=' + encodeURIComponent(composeId) : ''}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-flex;align-items:center;padding:0.35rem 0.75rem;border-radius:6px;background:var(--accent);color:#ffffff !important;font-size:0.78rem;font-weight:600;border:1px solid var(--accent);">${composeId ? 'Open the draft in Gmail &rarr;' : 'Open Gmail Drafts &rarr;'}</a>`
     : '';

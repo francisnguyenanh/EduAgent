@@ -248,6 +248,13 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
     teacher_email = class_settings.get("digest_notify_email") or TEACHER.email
     draft_id = None
     draft_message_id = None
+    # ĐỢT 27 / ADR-031: WHY the draft is missing, not just THAT it is missing.
+    # Before this the dashboard rendered one fallback badge -- "no recipient
+    # configured" -- for both causes, so an expired Gmail OAuth token showed a
+    # judge a message contradicted by the recipient sitting in their own
+    # Settings box. Judging runs for a month; a refresh token can die inside
+    # that window, and a wrong explanation is worse than an honest one.
+    draft_status = "no_recipient"
     if teacher_email:
         try:
             from eduagent.integrations.gmail_mcp import create_digest_draft
@@ -263,7 +270,9 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
             # what Gmail's web UI addresses -- kept separately so the
             # dashboard's "open the draft" link resolves.
             draft_message_id = draft["message_id"]
+            draft_status = "created"
         except Exception:
+            draft_status = "failed"
             _logger.exception("Failed to create Gmail draft -- digest still returned/logged", extra={"class_id": class_id, "event_id": event_id})
 
     # ĐỢT 3 latency optimization: Sheets append and the Firestore
@@ -309,6 +318,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
                 common_fallacies=fallacies,
                 gmail_draft_id=draft_id,
                 gmail_draft_message_id=draft_message_id,
+                gmail_draft_status=draft_status,
                 now=now,
             )
         except Exception:
@@ -333,4 +343,5 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
         "digest": digest,
         "gmail_draft_id": draft_id,
         "gmail_draft_message_id": draft_message_id,
+        "gmail_draft_status": draft_status,
     }
