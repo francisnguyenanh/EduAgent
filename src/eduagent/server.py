@@ -333,6 +333,36 @@ async def api_debate_start_with_gdoc(request: Request, payload: DebateStartFromG
         raise HTTPException(status_code=502, detail="Failed to fetch Google Doc or start debate -- check server logs.")
 
 
+@app.post("/api/debate/extract-image")
+async def api_debate_extract_image(request: Request, payload: DebateStartFromImageRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
+    try:
+        from eduagent.api import extract_text_from_image
+        return extract_text_from_image(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        _logger.exception("extract_text_from_image failed")
+        raise HTTPException(status_code=502, detail="Failed to extract text from image -- check server logs.")
+
+
+@app.post("/api/debate/extract-gdoc")
+async def api_debate_extract_gdoc(request: Request, payload: DebateStartFromGDocRequest) -> dict:
+    _enforce_rate_limit(request, debate_limiter)
+    _verify_student_auth(student_id=payload.student_id, class_id=payload.class_id, authorization=request.headers.get("authorization"))
+    try:
+        from eduagent.api import extract_text_from_gdoc
+        return extract_text_from_gdoc(payload)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        _logger.exception("extract_text_from_gdoc failed")
+        raise HTTPException(status_code=502, detail="Failed to fetch Google Doc -- check server logs.")
+
+
 @app.post("/api/debate/turn")
 async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
     _enforce_rate_limit(request, debate_limiter)

@@ -252,6 +252,15 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
             "confidence": ocr_result["confidence"],
             "uncertain_segments": ocr_result["uncertain_segments"],
             "degraded": ocr_result["degraded"],
+            # ADR-028 / Audit Wave 25: which model family actually produced the
+            # cross-check's second transcription pass -- "gemma-4-26b-a4b-it-maas"
+            # normally, "gemini-fallback" when Gemma's shared MaaS queue was full.
+            # Surfaced to the client on purpose: without it the only proof Gemma
+            # is in the request path lives in Cloud Logging, which a judge testing
+            # the hosted URL has no access to. A signal nothing can read is the
+            # ADR-015 failure mode (a flag written but never on the read path),
+            # and this one is also the evidence for the extra-model bonus claim.
+            "cross_check_model": ocr_result["cross_check_model"],
         },
         persona_id=payload.persona_id,
     )
@@ -279,6 +288,30 @@ def start_debate_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
         "char_count": len(essay_text),
     }
     return result
+
+
+def extract_text_from_image(payload: DebateStartFromImageRequest) -> dict:
+    if len(payload.image_base64) > MAX_IMAGE_B64_CHARS:
+        raise ValueError(f"Image payload too large ({len(payload.image_base64)} chars, max {MAX_IMAGE_B64_CHARS}).")
+
+    image_bytes = base64.b64decode(payload.image_base64)
+    ocr_result = transcribe_essay_image(image_bytes, payload.image_mime_type, student_id=payload.student_id)
+
+    return {
+        "text": ocr_result["transcribed_text"],
+        "ocr": {
+            "confidence": ocr_result["confidence"],
+            "uncertain_segments": ocr_result["uncertain_segments"],
+            "degraded": ocr_result["degraded"],
+            "cross_check_model": ocr_result["cross_check_model"],
+        }
+    }
+
+
+def extract_text_from_gdoc(payload: DebateStartFromGDocRequest) -> dict:
+    from eduagent.integrations.gdocs import fetch_gdoc_text
+    essay_text = fetch_gdoc_text(payload.gdoc_url)
+    return {"text": essay_text}
 
 
 
