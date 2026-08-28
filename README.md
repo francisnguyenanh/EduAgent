@@ -22,6 +22,31 @@
 * **Tier 2 (Class-Wide Aggregator & Teacher Co-Pilot):** Every evaluated essay triggers an event-driven Class Aggregator that clusters shared fallacies across a cohort, calculates a deterministic intervention priority index (zero LLM vibes), and drafts actionable teacher digests with human-in-the-loop controls.
   * **Dynamic Integrations:** Real-time Google Sheet audit logging (auto URL parsing, smart multi-tab fallback, live connection testing) and automated Gmail draft composition.
 
+### Where the autonomy actually is
+
+The title says *Autonomous*, and the architecture deliberately contains **zero opaque `AgentNode`s** —
+every step is a `FunctionNode` and Gemini is only ever called *inside* deterministic Python. Those two
+facts are not in tension, but the distinction is worth stating plainly because it is the first thing
+worth asking about this project:
+
+**Autonomy here is not the LLM being left to reason unsupervised. It is the system running a complete
+observe → diagnose → act → evaluate → remember → adapt loop with no human in it.** Nobody chooses which
+persona challenges a student, nobody decides that a class has a shared fallacy, and nobody asks for a
+digest to be written. The system reads a student's history out of Firestore, picks the intervention,
+escalates a three-turn debate, scores the outcome, mutates the persistent profile, emits an event, and
+on the other side of Pub/Sub clusters the cohort, ranks who needs attention, and composes the teacher's
+email — unprompted.
+
+What the LLM supplies is **language**. What the system keeps is **judgement**: persona routing is
+keyword-based, the answer-leak validator runs zero LLM calls, and the teacher-facing priority ranking
+is arithmetic a teacher can audit line by line. An LLM asked to grade its own output is not a control,
+and an intervention ranking a teacher cannot explain is not usable in a classroom.
+
+Humans hold exactly two gates, both at consequential boundaries rather than sprinkled through the
+loop: **a student approves the transcription** of their own handwriting before the AI argues with it
+(ADR-029), and **a teacher presses Send** on the email that leaves the building (ADR-001). Everything
+between those two points runs itself.
+
 ---
 
 ## 🚀 Live Demo & Judge Quickstart
@@ -220,7 +245,7 @@ python scripts/run_eval_suite.py --strict
 
 ## 4. Architecture Decision Records (ADRs)
 
-The table below summarizes our 27 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
+The table below summarizes our 33 architectural decisions. Expand any section for full context, rationales, and rejected alternatives.
 
 | ID | Title | Category | Core Decision & Impact |
 | :---: | --- | --- | --- |
@@ -259,7 +284,7 @@ The table below summarizes our 27 architectural decisions. Expand any section fo
 | **ADR-033** | Public For Reading Is Not A Licence To Reuse | IP / Licensing | MIT replaced with **All Rights Reserved** plus an explicit judging grant. The Rules require no licence for your own work; MIT invited the commercial reuse the author does not intend. Full rationale in §9. |
 
 <details>
-<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-032; ADR-033 is documented in §9)</b></summary>
+<summary><b>🔍 Expand Detailed ADR Descriptions (ADR-001 through ADR-033)</b></summary>
 
 ### ADR-001: Gmail Least-Privilege Enforced at Code Layer
 
@@ -560,8 +585,27 @@ The modules carrying the decisions a judge would want verified are the well-cove
 
 ### Empirical Pedagogical Outcomes
 
-1. **Memory A/B Experiment:** Controlled 3-essay trajectory testing proves persistent memory eliminates repeated stagnant interventions (0% in Branch B vs. 1 repeated failure in stateless Branch A).
-2. **Scorer Delta Measurement:** Pushing 8 controlled thesis pairs through the live production scorer (`score_essay()` on Vertex AI) yields positive gains on the targeted axis in **7 of 8 scenarios**, with a mean improvement of **+2.75 points** on the targeted cognitive dimension.
+> ⚠️ **Read these as engineering evidence, not as an educational efficacy claim.** Both are small,
+> controlled, single-author measurements — they demonstrate that the *mechanism* behaves as designed.
+> Neither is a statistically powered study of student learning, and nothing here was run with real
+> students in a classroom. Establishing that EduAgent improves learning outcomes would need a
+> cohort trial with a control group, which is out of scope for a hackathon prototype. We would
+> rather state the limit than have a judge find it.
+
+1. **Memory A/B Experiment (n = 1 trajectory, 3 essays):** A controlled A/B run over one 3-essay
+   trajectory shows persistent memory removing the repeated stagnant intervention that the
+   stateless branch produces (0 in Branch B vs. 1 in Branch A). This demonstrates the
+   streak-breaking logic fires; it is not evidence about a population.
+2. **Scorer Delta Measurement (n = 8 thesis pairs):** Pushing 8 controlled thesis pairs through the
+   live production scorer (`score_essay()` on Vertex AI) yields gains on the targeted axis in
+   **7 of 8 scenarios**, mean **+2.75 points** on that axis. The scorer sees one text at a time and
+   is never told which is the revision. Eight pairs is a signal, not a finding — and the one
+   scenario that did not improve is reported rather than dropped.
+
+*(Audit Wave 27: this section previously said the A/B experiment "proves" its conclusion and quoted
++2.75 with no sample size. Both figures were real and honestly measured; the framing around them
+was not. An earlier wave already deleted a fabricated `+5.62` from this project — overstating what a
+real number supports is the same failure wearing better clothes.)*
 
 ---
 
