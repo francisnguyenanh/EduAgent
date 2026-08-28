@@ -91,7 +91,7 @@ gcloud auth application-default login
 python scripts/doctor.py
 
 # 4. Run test & evaluation suites
-pytest tests/ -q -m "not e2e"               # 240+ unit tests (~15s, zero cloud cost)
+pytest tests/ -q -m "not e2e"               # full unit suite (~20s, zero cloud cost)
 python scripts/run_eval_suite.py --strict   # 50/50 deterministic eval benchmarks
 python scripts/demo_tier1_run.py            # Live end-to-end run: 3 essays, Gemini + Firestore
 ```
@@ -560,7 +560,7 @@ listed failure, and restoring the file — not by reasoning about what *should* 
 
 ### Test Suite Coverage
 
-**327 tests** (`pytest -q -m "not e2e"`, re-measured 2026-08-28, Audit Wave 27). The per-module coverage below is **88% statement coverage** over `src/eduagent`, measured 2026-08-27 at 309 tests — the test count has since grown, so treat the percentages as a floor rather than a current reading. `pytest-cov` is **not** in `requirements.txt` (it is not needed to run the suite); reproduce the table with `pip install pytest-cov && pytest --cov=src/eduagent --cov-report=term -q -m "not e2e"`:
+**353 tests** (`pytest -q -m "not e2e"`, re-measured 2026-08-28, Audit Wave 27). The per-module coverage below is **88% statement coverage** over `src/eduagent`, measured 2026-08-27 at 309 tests — the test count has since grown, so treat the percentages as a floor rather than a current reading. `pytest-cov` is **not** in `requirements.txt` (it is not needed to run the suite); reproduce the table with `pip install pytest-cov && pytest --cov=src/eduagent --cov-report=term -q -m "not e2e"`:
 
 ```bash
 pip install pytest-cov
