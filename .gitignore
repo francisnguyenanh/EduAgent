@@ -27,9 +27,6 @@ node_modules/
 dist/
 build/
 
-# Claude Code local state
-.claude/
-
 # OS / editor
 .DS_Store
 Thumbs.db
@@ -39,51 +36,7 @@ Thumbs.db
 # Logs / local artifacts
 *.log
 /tmp/
-scratch/
-
-ref/
-deploy.txt
 
 # coverage artifacts
 .coverage
 htmlcov/
-
-# --- Audit Wave 27: internal working material, kept locally, out of the public repo ---
-# These are "how this was built / how it gets submitted" artefacts, not "what the
-# project is". They stay on disk (nothing is deleted) but are not part of what
-# judges read. NOTE: gitignore has no trailing-comment syntax -- a '#' only starts
-# a comment at the START of a line, so every note here is on its own line.
-
-# 4900-line Vietnamese audit log across 27 review waves
-TODO.md
-# one-off AI audit prompt
-docs/opus5_full_audit_prompt_v2.md
-# internal doc-maintenance rules
-docs/DOC_UPDATE_RULE.md
-# historical handoff artefact
-docs/review_handoff_dot8.md
-# recording script
-docs/video_script.md
-# Devpost form content
-docs/devpost_submission_draft.md
-# personal pre-submission to-do list
-docs/submission_checklist.md
-# drafts of already-published posts
-docs/social_post_draft.md
-docs/blog_post_draft.md
-# how to capture evidence screenshots
-docs/gcp_screenshot_guide.md
-docs/gcp_evidence_checklist.md
-# source text for generating slides via NotebookLM
-docs/For_notebookLM.md
-# Official contest rules are Google's text, not this project's documentation
-overview/rule.txt
-overview/intro.txt
-
-# Wave 27: scratch analysis output, never part of the project
-_*.txt
-_*.log
-
-# Wave 27: internal Vietnamese design narrative + AI-agent briefing (see
-# docs/eligibility_statement.md for the English design principles it carried)
-overview/PROJECT_WIKI.md

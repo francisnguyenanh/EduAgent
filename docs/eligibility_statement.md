@@ -22,14 +22,14 @@ and pedagogical principle, not source code**:
 | Architectural lessons learned — written out in full below, so this claim can be read rather than taken on trust | Its agent graph, persona definitions, data model, or infrastructure |
 
 CritiqAI's source was kept locally as reference material only and is excluded from this repository's
-git history by the **first line** of `.gitignore` (`CritqAI-main/`). Verified 2026-08-27 —
+git history by the **first rule** in `.gitignore` (`CritqAI-main/`). Verified 2026-08-27 —
 `git rev-list --all --objects | grep -i critq` returns **no results**, i.e. no object with that path
 has ever entered this repository at any commit on any branch. Everything in the table in §1 below was
 designed and built during this Submission Period.
 
 ### What exactly carried over: the design principles, stated in full
 
-*(Audit Wave 27: these were previously kept in `overview/PROJECT_WIKI.md` §9, an internal
+*(Audit Wave 27: these were previously kept in an internal
 Vietnamese design document that has since been removed from this repository. Citing a
 Vietnamese file that a judge could not read — to substantiate a disclosure claim — was the
 weakest part of this statement, so the substance is reproduced here in English instead. Nothing
