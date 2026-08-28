@@ -41,6 +41,10 @@ DEMO_PAGE_HTML = """<!doctype html>
   .tabs button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
   .panel + .panel { margin-top: 1rem; }
+  #panel-student { max-height: calc(100vh - 180px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  #panel-student::-webkit-scrollbar { width: 6px; }
+  #panel-student::-webkit-scrollbar-track { background: transparent; }
+  #panel-student::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
   label { display: block; font-size: 0.8rem; color: var(--muted); margin: 0.75rem 0 0.25rem; }
   input:not([type="checkbox"]), textarea { width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
   input[type="checkbox"] { cursor: pointer; }
@@ -56,7 +60,7 @@ DEMO_PAGE_HTML = """<!doctype html>
   table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.85rem; }
   th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .ok-text { color: var(--ok); }
   .role-pick { display: flex; gap: 1rem; margin-top: 1rem; }
   .role-pick button { flex: 1; padding: 1.5rem 1rem; font-size: 1rem; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; color: var(--text); }
@@ -82,7 +86,8 @@ DEMO_PAGE_HTML = """<!doctype html>
   .judge-bar-title { font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
   .judge-bar-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .judge-btn { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); color: #fff; border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
-  .judge-btn:hover { background: #fff; color: #1e3a8a; font-weight: 600; }
+  .judge-btn:hover:not(:disabled) { background: #fff; color: #1e3a8a; font-weight: 600; }
+  .judge-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; border-color: rgba(255, 255, 255, 0.2); }
   .typing-bubble { display: flex; align-items: center; gap: 0.4rem; padding: 0.6rem 0.9rem; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; width: fit-content; color: var(--muted); font-size: 0.82rem; font-style: italic; }
   .typing-dots { display: inline-flex; gap: 4px; align-items: center; margin-left: 0.3rem; }
   .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: typingBounce 1.4s infinite ease-in-out both; }
@@ -121,7 +126,7 @@ DEMO_PAGE_HTML = """<!doctype html>
   <div class="judge-bar" id="judge-bar">
     <div class="judge-bar-title">✨ Judge 1-Click Showcase:</div>
     <div class="judge-bar-btns">
-      <button class="judge-btn" onclick="presetScenario('stuck')">🎯 1. Stuck Streak (Binh)</button>
+      <button class="judge-btn" onclick="presetScenario('stuck')">🎯 1. Stuck Streak (Bob)</button>
       <button class="judge-btn" onclick="presetScenario('ocr')">📷 2. Handwritten Essay (OCR)</button>
       <button class="judge-btn" onclick="presetScenario('gdoc')">🔗 3. Google Doc Ingestion</button>
       <button class="judge-btn" onclick="presetScenario('teacher')">👨‍🏫 4. Teacher Dashboard &amp; Note</button>
@@ -407,12 +412,27 @@ async function doLogin() {
   }
 }
 
+function setJudgeBarState(isLoggedIn) {
+  const btns = document.querySelectorAll('.judge-btn');
+  btns.forEach(btn => {
+    btn.disabled = isLoggedIn;
+    if (isLoggedIn) {
+      btn.setAttribute('title', 'Log out first to switch scenarios via Judge bar');
+    } else {
+      btn.removeAttribute('title');
+    }
+  });
+}
+
 function logout() {
   auth = null;
   sessionId = null;
+  setJudgeBarState(false);
   document.getElementById('gate').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('who-box').classList.add('hidden');
+  const whoLabel = document.getElementById('who-label');
+  if (whoLabel) whoLabel.textContent = '';
   document.getElementById('role-pick-step').classList.remove('hidden');
   document.getElementById('login-step').classList.add('hidden');
   document.getElementById('login_user_id').value = '';
@@ -420,6 +440,7 @@ function logout() {
 }
 
 function enterApp() {
+  setJudgeBarState(true);
   document.getElementById('gate').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who-box').classList.remove('hidden');
@@ -1022,6 +1043,9 @@ function printReport() {
 
 
 async function presetScenario(scenario) {
+  if (auth && auth.token) {
+    return;
+  }
   if (scenario === 'stuck') {
     await autoLogin('c1_stu02', 'student', 'Bob (Stuck Streak)');
     enterApp();
@@ -1199,7 +1223,7 @@ function digestDraftPreview(latest) {
     ? '<span style="background:#dcfce7;color:#14532d;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">Draft created &#10003; &mdash; awaiting human Send (ADR-001)</span>'
     : '<span style="background:#e5e7eb;color:#374151;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">No draft for this digest &mdash; no recipient configured</span>';
   const link = draftId
-    ? `<a href="https://mail.google.com/mail/u/0/#drafts${composeId ? '?compose=' + encodeURIComponent(composeId) : ''}" target="_blank" rel="noopener noreferrer" class="small" style="text-decoration:none;">${composeId ? 'Open the draft in Gmail &rarr;' : 'Open Gmail Drafts &rarr;'}</a>`
+    ? `<a href="https://mail.google.com/mail/u/0/#drafts${composeId ? '?compose=' + encodeURIComponent(composeId) : ''}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-flex;align-items:center;padding:0.35rem 0.75rem;border-radius:6px;background:var(--accent);color:#ffffff !important;font-size:0.78rem;font-weight:600;border:1px solid var(--accent);">${composeId ? 'Open the draft in Gmail &rarr;' : 'Open Gmail Drafts &rarr;'}</a>`
     : '';
   const body = latest.digest_html
     ? `<div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:#fff;color:#111827;overflow-x:auto;">${latest.digest_html}</div>`

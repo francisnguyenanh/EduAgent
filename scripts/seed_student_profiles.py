@@ -65,7 +65,7 @@ def _replay(name: str, class_id: str, essays: list[dict]) -> dict:
 
 SEED_PROFILES: dict[str, dict] = {
     "stu_improving": _replay(
-        "Mai",
+        "Mia",
         "c1",
         [
             {"timestamp": _ts(20), "persona_used": "skeptic", "scores": _scores(4), "weakness_detected": ["unsourced claim"]},
@@ -74,7 +74,7 @@ SEED_PROFILES: dict[str, dict] = {
         ],
     ),
     "stu_stuck": _replay(
-        "Binh",
+        "Tom",
         "c1",
         [
             {"timestamp": _ts(28), "persona_used": "skeptic", "scores": _scores(5), "weakness_detected": ["hasty generalization"]},
@@ -84,7 +84,7 @@ SEED_PROFILES: dict[str, dict] = {
         ],
     ),
     "stu_declining": _replay(
-        "Chi",
+        "Jerry",
         "c1",
         [
             {"timestamp": _ts(18), "persona_used": "devils_advocate", "scores": _scores(8), "weakness_detected": []},
@@ -93,18 +93,34 @@ SEED_PROFILES: dict[str, dict] = {
         ],
     ),
     "stu_inactive": _replay(
-        "Duc",
+        "David",
         "c1",
         [
             {"timestamp": _ts(45), "persona_used": "skeptic", "scores": _scores(5), "weakness_detected": ["unsourced claim"]},
         ],
     ),
     "stu_common_fallacy": _replay(
-        "Em",
+        "Emma",
         "c1",
         [
             {"timestamp": _ts(15), "persona_used": "skeptic", "scores": _scores(5), "weakness_detected": ["hasty generalization"]},
             {"timestamp": _ts(8), "persona_used": "devils_advocate", "scores": _scores(6), "weakness_detected": ["hasty generalization"]},
+        ],
+    ),
+    "c1_stu01": _replay(
+        "Alice",
+        "c1",
+        [
+            {"timestamp": _ts(10), "persona_used": "skeptic", "scores": _scores(7), "weakness_detected": ["unsourced claim"]},
+            {"timestamp": _ts(2), "persona_used": "expander", "scores": _scores(8), "weakness_detected": []},
+        ],
+    ),
+    "c1_stu02": _replay(
+        "Bob",
+        "c1",
+        [
+            {"timestamp": _ts(12), "persona_used": "devils_advocate", "scores": _scores(6), "weakness_detected": ["hasty generalization"]},
+            {"timestamp": _ts(5), "persona_used": "skeptic", "scores": _scores(5), "weakness_detected": ["hasty generalization"]},
         ],
     ),
 }

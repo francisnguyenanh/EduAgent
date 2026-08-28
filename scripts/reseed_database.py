@@ -62,8 +62,8 @@ def reseed():
 
     # 5. Insert 2 fresh student profiles for class "c1"
     students = [
-        {"id": "c1_stu01", "name": "An"},
-        {"id": "c1_stu02", "name": "Binh"}
+        {"id": "c1_stu01", "name": "Alice"},
+        {"id": "c1_stu02", "name": "Bob"}
     ]
     for s in students:
         p = empty_profile(name=s["name"], class_id="c1")
