@@ -587,10 +587,20 @@ files: [`assets/gcp_evidence/`](assets/gcp_evidence/).
 returning `HTTP/1.1 200 OK`, in the same one-day log window.
 ![Cloud Logging search for generateContent showing both gemini-3.5-flash and gemma-4-26b-a4b-it-maas calls returning 200 OK](assets/gcp_evidence/Gemini%20API%20logs.png)
 
-**Cloud Trace — one request, the whole decision path.** 20 spans under a single trace:
-`intake → multimodal_ocr → sanitizer → summarizer → persona_selector → debate_loop →
-challenge_validator → cognitive_scorer → profile_mutator`. This is the graph in §2, executing.
-![Cloud Trace span waterfall for one end-to-end EduAgent request, showing 20 spans across the Tier 1 node sequence](assets/gcp_evidence/Cloud%20Trace%20span%20end-to-end.png)
+**Cloud Trace — one live interactive-API request, the decision path that produced it.** 5 spans under
+a single trace, captured from a real `/api/debate/start` call: `eduagent.pipeline.essay_evaluation →
+sanitizer → summarizer → persona_selector → debate_loop`. Until 2026-08-30 this route produced *zero*
+`eduagent.*` spans at all — the interactive API called node logic directly, bypassing the
+`@traced_node`/tracing wiring entirely, so Cloud Trace showed only Cloud Run's own request-level spans.
+Fixed by threading `traced_pipeline()`/`traced_step()` (`src/eduagent/tracing.py`) through `api.py`.
+![Cloud Trace span waterfall for one live /api/debate/start request, showing eduagent.pipeline.essay_evaluation with sanitizer, summarizer, persona_selector and debate_loop as child spans](assets/gcp_evidence/Cloud%20Trace%20span%20end-to-end.png)
+The fuller 8-node graph (`intake → multimodal_ocr → sanitizer → summarizer → persona_selector →
+debate_loop → challenge_validator → cognitive_scorer → profile_mutator`) is the batch Tier 1 path
+(`scripts/demo_tier1_run.py`) — it runs the whole graph in one process, so all 8 nodes nest under one
+trace; the interactive web flow spans multiple separate HTTP requests (start → turns → reflect), each
+producing its own trace, so `intake`/`profile_mutator` (batch-only) and `cognitive_scorer`/
+`challenge_validator`/`metacognitive_reflection` (later requests in the same debate) don't appear in
+this particular capture.
 
 **Pub/Sub — the Tier 1 → Tier 2 boundary, as configured.** Delivery type `Push` to the Cloud Run
 URL, **push authentication enabled** with `eduagent-sa` and an audience pinned to the service
