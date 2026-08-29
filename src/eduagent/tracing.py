@@ -13,7 +13,8 @@ from __future__ import annotations
 import functools
 import logging
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -93,3 +94,38 @@ def traced_node(name: str) -> Callable:
         return wrapper
 
     return decorator
+
+
+@contextmanager
+def traced_step(name: str, *, essay_id: str | None = None, student_id: str | None = None) -> Iterator[None]:
+    """Synchronous counterpart to `traced_node` for call sites that aren't
+    graph nodes with a `ctx` (e.g. the interactive HTTP API in api.py, which
+    calls node logic directly rather than through the ADK Workflow). Nest
+    these inside `traced_pipeline()` so a single HTTP request produces the
+    same kind of parent/child waterfall Cloud Trace shows for the batch
+    graph, instead of the orphaned single spans that shipped before."""
+    with _tracer.start_as_current_span(f"eduagent.node.{name}") as span:
+        span.set_attribute("eduagent.node", name)
+        if essay_id:
+            span.set_attribute("eduagent.essay_id", essay_id)
+        if student_id:
+            span.set_attribute("eduagent.student_id", student_id)
+        try:
+            yield
+            span.set_attribute("eduagent.status", "ok")
+        except Exception as exc:
+            span.set_attribute("eduagent.status", "error")
+            span.record_exception(exc)
+            raise
+
+
+@contextmanager
+def traced_pipeline(name: str, *, student_id: str | None = None) -> Iterator[None]:
+    """Root span for one HTTP request through the interactive debate API --
+    ensures configure_tracing() has run (idempotent) and opens the parent
+    span that `traced_step()` calls nest under."""
+    configure_tracing()
+    with _tracer.start_as_current_span(name) as span:
+        if student_id:
+            span.set_attribute("eduagent.student_id", student_id)
+        yield

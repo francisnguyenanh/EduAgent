@@ -53,6 +53,7 @@ from eduagent.nodes.intake import strip_injection_attempts
 from eduagent.nodes.ocr import transcribe_essay_image
 from eduagent.nodes.persona_selector import choose_persona
 from eduagent.nodes.summarizer import summarize_essay
+from eduagent.tracing import configure_tracing, traced_pipeline, traced_step
 from eduagent.skills.language import detect_language
 from eduagent.skills.parent_note import draft_parent_note
 from eduagent.skills.personas import get_persona
@@ -150,71 +151,76 @@ def _start_debate_from_essay_text(
     if len(essay_text) > MAX_ESSAY_CHARS:
         raise ValueError(f"Essay too long: {len(essay_text)} characters (maximum allowed is {MAX_ESSAY_CHARS}).")
 
-    # P0 fix: ensure live API inputs pass through deterministic prompt-injection stripping
-    clean_essay_text, injection_matches = strip_injection_attempts(essay_text)
-    if injection_matches:
-        _logger.warning("Sanitized prompt injection attempt from live essay input", extra={"matches": injection_matches, "student_id": student_id})
+    with traced_pipeline("eduagent.pipeline.essay_evaluation", student_id=student_id):
+        # P0 fix: ensure live API inputs pass through deterministic prompt-injection stripping
+        with traced_step("sanitizer", student_id=student_id):
+            clean_essay_text, injection_matches = strip_injection_attempts(essay_text)
+            if injection_matches:
+                _logger.warning("Sanitized prompt injection attempt from live essay input", extra={"matches": injection_matches, "student_id": student_id})
 
-    language = detect_language(clean_essay_text)
-    summary, summary_degraded = summarize_essay(clean_essay_text, student_id=student_id)
+        language = detect_language(clean_essay_text)
+        with traced_step("summarizer", student_id=student_id):
+            summary, summary_degraded = summarize_essay(clean_essay_text, student_id=student_id)
 
-    try:
-        profile = get_profile(student_id) if student_id else None
-    except Exception:
-        # Same discipline as persona_selector.py's own ctx.state read: a
-        # Firestore hiccup degrades to "no memory this run", not a 500 that
-        # blocks the student from starting at all.
-        _logger.exception("get_profile failed for interactive debate start -- continuing without memory")
-        profile = None
-
-    persona_history = persona_history_from_profile(profile) if profile else []
-    prior_weaknesses = weakness_taxonomy_from_profile(profile) if profile else []
-
-    # Look up teacher settings for persona enforcement (Student cannot pick, teacher enforces it)
-    enforced_persona = "auto"
-    inferred_class_id = class_id
-    if not inferred_class_id and student_id and "_" in student_id:
-        inferred_class_id = student_id.split("_")[0]
-    
-    if inferred_class_id:
         try:
-            settings = get_class_settings(class_id=inferred_class_id)
-            enforced_persona = settings.get("socratic_persona", "auto")
+            profile = get_profile(student_id) if student_id else None
         except Exception:
-            _logger.exception("Failed to load class settings for debate start -- defaulting to auto persona")
+            # Same discipline as persona_selector.py's own ctx.state read: a
+            # Firestore hiccup degrades to "no memory this run", not a 500 that
+            # blocks the student from starting at all.
+            _logger.exception("get_profile failed for interactive debate start -- continuing without memory")
+            profile = None
 
-    selected_persona_id = enforced_persona if enforced_persona in ("skeptic", "devils_advocate", "nitpicker", "expander") else None
-    if not selected_persona_id:
-        selected_persona_id = choose_persona(summary.get("fallacies_draft", []), persona_history, essay_seed=clean_essay_text)
-    persona = get_persona(selected_persona_id)
+        persona_history = persona_history_from_profile(profile) if profile else []
+        prior_weaknesses = weakness_taxonomy_from_profile(profile) if profile else []
 
-    session_id = str(uuid.uuid4())
-    start_debate_session(
-        session_id,
-        persona_id=selected_persona_id,
-        essay_text=clean_essay_text,
-        summary=summary,
-        prior_weaknesses=prior_weaknesses,
-        language=language,
-        student_id=student_id,
-        name=name,
-        class_id=class_id,
-    )
-    first_turn = step_debate_turn(session_id)
+        # Look up teacher settings for persona enforcement (Student cannot pick, teacher enforces it)
+        enforced_persona = "auto"
+        inferred_class_id = class_id
+        if not inferred_class_id and student_id and "_" in student_id:
+            inferred_class_id = student_id.split("_")[0]
 
-    result = {
-        "session_id": session_id,
-        "persona_id": selected_persona_id,
-        "persona_name": persona.display_name,
-        "language": language,
-        "summary": summary,
-        "summary_degraded": summary_degraded,
-        "turn": first_turn,
-        "turn_number": 1,
-    }
-    if ocr_meta is not None:
-        result["ocr"] = ocr_meta
-    return result
+        if inferred_class_id:
+            try:
+                settings = get_class_settings(class_id=inferred_class_id)
+                enforced_persona = settings.get("socratic_persona", "auto")
+            except Exception:
+                _logger.exception("Failed to load class settings for debate start -- defaulting to auto persona")
+
+        with traced_step("persona_selector", student_id=student_id):
+            selected_persona_id = enforced_persona if enforced_persona in ("skeptic", "devils_advocate", "nitpicker", "expander") else None
+            if not selected_persona_id:
+                selected_persona_id = choose_persona(summary.get("fallacies_draft", []), persona_history, essay_seed=clean_essay_text)
+            persona = get_persona(selected_persona_id)
+
+        session_id = str(uuid.uuid4())
+        start_debate_session(
+            session_id,
+            persona_id=selected_persona_id,
+            essay_text=clean_essay_text,
+            summary=summary,
+            prior_weaknesses=prior_weaknesses,
+            language=language,
+            student_id=student_id,
+            name=name,
+            class_id=class_id,
+        )
+        with traced_step("debate_loop", student_id=student_id):
+            first_turn = step_debate_turn(session_id)
+
+        result = {
+            "session_id": session_id,
+            "persona_id": selected_persona_id,
+            "persona_name": persona.display_name,
+            "language": language,
+            "summary": summary,
+            "summary_degraded": summary_degraded,
+            "turn": first_turn,
+            "turn_number": 1,
+        }
+        if ocr_meta is not None:
+            result["ocr"] = ocr_meta
+        return result
 
 
 def start_debate(payload: DebateStartRequest) -> dict:
@@ -241,7 +247,9 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
         raise ValueError(f"Image payload too large ({len(payload.image_base64)} chars, max {MAX_IMAGE_B64_CHARS}).")
 
     image_bytes = base64.b64decode(payload.image_base64)
-    ocr_result = transcribe_essay_image(image_bytes, payload.image_mime_type, student_id=payload.student_id)
+    configure_tracing()  # idempotent -- ensures the exporter is up even if this is the first traced call
+    with traced_step("multimodal_ocr", student_id=payload.student_id):
+        ocr_result = transcribe_essay_image(image_bytes, payload.image_mime_type, student_id=payload.student_id)
 
     result = _start_debate_from_essay_text(
         ocr_result["transcribed_text"],
@@ -325,17 +333,20 @@ def submit_debate_turn(payload: DebateTurnRequest) -> dict:
 
     session = get_debate_session(payload.session_id)
     turns = session["turns"]
+    student_id = session.get("student_id")
 
-    # If all max questions (e.g. 3) were already asked, this reply is the answer to Turn 3.
-    if len(turns) >= _max_turns():
-        record_student_reply(payload.session_id, clean_reply)
-        result = _score_and_close_session(payload.session_id)
-        return {"turn": None, "turn_number": len(turns), "completed": True, "result": result}
+    with traced_pipeline("eduagent.pipeline.essay_evaluation", student_id=student_id):
+        # If all max questions (e.g. 3) were already asked, this reply is the answer to Turn 3.
+        if len(turns) >= _max_turns():
+            record_student_reply(payload.session_id, clean_reply)
+            with traced_step("cognitive_scorer", student_id=student_id):
+                result = _score_and_close_session(payload.session_id)
+            return {"turn": None, "turn_number": len(turns), "completed": True, "result": result}
 
-
-    turn = step_debate_turn(payload.session_id, clean_reply)
-    turns_so_far = len(get_debate_session(payload.session_id)["turns"])
-    return {"turn": turn, "turn_number": turns_so_far, "completed": False}
+        with traced_step("debate_loop", student_id=student_id):
+            turn = step_debate_turn(payload.session_id, clean_reply)
+        turns_so_far = len(get_debate_session(payload.session_id)["turns"])
+        return {"turn": turn, "turn_number": turns_so_far, "completed": False}
 
 
 
@@ -577,68 +588,69 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
         f"Student's Revised Claim: <student_reply>{sanitized_revised}</student_reply>"
     )
 
-    try:
-        result = generate_json(
-            model=GEMINI.flash_model,
-            system_instruction=system_instruction,
-            prompt=prompt,
-            response_schema=_REFLECTION_SCHEMA,
-        )
-        resolved = bool(result.get("resolved", False))
-        raw_bonus = float(result.get("growth_bonus", 0.5)) if resolved else 0.0
-        growth_bonus = min(GROWTH_BONUS_MAX, max(GROWTH_BONUS_MIN, raw_bonus))
-        if raw_bonus != growth_bonus:
-            _logger.warning(
-                "Model returned an out-of-range growth_bonus; clamped",
-                extra={"raw": raw_bonus, "clamped": growth_bonus, "session_id": payload.session_id},
+    with traced_pipeline("eduagent.pipeline.essay_evaluation", student_id=student_id), traced_step("metacognitive_reflection", student_id=student_id):
+        try:
+            result = generate_json(
+                model=GEMINI.flash_model,
+                system_instruction=system_instruction,
+                prompt=prompt,
+                response_schema=_REFLECTION_SCHEMA,
             )
-        degraded = False
-        fallback_msg = "Luận điểm chỉnh sửa thể hiện sự tiến bộ tư duy." if lang == "vi" else "Good effort in revising your claim."
-        feedback = str(result.get("feedback", fallback_msg))
-    except LLMGenerationError:
-        # An outage must NOT mint a breakthrough. ADR-008's rule --
-        # content the model was never confident about (here: never evaluated at
-        # all) may not silently become part of a student's permanent,
-        # teacher-visible record -- applies to `breakthrough_count` exactly as
-        # it applies to a score. The attempt is still recorded for the audit
-        # trail, but with resolved=False, which is what keeps
-        # merge_reflection_into_profile() from incrementing the counter or the
-        # cumulative bonus.
-        _logger.warning("LLM evaluation of reflection failed -- recording as unevaluated, not as a breakthrough")
-        resolved = False
-        growth_bonus = 0.0
-        degraded = True
-        feedback = (
-            "Đã ghi nhận luận điểm chỉnh sửa của em. Hệ thống chấm đang tạm thời bận, "
-            "nên phần này chưa được đánh giá -- em thử gửi lại sau ít phút nhé."
-            if lang == "vi"
-            else "Your revised claim was recorded, but the evaluator is temporarily "
-            "unavailable, so it has not been assessed yet -- please try again shortly."
-        )
+            resolved = bool(result.get("resolved", False))
+            raw_bonus = float(result.get("growth_bonus", 0.5)) if resolved else 0.0
+            growth_bonus = min(GROWTH_BONUS_MAX, max(GROWTH_BONUS_MIN, raw_bonus))
+            if raw_bonus != growth_bonus:
+                _logger.warning(
+                    "Model returned an out-of-range growth_bonus; clamped",
+                    extra={"raw": raw_bonus, "clamped": growth_bonus, "session_id": payload.session_id},
+                )
+            degraded = False
+            fallback_msg = "Luận điểm chỉnh sửa thể hiện sự tiến bộ tư duy." if lang == "vi" else "Good effort in revising your claim."
+            feedback = str(result.get("feedback", fallback_msg))
+        except LLMGenerationError:
+            # An outage must NOT mint a breakthrough. ADR-008's rule --
+            # content the model was never confident about (here: never evaluated at
+            # all) may not silently become part of a student's permanent,
+            # teacher-visible record -- applies to `breakthrough_count` exactly as
+            # it applies to a score. The attempt is still recorded for the audit
+            # trail, but with resolved=False, which is what keeps
+            # merge_reflection_into_profile() from incrementing the counter or the
+            # cumulative bonus.
+            _logger.warning("LLM evaluation of reflection failed -- recording as unevaluated, not as a breakthrough")
+            resolved = False
+            growth_bonus = 0.0
+            degraded = True
+            feedback = (
+                "Đã ghi nhận luận điểm chỉnh sửa của em. Hệ thống chấm đang tạm thời bận, "
+                "nên phần này chưa được đánh giá -- em thử gửi lại sau ít phút nhé."
+                if lang == "vi"
+                else "Your revised claim was recorded, but the evaluator is temporarily "
+                "unavailable, so it has not been assessed yet -- please try again shortly."
+            )
 
-    # Record into student profile transactional memory
-    try:
-        from eduagent.memory.firestore_memory import apply_reflection_result
+        # Record into student profile transactional memory
+        try:
+            from eduagent.memory.firestore_memory import apply_reflection_result
 
-        apply_reflection_result(
-            student_id=student_id,
-            reflection_text=sanitized_revised,
-            original_fallacy=original_fallacy,
-            resolved=resolved,
-            growth_bonus=growth_bonus,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            class_id=class_id,
-        )
-    except Exception:
-        _logger.exception("Failed to persist student reflection for student_id=%s", student_id)
+            apply_reflection_result(
+                student_id=student_id,
+                reflection_text=sanitized_revised,
+                original_fallacy=original_fallacy,
+                resolved=resolved,
+                growth_bonus=growth_bonus,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                class_id=class_id,
+            )
+        except Exception:
+            _logger.exception("Failed to persist student reflection for student_id=%s", student_id)
 
-    if degraded:
-        # Give the attempt back rather than tearing the session down: the
-        # student never got an evaluation, so spending their one reflection on
-        # it would make an outage permanent (see release_reflection_claim).
-        release_reflection_claim(payload.session_id)
-    else:
-        end_debate_session(payload.session_id)
+        if degraded:
+            # Give the attempt back rather than tearing the session down: the
+            # student never got an evaluation, so spending their one reflection on
+            # it would make an outage permanent (see release_reflection_claim).
+            release_reflection_claim(payload.session_id)
+        else:
+            end_debate_session(payload.session_id)
 
     return {
         "student_id": student_id,
