@@ -53,7 +53,7 @@ def strip_injection_attempts(text: str) -> tuple[str, list[str]]:
 def _extract_essay_input(node_input: Any) -> tuple[str, bytes | None, str | None]:
     """Returns (text, image_bytes, image_mime_type).
 
-    PHASE 6 (Multimodal Ingestion): node_input is annotated as ``Any``, not
+    Multimodal ingestion: node_input is annotated as ``Any``, not
     ``str`` -- FunctionNode only auto-coerces types.Content -> str when the
     annotation expects str (see google.adk.workflow.FunctionNode docstring),
     which would silently DROP an image part before intake ever saw it. A
@@ -82,7 +82,7 @@ def _extract_essay_input(node_input: Any) -> tuple[str, bytes | None, str | None
 @traced_node("intake")
 async def intake(ctx: Context, node_input: Any) -> dict:
     """Accepts raw essay text OR a photo of a handwritten essay, stamps
-    pipeline start, and routes to the Multimodal OCR node (PHASE 6) when an
+    pipeline start, and routes to the Multimodal OCR node when an
     image is present -- a text-only essay never touches OCR or costs a
     Vision call. No mutation of the text itself here -- it's preserved for
     the audit trail even after sanitizing.
@@ -135,7 +135,7 @@ async def sanitizer(ctx: Context) -> dict:
     ctx.state["language"] = detect_language(cleaned)
 
     if matches:
-        # Audit signal only -- Phase 3/7 wires this into system_audit_logs.
+        # Audit signal only -- surfaced into system_audit_logs downstream.
         ctx.state.setdefault("audit_events", []).append(
             {"stage": "sanitizer", "event": "injection_attempt_stripped", "patterns": matches}
         )

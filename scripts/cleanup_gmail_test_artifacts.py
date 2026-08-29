@@ -1,4 +1,4 @@
-"""One-off cleanup: delete leftover Phase 0 verification drafts/messages
+"""One-off cleanup: delete leftover verification drafts/messages
 created while probing whether gmail.compose blocks send() (it doesn't)."""
 
 from __future__ import annotations

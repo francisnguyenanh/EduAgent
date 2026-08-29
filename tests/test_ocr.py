@@ -1,4 +1,4 @@
-"""Unit tests for PHASE 6 multimodal ingestion: intake.py's image/text
+"""Unit tests for multimodal ingestion: intake.py's image/text
 routing detection (deterministic, zero LLM) and the OCR node's degrade path.
 Mocks generate_json_from_image so this suite runs fast and offline -- the
 real Vertex AI Vision behavior (verbatim transcription, low-confidence
@@ -150,7 +150,7 @@ def test_multimodal_ocr_handles_missing_image_bytes_without_crashing():
 #
 # The property under test is NOT "Gemma is called". It is: the cross-check
 # keeps working when Gemma does not. Gemma 4 is Model-as-a-Service on shared
-# capacity -- 4 of 10 raw calls returned 429 during Wave 24 integration
+# capacity -- 4 of 10 raw calls returned 429 during integration
 # testing -- so the fallback is the normal path often enough that it has to be
 # the tested one.
 
@@ -225,8 +225,8 @@ def test_gemma_location_is_pinned_global_not_inherited_from_env():
 
 
 def test_cross_model_and_same_model_use_different_thresholds():
-    """The two comparisons have measurably different distributions (Wave 24,
-    12 real samples): legible images score 0.989-1.000 same-model but only
+    """The two comparisons have measurably different distributions across
+    12 real samples: legible images score 0.989-1.000 same-model but only
     0.729-0.998 cross-model. One shared threshold is therefore wrong for one
     of them -- 0.75 sits inside the cross-model legible cluster and fires on
     readable essays."""
@@ -253,7 +253,7 @@ def test_cross_model_genuine_disagreement_still_downgrades():
 
 
 # Real transcription pair captured from `eval/test_images/tilted_essay_grading.jpg`
-# during the Wave 24 ADR-028 measurement run. Similarity 0.709 -- squarely in
+# during the ADR-028 measurement run. Similarity 0.709 -- squarely in
 # the band between the cross-model threshold (0.50) and the same-model one
 # (0.75), which is exactly where the false positives lived. Kept verbatim
 # rather than hand-written: an earlier version of this test used invented

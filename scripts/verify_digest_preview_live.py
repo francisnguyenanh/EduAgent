@@ -3,17 +3,17 @@
     python scripts/verify_digest_preview_live.py
 
 Companion to scripts/smoke_live.py, which covers the student journey. This
-covers the teacher-facing half that Wave 26 changed, and exists because the
+covers the teacher-facing half, and exists because the
 defect it was written to catch could not be seen from the code: the deep link
 was built from the API draft id (`r328879860172231529`) while Gmail's web UI
 addresses drafts by the hex message id (`1a04055b6640d946`), so the link opened
 an empty compose window. Reading the source made that look correct.
 
 Defaults to the throwaway class `zz9`, never the demo class `c1` -- same reason
-smoke_live.py does, and because only digests written after Wave 26 carry
-`gmail_draft_message_id` at all.
+smoke_live.py does, and because only digests written since
+`gmail_draft_message_id` was introduced carry it at all.
 
-Checks only what Wave 26 changed:
+Checks:
   1. /analytics carries digest_html, and it is the draft's own body
   2. that HTML is escaped (no live markup reaching our origin)
   3. gmail_draft_id is present so the deep link can be built

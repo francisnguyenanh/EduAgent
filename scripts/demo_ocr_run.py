@@ -1,4 +1,4 @@
-"""PHASE 6 DoD proof: upload a real image -> OCR -> continue the FULL Tier 1
+"""End-to-end proof: upload a real image -> OCR -> continue the FULL Tier 1
 pipeline (sanitize -> summarize -> persona -> debate -> validate -> score ->
 mutate Firestore) with no manual intervention in between.
 
@@ -44,8 +44,9 @@ _REAL_PHOTOS_DIR = Path(__file__).parent.parent / "eval" / "test_images"
 
 # Prefer REAL handwritten photos (eval/test_images/, provided 2026-08-24) over
 # the synthetic PIL placeholders in assets/sample_essays/ -- this is what
-# actually closes PHASE 6's DoD ("upload anh viet tay THAT"). Falls back to
-# the synthetic ones only if the real photos aren't present.
+# exercises the ingest path this project claims: a photograph of genuine
+# handwriting. Falls back to the synthetic images only if the real photos are
+# not present.
 if _REAL_PHOTOS_DIR.exists() and any(_REAL_PHOTOS_DIR.glob("*.jpg")):
     SAMPLE_IMAGES = [
         ("neat", _REAL_PHOTOS_DIR / "neat_essay_homework.jpg"),

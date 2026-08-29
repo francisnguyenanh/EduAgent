@@ -1,5 +1,5 @@
-"""Structured (JSON) logging -- PHASE 4: "logs xuyen suot 1 essay tu Intake
-den Digest". Cloud Logging on Cloud Run parses JSON log lines natively
+"""Structured (JSON) logging, so a single essay can be followed from intake
+through to the teacher digest. Cloud Logging on Cloud Run parses JSON log lines natively
 (severity/message/jsonPayload), so this format is also what makes the
 Cloud Run log viewer filterable by essay_id in production, not just locally.
 

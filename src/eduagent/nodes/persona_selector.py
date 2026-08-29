@@ -5,9 +5,10 @@ reasoning isn't required. Matching a weakness keyword to a persona focus is a
 lookup problem, not a reasoning problem -- so it stays rule-based and
 auditable ("why was Skeptic chosen for this student?" has a real answer).
 
-Phase 1: works off the current essay's fallacies_draft only. Phase 2 adds
-`ctx.state["persona_history"]` (populated from Firestore student_profile) so
-this function avoids repeating a persona the student hasn't improved against.
+Scores the current essay's fallacies_draft, then consults
+`ctx.state["persona_history"]` (populated from the Firestore student_profile)
+so this function avoids repeating a persona the student hasn't improved
+against.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from eduagent.memory.student_profile import persona_history_from_profile, weakne
 from eduagent.skills.personas import PERSONA_IDS, get_persona
 from eduagent.tracing import traced_node
 
-# NOTE (Audit Wave 27): the Vietnamese below is FUNCTIONAL, not untranslated
+# NOTE: the Vietnamese below is FUNCTIONAL, not untranslated
 # documentation. This project accepts essays in Vietnamese as well as English
 # (skills/language.py detects which), and persona routing here is ZERO-LLM:
 # it is literally these keyword alternations. Dropping the Vietnamese half
@@ -63,7 +64,7 @@ def choose_persona(
     signal at all) AND the student has no history to rotate from -- i.e. a
     brand-new student whose essay matched none of the fallacy keywords. Without
     it, that case always returns PERSONA_IDS[0]. Callers should pass the essay
-    text (or any stable per-essay string); see Wave 12 Group 4 below.
+    text (or any stable per-essay string).
     """
     persona_history = persona_history or []
     last_used = persona_history[-1] if persona_history else None
@@ -73,9 +74,7 @@ def choose_persona(
     # Never repeat the immediately previous persona. This is unconditional
     # streak-breaking: even if `last_used` scores highest, it is excluded, so a
     # student who is stuck gets a genuinely different angle rather than the same
-    # question louder. (Wave 12 Group 4: this comment previously read "unless every
-    # other persona scores strictly lower", describing a fallback branch that
-    # does not exist in the code -- there is no path back to `last_used`.)
+    # question louder. There is no path back to `last_used`.
     candidates = [pid for pid in PERSONA_IDS if pid != last_used] or list(PERSONA_IDS)
     best = max(candidates, key=lambda pid: scores[pid])
 
@@ -107,7 +106,7 @@ async def persona_selector(ctx: Context) -> dict:
     ctx.state["persona_history"] = persona_history  # audit trail for this run
     ctx.state["prior_weakness_taxonomy"] = prior_weaknesses  # consumed by debate_loop for memory injection
 
-    # Wave 12 Group 4 fix: `essay_seed` was a dead parameter on this call path --
+    # `essay_seed` was a dead parameter on this call path --
     # declared by choose_persona() and used by its no-keyword-signal branch, but
     # never passed by the graph node. The result was that a FIRST-TIME student
     # (no persona_history to rotate from) whose essay matched no fallacy keyword

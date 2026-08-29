@@ -1,12 +1,12 @@
 """Live smoke test -- exercises the DEPLOYED service end to end, not a local process.
 
-Wave 19 #8. `scripts/doctor.py` answers "are the dependencies healthy?"; this
+`scripts/doctor.py` answers "are the dependencies healthy?"; this
 answers the different and equally important question "does a student's whole
-journey actually work on the URL a judge will open?" Every audit wave that
-found a real blocker (Pub/Sub pull mode in Wave 8, the fabricated breakthrough
-in Wave 16, the X-Forwarded-For bypass in Wave 17) found it by driving the live
-service, not by reading code -- so that sequence is worth having as one command
-rather than as a chain of curls retyped from a chat log.
+journey actually work on the deployed URL?" Every real blocker this project
+has had (Pub/Sub pull mode, the fabricated breakthrough, the X-Forwarded-For
+bypass) surfaced by driving the live service, not by reading code -- so that
+sequence is worth having as one command rather than as a chain of curls
+retyped by hand.
 
 Run it before recording. It calls real Gemini and writes a real profile, so it
 costs a few Flash requests and leaves an essay in the target student's history.

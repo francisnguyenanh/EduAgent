@@ -1,6 +1,6 @@
-"""Unit tests for Task 10.2: Learning-Outcome MEASUREMENT harness.
+"""Unit tests for the learning-outcome measurement harness.
 
-Wave 12 Group 1: the previous version of this file asserted that hand-typed
+The previous version of this file asserted that hand-typed
 `before_scores`/`after_scores` literals differed by >= 4 -- i.e. it asserted
 `8 - 2 >= 4`, which passes even if the entire `src/` tree is deleted. These
 tests instead exercise the measurement machinery itself (with the LLM mocked,
@@ -52,7 +52,7 @@ def _fake_score_degraded(**_kwargs):
 
 
 def test_no_scenario_declares_its_own_scores():
-    """Regression guard for the Wave 12 finding: a scenario must only carry
+    """Regression guard: a scenario must only carry
     INPUT text. If `before_scores`/`after_scores` ever reappear as literals,
     the report stops being a measurement again."""
     for s in BENCHMARK_SCENARIOS:

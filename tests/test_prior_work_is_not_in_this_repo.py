@@ -74,7 +74,7 @@ def _offending(paths: str) -> list[str]:
 @requires_git
 def test_no_tracked_file_comes_from_the_prior_project() -> None:
     """The check that matters: nothing from the earlier project is in the tree
-    that judges clone."""
+    that gets cloned."""
     offenders = _offending(_git("ls-files"))
     assert not offenders, (
         "These tracked paths come from the author's prior project, which Rules §6 "

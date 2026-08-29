@@ -1,4 +1,4 @@
-"""PHASE 6 DoD proof with REAL handwritten photos (not synthetic placeholders).
+"""OCR evaluation over REAL handwritten photos (not synthetic placeholders).
 
 Runs nodes/ocr.py's multimodal_ocr() (the exact production node -- including
 the self-consistency cross-check) against every image in eval/test_images/

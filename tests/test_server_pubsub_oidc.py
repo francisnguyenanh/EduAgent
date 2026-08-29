@@ -1,4 +1,4 @@
-"""Tier-A coverage (Audit Wave 24): the ADR-014 push-endpoint OIDC gate.
+"""Tier-A coverage: the ADR-014 push-endpoint OIDC gate.
 
 `POST /` is the Pub/Sub push entrypoint on a service deployed
 --allow-unauthenticated, so Cloud Run IAM does NOT protect it. This function

@@ -1,6 +1,6 @@
 """Shared retry policy for external calls (Firestore, Pub/Sub, Gmail, Sheets).
 
-PHASE 4: "Moi call ra ngoai (Gemini, Firestore, Pub/Sub, MCP) deu phai co
+"Moi call ra ngoai (Gemini, Firestore, Pub/Sub, MCP) deu phai co
 timeout + retry + duong thoat khi loi." llm.py has its own retry tuned to
 genai's error types (see LLMGenerationError); this module covers everything
 else, tuned to the transient gRPC/HTTP error types those clients raise.

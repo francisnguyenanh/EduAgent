@@ -4,7 +4,7 @@ This is the ADK "Memory" side (cross-session), as
 opposed to Context.state which only lives for the duration of one pipeline
 run. Read-modify-write is done via a Firestore transaction so two essays
 graded for the same student around the same time can't clobber each other's
-history (a real failure mode once Tier 2 runs concurrently in Phase 3).
+history (a real failure mode once Tier 2 runs concurrently).
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def get_profile(student_id: str) -> dict | None:
 
 @with_gcp_retry
 def list_students_by_class(class_id: str, *, limit: int = 50) -> list[dict]:
-    """Wave 3 storage/retrieval optimization: a class roster view (Teacher Web
+    """Storage/retrieval optimization: a class roster view (Teacher Web
     UI) ordered by most-recently-active student. Sorted in memory to avoid
     requiring a GCP composite index."""
     docs = (

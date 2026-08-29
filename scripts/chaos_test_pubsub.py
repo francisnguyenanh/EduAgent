@@ -1,4 +1,4 @@
-"""PHASE 4 chaos test: inject a malformed event into Pub/Sub and confirm the
+"""Chaos test: inject a malformed event into Pub/Sub and confirm the
 subscriber survives it (doesn't crash) and Pub/Sub eventually dead-letters
 it after PUBSUB.max_delivery_attempts, instead of retrying forever.
 

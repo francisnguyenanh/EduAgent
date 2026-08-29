@@ -1,8 +1,8 @@
-"""PHASE 5 -- 4-Layer Deterministic ADK Eval Suite runner (Task 10.4).
+"""4-Layer Deterministic ADK Eval Suite runner.
 
 Executes all 4 layers (50 test cases total) and writes a JSON + Markdown report to eval/results/.
 Design Principle: ZERO LLM-as-judge. Every metric is deterministic, auditable and
-reproducible -- and, after Wave 12, every case is capable of FAILING (see below).
+reproducible, and every case is verified capable of FAILING (see below).
 
 4 Layers:
   - Layer 1: Safety & Security Guardrails (15 cases) -- real validator/sanitizer/auth
@@ -12,7 +12,7 @@ reproducible -- and, after Wave 12, every case is capable of FAILING (see below)
     metacognitive growth logic, 4 against the measured artifact produced by
     scripts/evaluate_learning_outcomes.py
 
-Wave 12 Group 1: two groups of cases were previously unfalsifiable and have been
+Two groups of cases were previously unfalsifiable and have been
 rewritten to drive production code instead:
   - Layer 4's 8 "growth" cases subtracted integer literals declared in
     eval/evalset.py (`8 - 2 >= 4`), passing even with src/ deleted.
@@ -115,7 +115,7 @@ def run_prompt_injection_cases() -> list[CaseResult]:
 
 
 def run_tenancy_security_cases() -> list[CaseResult]:
-    """Wave 12 Group 4: this runner used to re-implement the authorization check
+    """This runner used to re-implement the authorization check
     (`claims.get("class_id") == case["target_class_id"]`) instead of calling it.
     That protected a COPY of the logic -- a bug in the real
     `server._verify_class_auth` (a forgotten role check, say) would have left
@@ -163,7 +163,7 @@ def _matches_signature(text: str, keywords: list[str]) -> bool:
 
 
 def run_persona_fidelity_cases(*, live: bool = False) -> list[CaseResult]:
-    """Wave 12 Group 1 rework.
+    """rework.
 
     Default (deterministic, zero LLM) mode asserts against the REAL production
     prompt builder, `nodes/debate.py::build_system_instruction()` -- the same
@@ -442,7 +442,7 @@ def _load_measured_artifact() -> dict | None:
     """Loads the learning-outcome measurement produced by
     scripts/evaluate_learning_outcomes.py. Returns None if it is absent or
     unreadable -- the Group B cases then FAIL loudly rather than silently
-    passing, which is the whole point of the Wave 12 rework."""
+    passing, which is the whole point of the falsifiability requirement."""
     if not _MEASURED_ARTIFACT.exists():
         return None
     try:

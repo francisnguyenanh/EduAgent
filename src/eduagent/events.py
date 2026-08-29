@@ -1,8 +1,8 @@
 """Pub/Sub publisher for the essay.evaluated event -- the Tier 1 -> Tier 2
 handoff. Kept as a thin wrapper: publishing failure must never lose the
 essay result that's already safely committed to Firestore (mutator.py calls
-this AFTER the Firestore write, and treats a publish failure as non-fatal --
-see PHASE 4 for the retry/backoff hardening around this).
+this AFTER the Firestore write, and treats a publish failure as non-fatal;
+`resilience.py` carries the retry/backoff policy applied here).
 """
 
 from __future__ import annotations

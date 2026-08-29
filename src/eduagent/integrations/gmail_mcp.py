@@ -89,7 +89,7 @@ def create_digest_draft(*, to_address: str, subject: str, body_text: str, body_h
     function has no path to messages.send/drafts.send.
 
     Returns BOTH ids, because they are not interchangeable and each has a
-    consumer (Wave 26, verified against the live mailbox):
+    consumer (verified against the live mailbox):
 
       draft_id    "r328879860172231529"  -- the API handle; what drafts.get()
                                            and the cleanup script address.

@@ -1,4 +1,4 @@
-"""Teacher Digest Synthesizer -- agent node (heavy Gemini model).
+"""Teacher Digest Synthesizer -- LLM-backed function node (heavy Gemini model).
 
 Architecture (README.md section 2): this node ONLY turns already-computed ranking data into
 natural-language prose for a teacher. It never re-ranks, never re-weighs --

@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from opentelemetry import trace
 
 from eduagent.aggregator.digest import synthesize_digest
-from eduagent.aggregator.digest_store import get_last_digest_timestamp, persist_digest
+from eduagent.aggregator.digest_store import get_class_settings, get_last_digest_timestamp, persist_digest
 from eduagent.aggregator.idempotency import claim_event
 from eduagent.aggregator.priority_engine import cluster_fallacies, common_fallacies, rank_students
 from eduagent.config import DIGEST_DEBOUNCE, FIRESTORE, SHEETS, TEACHER
@@ -65,7 +65,7 @@ def _display_name(student_id: str, name_by_id: dict[str, str]) -> str:
 
 
 def _h(value) -> str:
-    """Wave 26 #1.3: HTML-escapes every model- or user-derived string before it
+    """HTML-escape every model- or user-derived string before it
     lands in format_digest_email_html(). Gmail sanitizes what it renders, so
     this was invisible on the email path -- but the same HTML is now served to
     the Teacher Dashboard preview, where an unescaped `<` out of an LLM field
@@ -96,7 +96,7 @@ def _priority_badges(reason: dict) -> str:
     if reason.get("score_trend") == "declining":
         badges.append('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:12px;">declining</span>')
     if reason.get("score_trend") == "volatile":
-        # Wave 15 #3 -- a collapse-and-recover inside the trend window. Its own
+        # a collapse-and-recover inside the trend window. Its own
         # badge, not folded into "declining": the teacher is being told the
         # scores are unstable, not that they are heading down.
         badges.append('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:12px;">volatile</span>')
@@ -216,7 +216,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
         last_digest_at = None
 
     if should_coalesce_digest(last_digest_at=last_digest_at, now=now, window_seconds=DIGEST_DEBOUNCE.window_seconds):
-        # Wave 3 high-load resiliency: e.g. a whole class of 50 submitting
+        # High-load resiliency: e.g. a whole class of 50 submitting
         # near-simultaneously would otherwise generate 50 near-identical
         # digests/Gmail drafts in a few minutes. This event's profile write
         # already happened in Tier 1 (unaffected); the NEXT event for this
@@ -235,23 +235,38 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
     name_by_id = {r["student_id"]: r["name"] for r in ranked}
 
     # Gmail and Sheets are independent side effects -- one failing must not
-    # prevent the other (PHASE 4: "Gmail MCP loi -> digest van duoc luu
-    # Firestore + hien tren Web UI, khong mat du lieu"). The digest itself
+    # prevent the other: a Gmail outage must still leave the digest persisted to
+    # Firestore and visible in the Web UI, with no data lost. The digest itself
     # (the actual analysis) already exists in `digest` regardless of what
     # happens below; only the delivery channels can fail here.
+    # `get_class_settings` was CALLED here but never imported, so
+    # every invocation raised NameError straight into a bare `except: pass`. The
+    # teacher's Settings tab writes `digest_notify_email` / `audit_spreadsheet_id`
+    # to Firestore (api.py::update_settings) and this is the only place that was
+    # supposed to read them back -- so both fields were dead on the digest path
+    # while the UI showed them saved, and every draft silently fell through to
+    # the deployment-wide TEACHER.email. That is precisely the state ADR-031
+    # describes as worse than a missing draft: a badge contradicted by the
+    # recipient sitting in the teacher's own Settings box.
+    #
+    # The exception is logged rather than swallowed for the same reason: this
+    # bug was invisible for as long as it was, only because nothing ever said so.
     class_settings = {}
     try:
         class_settings = get_class_settings(class_id=class_id)
     except Exception:
-        pass
+        _logger.exception(
+            "get_class_settings failed -- falling back to deployment-wide teacher email / audit sheet",
+            extra={"class_id": class_id, "event_id": event_id},
+        )
 
     teacher_email = class_settings.get("digest_notify_email") or TEACHER.email
     draft_id = None
     draft_message_id = None
-    # Wave 27 / ADR-031: WHY the draft is missing, not just THAT it is missing.
+    # ADR-031: WHY the draft is missing, not just THAT it is missing.
     # Before this the dashboard rendered one fallback badge -- "no recipient
     # configured" -- for both causes, so an expired Gmail OAuth token showed a
-    # judge a message contradicted by the recipient sitting in their own
+    # a reader a message contradicted by the recipient sitting in their own
     # Settings box. Judging runs for a month; a refresh token can die inside
     # that window, and a wrong explanation is worse than an honest one.
     draft_status = "no_recipient"
@@ -266,7 +281,7 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
                 body_html=format_digest_email_html(digest, ranked, name_by_id),
             )
             draft_id = draft["draft_id"]
-            # Wave 26 / ADR-030: the hex message id, not the API draft id, is
+            # ADR-030: the hex message id, not the API draft id, is
             # what Gmail's web UI addresses -- kept separately so the
             # dashboard's "open the draft" link resolves.
             draft_message_id = draft["message_id"]
@@ -275,13 +290,13 @@ async def _process_event_traced(event_id: str, class_id: str) -> dict:
             draft_status = "failed"
             _logger.exception("Failed to create Gmail draft -- digest still returned/logged", extra={"class_id": class_id, "event_id": event_id})
 
-    # Wave 3 latency optimization: Sheets append and the Firestore
+    # Latency optimization: Sheets append and the Firestore
     # class_analytics write are each independent network round-trips that
     # both only depend on `draft_id` (Gmail must run first for that reason)
     # -- not on each other -- so dispatch them concurrently instead of
     # sequentially. Each keeps its own try/except so one failing still
-    # doesn't affect the other (same PHASE 4 principle as Gmail vs Sheets
-    # above, just parallel instead of sequential).
+    # doesn't affect the other (same isolation as Gmail vs Sheets above, just
+    # parallel instead of sequential).
     def _append_sheets_row() -> None:
         from eduagent.integrations.sheets_mcp import append_audit_row, extract_spreadsheet_id
 

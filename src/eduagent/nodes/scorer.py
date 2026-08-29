@@ -1,4 +1,4 @@
-"""Cognitive Scorer -- agent node (Gemini Flash). Scores the ORIGINAL essay
+"""Cognitive Scorer -- LLM-backed function node (Gemini Flash). Scores the ORIGINAL essay
 against 4 rubric axes, informed by how the student handled the debate.
 
 Kept separate from the Debate Agent (own LLM call) so that grading pressure
@@ -72,7 +72,7 @@ def score_essay(
 ) -> tuple[dict, dict, str, bool]:
     """Scores one essay against the 4 rubric axes. Pulled out of
     cognitive_scorer() so the SAME logic backs both the batch graph node
-    (against `Context`) and the interactive debate API (Wave 5 -- scoring a
+    (against `Context`) and the interactive debate API (scoring a
     session right after its 3rd turn completes, without duplicating this
     prompt/schema/degradation logic a second time) -- same pattern as
     debate.py's generate_debate_turn().

@@ -1,4 +1,4 @@
-"""Audit Wave 27 hard gate: no script may pass the bare string "gcloud" as argv[0].
+"""Hard gate: no script may pass the bare string "gcloud" as argv[0].
 
 WHY THIS TEST EXISTS
 --------------------
@@ -6,7 +6,7 @@ On Windows the Cloud SDK ships `gcloud.CMD`, and `CreateProcess` does not apply
 PATHEXT to argv[0]. So `subprocess.run(["gcloud", ...])` raises
 `FileNotFoundError: [WinError 2]` -- the launcher is on PATH, but not under the
 name given. The fix (resolve with `shutil.which` first) was applied to
-`doctor.py` and `deploy_to_cloud_run.py` in Wave 15, and **missed
+`doctor.py` and `deploy_to_cloud_run.py`, and **missed
 `rotate_oauth_tokens.py`**, where it stayed hidden for twelve waves because
 nobody had rotated a token from Windows.
 

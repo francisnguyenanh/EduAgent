@@ -1,4 +1,4 @@
-"""Memory A/B Experiment (Task 10.1 - All Things Agentic Hackathon).
+"""Memory A/B Experiment.
 
 Demonstrates and quantifies the empirical impact of Long-Term Memory (eduagent)
 versus Stateless Baseline (No Memory) across a 3-essay student trajectory.

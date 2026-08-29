@@ -2,7 +2,7 @@
 
 Runs the SAME student through 3 different mock essays to prove the memory
 loop actually works: the Persona Selector must read Firestore history before
-choosing (Phase 2), so persona choice and weakness tracking should evolve
+choosing, so persona choice and weakness tracking should evolve
 across calls instead of resetting each time. This is the direct evidence for
 the track's "become more helpful over time" requirement -- not a unit test,
 meant to be eyeballed.

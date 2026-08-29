@@ -1,9 +1,9 @@
 """Deterministic image prep before a photo ever reaches Gemini Vision.
 
-Wave 3 #1: a phone-camera photo of a handwritten essay can weigh 5-15MB and
+a phone-camera photo of a handwritten essay can weigh 5-15MB and
 carry an EXIF rotation flag that most viewers auto-apply but the raw bytes
 never do -- sent as-is, that risks a sideways transcription and adds network
-latency/timeout risk (PHASE 6 real finding: a 2.6MB test photo, `stu_stuck_
+latency/timeout risk (observed with a 2.6MB test photo, `stu_stuck_
 messy.png`, hit a 504 DEADLINE_EXCEEDED at the multimodal call's 60s budget).
 
 Pure, zero-LLM, Function Node-style transformation (ADK2 deterministic-first

@@ -1,6 +1,6 @@
 """Persist Teacher Digests to Firestore -- the historical record a teacher
 (or a future Web UI) can browse across days, not just the one-shot Gmail
-draft / Sheets row that already exist per PHASE 3.
+draft / Sheets row, which are one-shot.
 
 Schema: class_analytics/{class_id}/digests/{digest_id}, digest_id == the
 Pub/Sub event_id that triggered it (one digest per essay.evaluated event,
@@ -34,7 +34,7 @@ def persist_digest(
     common_fallacies: list[str],
     gmail_draft_id: str | None,
     gmail_draft_message_id: str | None = None,
-    # Wave 27 / ADR-031: "created" | "no_recipient" | "failed". Defaulted so
+    # ADR-031: "created" | "no_recipient" | "failed". Defaulted so
     # digests written before this field existed still load; the dashboard
     # treats a missing value as "unknown" rather than inventing a cause.
     gmail_draft_status: str | None = None,
@@ -62,7 +62,7 @@ def persist_digest(
 
 @with_gcp_retry
 def get_last_digest_timestamp(*, class_id: str) -> datetime | None:
-    """Wave 3 high-load debounce: the single most recent digest's timestamp
+    """High-load debounce: the single most recent digest's timestamp
     for this class, or None if it has never had one. Backs
     class_aggregator.py's coalescing check -- kept as its own tiny query
     (limit=1) rather than reusing list_recent_digests(limit=1) so the
@@ -94,7 +94,7 @@ DEFAULT_CLASS_SETTINGS = {
 
 @with_gcp_retry
 def get_class_settings(*, class_id: str) -> dict:
-    """Wave 4 #2 Settings Tab -- pedagogical toggles a teacher can adjust per
+    """Settings Tab -- pedagogical toggles a teacher can adjust per
     class, stored on the parent `class_analytics/{class_id}` doc (a sibling
     of the `digests` subcollection above, not a new collection) so a class
     with no settings saved yet still resolves cleanly to the defaults."""
@@ -117,8 +117,8 @@ def set_class_settings(*, class_id: str, settings: dict) -> dict:
 
 @with_gcp_retry
 def list_recent_digests(*, class_id: str, limit: int = 10) -> list[dict]:
-    """Wave 3 #2: read path for the Cloud Run analytics endpoint / Web demo --
-    newest-first, so a teacher/judge opening the page sees the latest
+    """Read path for the Cloud Run analytics endpoint / Web demo --
+    newest-first, so anyone opening the page sees the latest
     Priority Index ranking without having to wait for a fresh essay."""
     docs = (
         _client()

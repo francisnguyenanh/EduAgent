@@ -1,7 +1,7 @@
-"""Wave 12 Group 2 -- tests for the two protections added to the student-facing
+"""Tests for the two protections added to the student-facing
 debate endpoints: ownership authorization and token-bucket rate limiting.
 
-The audit's finding was that `/api/debate/{start,start-with-image,
+The defect these cover was that `/api/debate/{start,start-with-image,
 start-with-gdoc,turn,reflect}` had NO authentication at all while every
 `/api/classes/*` route did, on a service deployed --allow-unauthenticated.
 Anyone could write into any student's Firestore profile and burn Vertex AI
@@ -47,7 +47,7 @@ _DEBATE_ROUTES = [
     ("/api/debate/start", {"essay_text": "x", "student_id": _VICTIM, "class_id": "c1"}),
     ("/api/debate/start-with-image", {"image_base64": base64.b64encode(b"f").decode(), "student_id": _VICTIM, "class_id": "c1"}),
     ("/api/debate/start-with-gdoc", {"gdoc_url": "https://docs.google.com/document/d/abc/edit", "student_id": _VICTIM, "class_id": "c1"}),
-    # Wave 15 #2: this payload is session-only now. The no-token / forged-token
+    # This payload is session-only now. The no-token / forged-token
     # checks below still apply, because the token is verified BEFORE the session
     # lookup (same ordering as /api/debate/turn).
     ("/api/debate/reflect", {"session_id": "sess-x", "revised_claim": "Revised."}),
@@ -83,7 +83,7 @@ def test_student_cannot_submit_as_another_student():
 
 
 def test_student_cannot_reflect_as_another_student():
-    """Wave 15 #2: the request no longer names a student, so the attacker has to
+    """The request no longer names a student, so the attacker has to
     aim at the victim's SESSION -- and ownership is resolved from the session's
     own stored student_id, so the same 403 must come back."""
     from eduagent import interactive
@@ -211,7 +211,7 @@ def test_rejected_caller_still_accrues_tokens_and_is_not_locked_out():
 
 
 def test_client_key_uses_the_last_forwarded_hop_not_the_client_supplied_one():
-    """Wave 17 #1 -- this test used to assert the opposite, and its docstring
+    """This test used to assert the opposite, and its docstring
     had the direction of X-Forwarded-For exactly backwards.
 
     Cloud Run APPENDS the real client address, so the header reads
@@ -267,7 +267,7 @@ def test_login_is_rate_limited_against_password_brute_force():
     login_limiter.reset()
     statuses = [
         client.post("/api/auth/login", json={"role": "student", "user_id": "c1_stu01", "password": f"guess{i}"}).status_code
-        # Wave 27 / ADR-032: LOGIN_POLICY.capacity went 5 -> 15 so judges are not
+        # ADR-032: LOGIN_POLICY.capacity went 5 -> 15 so a reviewer is not
         # locked out mid-review. The probe count is raised to stay ABOVE capacity
         # -- the property under test (a burst eventually gets 429) is unchanged;
         # only the burst size it must exceed moved. Sabotage-verified: setting

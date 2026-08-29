@@ -1,4 +1,4 @@
-"""Unit tests for Wave 6 API hardening: live prompt injection sanitization,
+"""Unit tests for API hardening: live prompt injection sanitization,
 input size limits, scoped token authentication, and IDOR prevention."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from eduagent.server import app
 
 client = TestClient(app)
 
-# Wave 12 Group 2: the debate endpoints are now authenticated, so these hardening
+# The debate endpoints are now authenticated, so these hardening
 # tests carry a valid student token -- the point they assert (sanitization, size
 # caps) is downstream of auth and must keep holding for a legitimate caller.
 _STUDENT_ID = "c1_stu01"
@@ -125,12 +125,12 @@ def test_protected_class_routes_reject_idor_cross_class_access():
 
 
 # ---------------------------------------------------------------------------
-# Wave 16 #5 / #6
+# Rate-limit coverage on the LLM-invoking routes
 # ---------------------------------------------------------------------------
 
 
 def test_parent_note_is_rate_limited(monkeypatch):
-    """Wave 16 #5: /api/parent-note was the only Gemini-invoking route with no
+    """/api/parent-note was the only Gemini-invoking route with no
     token bucket, which defeated the stated purpose of ADR-017 ("bound Vertex
     AI spend"). It also scans every profile in the class before the LLM call."""
     from fastapi.testclient import TestClient
@@ -156,7 +156,7 @@ def test_parent_note_is_rate_limited(monkeypatch):
 
 
 def test_teacher_login_can_require_its_own_password(monkeypatch):
-    """Wave 16 #6: ADR-016 closed token forgery but not token issuance -- the
+    """ADR-016 closed token forgery but not token issuance -- the
     README publishes the demo passcode, so anyone could mint a role=teacher
     token for any class_id. Teacher login now honours a separate secret.
 

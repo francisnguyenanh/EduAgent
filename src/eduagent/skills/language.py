@@ -31,7 +31,7 @@ def detect_language(text: str) -> str:
 
 
 def language_instruction(language: str) -> str:
-    """Appended to an agent node's system_instruction so student-facing text
+    """Appended to a node's system_instruction so student-facing text
     (debate questions, feedback, rationale) matches the essay's language --
     a Vietnamese essay should get natural Vietnamese Socratic questions, not
     an English question the student then has to translate themselves."""

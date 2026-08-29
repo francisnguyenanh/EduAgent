@@ -12,7 +12,7 @@ Design Principle (ZERO LLM-as-Judge):
   - Layer 4: Learning Outcomes (10 cases: 6 against the real metacognitive
     growth logic, 4 against the measured learning-outcome artifact)
 
-Wave 12 Group 1 correction: Layer 4 previously carried 8 cases whose `before`
+Layer 4 previously carried 8 cases whose `before`
 and `after` values were integer literals declared in this file, and whose
 runner asserted `after - before >= 4`. Those cases passed unconditionally --
 they were arithmetic on constants, not tests of the system. They have been
@@ -167,7 +167,7 @@ PERSONA_FIDELITY_CASES = [
         "essay": _PERSONA_FIDELITY_ESSAY,
         "summary": _PERSONA_FIDELITY_SUMMARY,
         "student_replies": _PERSONA_FIDELITY_REPLIES,
-        # Wave 12: "every"/"case"/"apply" were removed -- they are generic enough
+        # "every"/"case"/"apply" were removed -- they are generic enough
         # to appear in the Skeptic's and Devil's Advocate's anchors too, which
         # made this persona's signature non-discriminating. The mutual-exclusion
         # check in run_persona_fidelity_cases() now enforces that property.
@@ -357,7 +357,7 @@ LEARNING_OUTCOME_CASES = [
     # -- Group B: assertions against the MEASURED learning-outcome artifact
     #    (eval/results/learning_outcome_measured.json), produced by
     #    scripts/evaluate_learning_outcomes.py running the real production
-    #    scorer against Vertex AI. Wave 12 Group 1: these replaced 8 cases that
+    #    scorer against Vertex AI. These replaced 8 earlier cases that
     #    asserted `8 - 2 >= 4` on literals declared in this very file -- those
     #    could not fail even with the entire src/ tree deleted. These CAN fail:
     #    if the artifact is missing, stale in shape, or the measurement did not

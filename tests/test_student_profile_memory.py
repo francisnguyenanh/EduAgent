@@ -1,7 +1,7 @@
 """Unit tests for the pure profile-merge logic (no Firestore, no network).
 
 Locks in the "stuck persona streak" and "needs_attention" flagging rules
-that Phase 3's Class Aggregator will depend on.
+the Class Aggregator depends on.
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def test_score_trend_stagnant_within_flat_band():
 
 
 def test_score_trend_flags_a_mid_window_collapse_as_volatile():
-    """Wave 15 #3 -- the audit's case: [10, 0, 10].
+    """The case that motivated it: [10, 0, 10].
 
     The slope over that window is genuinely flat, so the old code called it
     "stagnant" and it contributed 0 to the teacher's ranking -- ranked exactly
@@ -139,7 +139,7 @@ def test_score_trend_flags_a_mid_window_collapse_as_volatile():
 
 def test_score_trend_volatile_outranks_stagnant_for_the_teacher():
     """The point of the classification: it has to change the ordering, or the
-    teacher never sees the collapse. (Wave 15 #3)"""
+    teacher never sees the collapse."""
     from datetime import datetime, timezone
 
     from eduagent.aggregator.priority_engine import compute_priority
@@ -170,7 +170,7 @@ def test_score_trend_small_swing_is_still_stagnant():
 
 
 def test_trend_slope_is_a_real_regression_over_a_wider_window():
-    """Wave 15 #3: the old `sum(diffs)/len(diffs)` telescoped to
+    """The old `sum(diffs)/len(diffs)` telescoped to
     (last - first) / (n - 1), so every essay between the ends cancelled out.
     At TREND_WINDOW == 3 the two agree; this pins the difference that appears
     the moment the window widens, so the bug cannot come back by config change.

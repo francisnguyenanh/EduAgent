@@ -1,4 +1,4 @@
-"""Learning Outcome & Cognitive Growth Measurement (Task 10.2).
+"""Learning Outcome & Cognitive Growth Measurement.
 
 MEASURES the learning-outcome delta (Before vs After) across the 4 cognitive
 dimensions by running the REAL production scorer on both texts:
@@ -6,7 +6,7 @@ dimensions by running the REAL production scorer on both texts:
     initial_thesis  --summarize_essay()--> summary --score_essay()--> before
     revised_thesis  --summarize_essay()--> summary --score_essay()--> after
 
-Wave 12 Group 1 fix (option A): this script previously carried `before_scores`
+This script previously carried `before_scores`
 and `after_scores` as hand-typed literals and merely subtracted them, then the
 report called the result a "Measured Value" from an "independent re-score". Nothing was
 measured and nothing was re-scored -- the headline number was the mean of 16

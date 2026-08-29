@@ -1,11 +1,11 @@
-"""Wave 3 GCP hygiene -- one CLI to sweep up leftover cloud resources this
+"""GCP hygiene -- one CLI to sweep up leftover cloud resources this
 project accumulates over repeated dev/demo/chaos-test cycles:
 
   1. Stale Pub/Sub subscriptions matching `chaos-test-*` -- scripts/
      chaos_test_pubsub.py creates one temporarily and deletes it in a
      `finally` block, but a hard crash/Ctrl-C mid-run can still leave one
      behind (real risk: it silently keeps pulling from the DLQ topic,
-     which is otherwise meant to sit untouched for teacher/judge review).
+     which is otherwise meant to sit untouched for teacher review).
   2. Cloud Run revisions of eduagent-class-aggregator older than the N most
      recent -- Cloud Run keeps every revision by default; NEVER deletes the
      revision currently serving traffic.
@@ -26,7 +26,7 @@ project accumulates over repeated dev/demo/chaos-test cycles:
          match against safely).
   5. Gmail drafts whose subject matches "Class digest for {test class_id}:"
      -- reuses gmail_mcp.py's own credential loading, same discipline as
-     scripts/cleanup_gmail_test_artifacts.py (Phase 0).
+     scripts/cleanup_gmail_test_artifacts.py.
 
 DELIBERATELY NOT HANDLED: Sheets audit rows. sheets_mcp.py's own docstring
 states the design principle directly -- "append-only by convention... an

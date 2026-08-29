@@ -1,4 +1,4 @@
-"""Tier-A coverage (Audit Wave 24): the Pub/Sub duplicate-delivery guard.
+"""Tier-A coverage: the Pub/Sub duplicate-delivery guard.
 
 Why this file exists: Pub/Sub is at-least-once, so `claim_event()`'s
 AlreadyExists branch is not an edge case -- it is a branch production WILL

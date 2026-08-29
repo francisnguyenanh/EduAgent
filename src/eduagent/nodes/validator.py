@@ -23,7 +23,7 @@ from eduagent.config import VALIDATOR
 # safer than blocking legitimate Socratic prompts that happen to explain a
 # concept the student already raised. Bilingual (EN + VI) since essays and
 # debate turns may be in either language.
-# NOTE (Audit Wave 27): the Vietnamese below is FUNCTIONAL, not untranslated
+# NOTE: the Vietnamese below is FUNCTIONAL, not untranslated
 # documentation. This project accepts essays in Vietnamese as well as English
 # (skills/language.py detects which), and the zero-answer-leak guarantee
 # has to hold in BOTH. Translating these regexes to English would silently

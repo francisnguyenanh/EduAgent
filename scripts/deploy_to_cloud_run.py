@@ -10,10 +10,22 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 SECRETS_DIR = ROOT / "secrets"
 
+# The deploy-time delivery targets (EDUAGENT_TEACHER_EMAIL /
+# EDUAGENT_AUDIT_SPREADSHEET_ID) moved out of hardcoded literals and into the
+# environment. `.env` is where README §3.2 tells you to put them, so read it
+# here too -- otherwise _preflight_deploy_config() would block a deploy on a
+# value the operator had already configured exactly where they were told to.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+except ImportError:  # python-dotenv is in requirements.txt; tolerate its absence
+    pass
+
 PROJECT_ID = "project-4fc36103-f4ca-49f6-883"
 SERVICE_ACCOUNT = f"eduagent-sa@{PROJECT_ID}.iam.gserviceaccount.com"
 
-# Wave 14 / ADR-020: every credential reaches the container as a Secret Manager
+# ADR-020: every credential reaches the container as a Secret Manager
 # reference, never as a plain env var. Mapping is {ENV_VAR: secret name}.
 #
 # WHY (this was a live vulnerability, not a theoretical one): an earlier version
@@ -33,7 +45,7 @@ SECRET_ENV_VARS = {
     "SHEETS_TOKEN_JSON": "eduagent-sheets-token",
 }
 
-# Wave 17 #3: mounted only when the secret already exists, and never a reason to
+# Mounted only when the secret already exists, and never a reason to
 # fail a deploy.
 #
 # ADR-025 added EDUAGENT_TEACHER_PASSWORD so teacher login can stop accepting
@@ -41,7 +53,7 @@ SECRET_ENV_VARS = {
 # all -- this script builds its env from a hardcoded dict, so the variable could
 # be set locally and would silently never reach Cloud Run. An ADR that describes
 # a capability production cannot reach is the same failure mode as ADR-016
-# before Wave 12: documented, believed, and not actually in effect.
+# before it was fixed: documented, believed, and not actually in effect.
 #
 # It stays OPTIONAL rather than joining SECRET_ENV_VARS above because the
 # shared-passcode fallback is the deliberate judging default; making it required
@@ -83,7 +95,7 @@ def _report_optional_secrets() -> None:
 
 
 def _gcloud() -> str:
-    """Absolute path to the gcloud launcher. Same Wave 15 #5 Windows fix as
+    """Absolute path to the gcloud launcher. Same Windows fix as
     scripts/doctor.py::_gcloud_executable(): on Windows gcloud is `gcloud.cmd`,
     so the bare string "gcloud" made subprocess.run() raise FileNotFoundError."""
     import shutil
@@ -143,8 +155,54 @@ def _preflight_secrets() -> None:
     sys.exit(1)
 
 
+def _preflight_deploy_config() -> tuple[str, str]:
+    """Resolve the two deployment-wide delivery targets from the
+    environment, and FAIL rather than deploy a revision that silently cannot
+    deliver.
+
+    Why fail-fast and not a quiet default. This script builds its env with
+    `--env-vars-file`, which REPLACES the revision's entire env var set (it is
+    not `--update-env-vars`). So this dict is the only source of
+    EDUAGENT_TEACHER_EMAIL -- reading it back off the running service is not
+    what happens. An empty value here therefore ships a revision where
+    `teacher_email` is falsy, `class_aggregator` records
+    `gmail_draft_status = "no_recipient"`, and no Gmail draft is ever created.
+    That is the exact artifact the demo's human-approval gate is built on
+    (ADR-001/ADR-030), so losing it silently at deploy time is worse than
+    refusing to deploy -- the same reasoning as ADR-016's boot-time abort.
+
+    These were previously hardcoded literals, which put a personal address and
+    a live document id in a public repository for no operational benefit.
+    """
+    teacher_email = os.getenv("EDUAGENT_TEACHER_EMAIL", "").strip()
+    spreadsheet_id = os.getenv("EDUAGENT_AUDIT_SPREADSHEET_ID", "").strip()
+
+    if not teacher_email:
+        print(
+            "\n[FAIL] EDUAGENT_TEACHER_EMAIL is not set.\n\n"
+            "  This is the digest recipient for classes that have not set their own\n"
+            "  address in the Teacher Settings tab. Deploying without it produces a\n"
+            "  revision that reports gmail_draft_status='no_recipient' and never\n"
+            "  creates a draft -- the demo's human-approval gate disappears.\n\n"
+            "  Set it (it lives in .env locally; see .env.example):\n\n"
+            "    export EDUAGENT_TEACHER_EMAIL='teacher@your-domain.com'\n"
+        )
+        sys.exit(1)
+
+    if not spreadsheet_id:
+        # Not fatal: the Sheets audit row is an optional side channel, and
+        # class_aggregator already skips it cleanly when no target resolves.
+        print(
+            "[WARN] EDUAGENT_AUDIT_SPREADSHEET_ID is not set -- the Sheets audit row\n"
+            "       will be skipped for classes with no per-class Sheet configured."
+        )
+
+    return teacher_email, spreadsheet_id
+
+
 def main():
     _preflight_secrets()
+    teacher_email, audit_spreadsheet_id = _preflight_deploy_config()
     print("Preparing non-sensitive environment variables...")
 
     env_vars = {
@@ -155,8 +213,11 @@ def main():
         "EDUAGENT_HEAVY_MODEL": "gemini-3.7-flash",
         "PUBSUB_PUSH_AUDIENCE": "https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app",
         "PUBSUB_PUSH_SERVICE_ACCOUNT": "eduagent-sa@project-4fc36103-f4ca-49f6-883.iam.gserviceaccount.com",
-        "EDUAGENT_TEACHER_EMAIL": "eikitomobe@gmail.com",
-        "EDUAGENT_AUDIT_SPREADSHEET_ID": "1pUGTCIzGxZ8xKXbGSgUtd-1pV_qVYUAVqYaJQcyTFnE",
+        # From the environment, never hardcoded -- see
+        # _preflight_deploy_config() for why an empty teacher email is a
+        # deploy-blocking failure rather than a silent default.
+        "EDUAGENT_TEACHER_EMAIL": teacher_email,
+        "EDUAGENT_AUDIT_SPREADSHEET_ID": audit_spreadsheet_id,
         "EDUAGENT_MOCK_PASSWORD": "eduagent2026",
         # NOTE: GMAIL_COMPOSE_TOKEN_JSON and SHEETS_TOKEN_JSON deliberately do
         # NOT appear here -- they are mounted from Secret Manager below
@@ -169,7 +230,7 @@ def main():
     # correct quoting/escaping for free -- and drops the PyYAML dependency
     # entirely. That matters here: this project's venv is created by `uv` and
     # has no `pip`, so `import yaml` failed at deploy time. One less thing a
-    # judge has to install to reproduce the deploy.
+    # reader has to install to reproduce the deploy.
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
         json.dump(env_vars, tmp, ensure_ascii=False, indent=2)
         tmp_path = tmp.name

@@ -1,4 +1,4 @@
-"""Unit tests for Wave 3 #2's REST API additions to server.py (debate
+"""Unit tests for the REST API additions to server.py (debate
 start/turn, class analytics, demo page). Mocks the underlying business logic
 -- same discipline as test_server.py -- these must not touch real Vertex
 AI/Firestore."""
@@ -16,7 +16,7 @@ from eduagent.server import app
 client = TestClient(app)
 _C1_HEADERS = {"Authorization": f"Bearer {create_access_token('c1_teacher', 'teacher', 'c1')}"}
 
-# Wave 12 Group 2: the debate endpoints now require a student (or same-class
+# The debate endpoints now require a student (or same-class
 # teacher) Bearer token, so every debate request below carries one.
 _STUDENT_ID = "c1_stu01"
 _STUDENT_HEADERS = {"Authorization": f"Bearer {create_access_token(_STUDENT_ID, 'student', 'c1')}"}
@@ -167,7 +167,7 @@ def test_api_class_analytics_returns_digests():
 
 
 def test_api_class_analytics_attaches_the_draft_body_as_digest_html():
-    """Wave 26 #1.3: a judge with no access to the system mailbox must still be
+    """A reader with no access to the system mailbox must still be
     able to read what the Gmail draft says. The preview is the draft body."""
     fake_digests = [
         {

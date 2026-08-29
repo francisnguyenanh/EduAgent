@@ -1,6 +1,6 @@
 """Thin, shared wrapper around google-genai (Vertex AI backend).
 
-Kept deliberately small: every agent node calls generate_json() with its own
+Kept deliberately small: every LLM-backed node calls generate_json() with its own
 prompt + schema. No shared conversation state between nodes here -- that
 lives in Context.state, not in this client. This is what keeps the
 Summarizer, Persona Selector, Debate Loop, and Cognitive Scorer as
@@ -24,7 +24,7 @@ from eduagent.config import GEMINI
 
 _logger = logging.getLogger(__name__)
 
-# PHASE 4: retry only what's actually transient. ServerError (5xx) and a
+# Retry only what's actually transient. ServerError (5xx) and a
 # malformed-JSON response are both worth retrying (the latter is often a
 # one-off generation glitch despite response_schema); ClientError (4xx --
 # e.g. a genuinely invalid request) is NOT retried because it will fail
@@ -77,7 +77,7 @@ def _is_maas_queue_full(exc: BaseException) -> bool:
 # does NOT retry ClientError (4xx) because a 4xx against Gemini means a
 # genuinely malformed request that will fail identically every time. A MaaS
 # queue-full is the opposite failure: the identical request succeeds seconds
-# later. Measured during Wave 24 integration testing -- 4 of 10 raw Gemma
+# later. Measured during integration testing -- 4 of 10 raw Gemma
 # calls returned 429, yet with this retry every one of 6 test images
 # transcribed successfully. Shared capacity is the cost of MaaS; treating its
 # backpressure as a permanent error would make the model unusable.
@@ -102,7 +102,7 @@ def _strip_markdown_fence(text: str) -> str:
 
 
 def _config_with_thinking_budget(config: dict[str, Any], thinking_budget: int | None) -> dict[str, Any]:
-    """Wave 3 token-optimization: a fast structural-extraction call (OCR
+    """Token-optimization: a fast structural-extraction call (OCR
     transcription, Summarizer's claim/evidence extraction) doesn't need the
     model's extended reasoning mode -- only nodes that pass an explicit
     `thinking_budget` (0 = off) get it added; every other caller (Scorer,
@@ -180,7 +180,7 @@ def _generate_json_from_image_once(
                 "system_instruction": system_instruction,
                 "response_mime_type": "application/json",
                 "response_schema": response_schema,
-                # PHASE 6 real finding: a real phone-camera photo (multi-MB JPEG/PNG)
+                # Real finding: a real phone-camera photo (multi-MB JPEG/PNG)
                 # takes noticeably longer for Vertex AI to process than a text-only
                 # prompt -- a real ~2.6MB test photo hit a 504 DEADLINE_EXCEEDED at
                 # the same 30s budget generate_json() uses, even though the image
@@ -203,7 +203,7 @@ def generate_json_from_image(
     response_schema: dict[str, Any],
     thinking_budget: int | None = None,
 ) -> dict[str, Any]:
-    """Multimodal variant of generate_json() -- PHASE 6 (Multimodal OCR): sends
+    """Multimodal variant of generate_json() for the OCR path: sends
     an image alongside the text prompt. Same retry/degrade contract: raises
     LLMGenerationError after exhausting retries rather than ever returning
     fabricated transcription."""
@@ -241,7 +241,7 @@ def generate_text_from_image(*, model: str, prompt: str, image_bytes: bytes, ima
     """ADR-028: multimodal call that returns PLAIN TEXT, used for the OCR
     cross-check's second opinion on a non-Gemini model.
 
-    Why not reuse generate_json_from_image(): Wave 22 measured that Gemma
+    Why not reuse generate_json_from_image(): measurement showed that Gemma
     ignores `response_schema` -- asked for `{resolved, reason}` it returned
     `{"answer": ...}`. Building on that would mean defensive parsing of a
     structure the model never promised. This function sidesteps the problem

@@ -1,4 +1,4 @@
-"""Unit tests for the PHASE 7 Cloud Run push-subscriber HTTP entrypoint
+"""Unit tests for the Cloud Run push-subscriber HTTP entrypoint
 (server.py). Mocks process_event() -- these must not touch real
 Firestore/Pub/Sub/Gmail/Sheets, same discipline as test_class_aggregator.py.
 """
@@ -30,7 +30,7 @@ def test_health_check_returns_ok_without_touching_gcp():
 
 
 def _bypass_push_auth():
-    """Wave 8 / ADR-014: POST / now verifies a real Pub/Sub OIDC token
+    """ADR-014: POST / now verifies a real Pub/Sub OIDC token
     (google_id_token.verify_oauth2_token against Google's live public keys)
     before ever looking at the envelope. Tests exercising envelope/
     process_event behavior bypass that check the same way they already mock
@@ -81,7 +81,7 @@ def test_pubsub_push_drops_undecodable_payload_with_200():
 
 
 def test_pubsub_push_rejects_missing_authorization_header_without_calling_process_event():
-    """Wave 8 blocker fix: with the service deployed --allow-unauthenticated,
+    """Blocker fix: with the service deployed --allow-unauthenticated,
     this is the only thing standing between the public internet and a
     Vertex-AI-costed process_event() call."""
     event = {"event_id": "e3", "student_id": "s1", "class_id": "c1", "essay_id": "e1"}

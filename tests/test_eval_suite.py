@@ -1,4 +1,4 @@
-"""Unit tests for the PHASE 5 eval suite's deterministic groups (answer_leak,
+"""Unit tests for the eval suite's deterministic groups (answer_leak,
 prompt_injection) -- fast, zero LLM. persona_fidelity hits real Vertex AI
 (scripts/run_eval_suite.py itself, not covered here -- see eval_report.md
 for its real, committed results) so it's exercised by running the script

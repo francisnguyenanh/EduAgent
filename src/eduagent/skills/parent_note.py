@@ -1,8 +1,8 @@
-"""Wave 4 #3 -- Parent Communication Co-Pilot ("Copy Parent Update Note").
+"""Parent Communication Co-Pilot ("Copy Parent Update Note").
 
 This project's own risk analysis rules out auto-sending email to parents
 (mass mailing 40+ inboxes on every submission is a FERPA/COPPA risk and
-drowns quota, same discipline as Phase 0/3's Gmail HITL gate). Instead
+drowns quota, same discipline as the Gmail human-approval gate). Instead
 this generates ONE short, encouraging note text for the teacher to
 review and copy themselves -- the LLM only phrases what the deterministic
 Priority Engine (priority_engine.py) already computed; it never decides
@@ -52,13 +52,13 @@ def draft_parent_note(*, student_name: str, reason: dict, language: str = "en") 
 
     Returns (note_text, degraded). On any LLM failure, returns a generic
     but still genuine fallback rather than blocking the teacher's workflow
-    (same graceful-degradation discipline as Phase 4)."""
+    (the same graceful-degradation discipline used elsewhere)."""
     facts = []
     if reason.get("stuck_streak_count", 0) >= 2:
         facts.append(f"has repeated the same type of debate challenge {reason['stuck_streak_count']} times without a breakthrough yet")
     if reason.get("score_trend") == "declining":
         facts.append("has seen scores dip over their last few essays")
-    # Wave 15 #3: phrased as unevenness, not decline -- "volatile" means the
+    # Phrased as unevenness, not decline -- "volatile" means the
     # scores swung and recovered, so telling a parent their child is slipping
     # would be false.
     if reason.get("score_trend") == "volatile":

@@ -1,7 +1,7 @@
-"""Phase 3 dev-mode Class Aggregator subscriber.
+"""Dev-mode Class Aggregator subscriber.
 
 Synchronous pull loop against class-aggregator-sub -- good enough for local
-testing and the demo video. Phase 7 replaces this with a Cloud Run push
+testing and demos. server.py replaces this with a Cloud Run push
 subscriber (same process_event() call, different transport), so nothing in
 aggregator/class_aggregator.py needs to change.
 
@@ -34,7 +34,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _pull_and_process(subscriber: pubsub_v1.SubscriberClient, subscription_path: str, max_messages: int = 10) -> int:
-    """PHASE 4 chaos-test fix: each message is handled independently -- a
+    """Chaos-test fix: each message is handled independently -- a
     malformed payload or a process_event() exception for ONE message must
     never prevent acking the OTHER messages in the same batch, and must
     never crash the subscriber process itself. A failed message is simply

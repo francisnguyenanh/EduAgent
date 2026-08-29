@@ -1,4 +1,4 @@
-"""Phase 0 DoD check: Tier 1 skeleton graph runs end-to-end with mock data.
+"""Tier 1 skeleton graph runs end-to-end with mock data.
 
 Not a unit test of real logic (there is none yet, by design) — this only
 proves the ADK2 Graph Workflow wiring (edges, FunctionNode stubs, Context

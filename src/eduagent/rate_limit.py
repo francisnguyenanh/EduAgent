@@ -1,15 +1,15 @@
-"""In-process token-bucket rate limiter (Wave 12 Group 2, ADR-017).
+"""In-process token-bucket rate limiter (ADR-017).
 
 WHY THIS EXISTS: `docs/data_lifecycle_and_privacy.md`'s STRIDE table listed
-"Token bucket rate limiting" as the Denial-of-Service mitigation. The Wave 12
-audit grepped for it and found nothing -- `grep -rniE "rate.?limit|token.?bucket|
+"Token bucket rate limiting" as the Denial-of-Service mitigation. Nothing in
+the source implemented it -- `grep -rniE "rate.?limit|token.?bucket|
 slowapi|throttl" src/` returned zero results. The claim was false, and it was
 false in a security table, which is the worst place for a claim to be false.
 
 Rather than delete the claim, the mechanism is implemented here, because the
 exposure it describes is real: the student-facing debate endpoints each trigger
-several Gemini calls, and before Wave 12 they were unauthenticated on a public
-URL. A `while true; do curl ...; done` loop was a direct route to draining the
+several Gemini calls, and they were once unauthenticated on a public URL. A
+`while true; do curl ...; done` loop was a direct route to draining the
 project's Vertex AI quota (a cost-DoS), with no per-caller ceiling anywhere in
 the stack.
 
@@ -27,8 +27,8 @@ HONEST SCOPE -- read this before citing it as a mitigation:
     "as fast as curl can loop". It is 5x weaker than the per-instance numbers
     suggest, which is exactly why the multiplier is written out here.
 
-    Wave 17 review note: an external reviewer argued this makes the limiter
-    "meaningless under autoscaling, and you chose --max-instances 5 yourself".
+    One objection to this design is that it makes the limiter
+    "meaningless under autoscaling, when --max-instances 5 was our own choice".
     Half right, and worth recording both halves. The contradiction is real --
     we opted into the horizontal scaling that weakens this control. But a 5x
     multiplier on a bounded ceiling is still a bounded ceiling; "meaningless"
@@ -81,11 +81,11 @@ class RateLimitPolicy:
 
 
 DEBATE_POLICY = RateLimitPolicy(capacity=10, refill_per_second=0.2)
-# Wave 27 / ADR-032: deliberately loosened from (5, 0.1) to (15, 0.5) so a judge
+# ADR-032: deliberately loosened from (5, 0.1) to (15, 0.5) so a reviewer
 # exploring both portals over a month-long window is not locked out mid-review.
 #
-# Why this does not weaken the system (reviewed Wave 27, and the reasoning is
-# the point -- not the numbers):
+# Why this does not weaken the system (the reasoning is the point, not the
+# numbers):
 #   * login() is pure in-process work -- hmac.compare_digest + create_access_token.
 #     No Firestore read, no LLM call, no network I/O. Raising its ceiling adds
 #     ZERO Vertex AI spend, which is what ADR-017 exists to bound.
@@ -164,7 +164,7 @@ login_limiter = TokenBucketLimiter(LOGIN_POLICY)
 def client_key(*, x_forwarded_for: str | None, peer_host: str | None) -> str:
     """Derives the rate-limit key from a request.
 
-    Wave 17 #1 -- this function previously took the FIRST entry of
+    This function previously took the FIRST entry of
     X-Forwarded-For, with a docstring asserting that the proxy appends and so
     "later entries are attacker-supplied". That was backwards, and it made the
     whole limiter bypassable with one header.

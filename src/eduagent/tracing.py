@@ -1,6 +1,6 @@
 """Cloud Trace instrumentation -- one real span per graph node.
 
-Phase 4 rationale: one complete trace span is the strongest single piece of
+Rationale: one complete trace span is the strongest single piece of
 "proof of action" available for the demo video. Wired at the lowest common point
 (a decorator each node applies to itself) rather than trying to instrument
 the ADK Workflow internals, so it works whether a node runs inside the
@@ -37,11 +37,11 @@ def configure_tracing(project_id: str | None = None) -> None:
 
     project_id = project_id or FIRESTORE.project_id
     try:
-        # DOT 3 #4: opentelemetry-exporter-gcp-trace 1.15+ marks
+        # Opentelemetry-exporter-gcp-trace 1.15+ marks
         # CloudTraceSpanExporter deprecated in favor of routing through an
         # OTLP collector, but that requires standing up and operating a
         # collector -- new infra outside this hackathon's scope, and
-        # PHASE 4 already verified this exporter produces real, complete
+        # Already verified this exporter produces real, complete
         # spans in Cloud Trace. Silence exactly this one known, upstream
         # deprecation message (not DeprecationWarning wholesale, which would
         # also hide warnings about eduagent's OWN code) rather than taking on

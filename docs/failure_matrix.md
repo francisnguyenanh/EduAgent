@@ -16,7 +16,7 @@
 
 ---
 
-## 1. 20-Component Failure & Recovery Matrix
+## 1. 21-Component Failure & Recovery Matrix
 
 | # | System Component | Trigger Condition | Severity | Self-Healing & Graceful Degradation | Fallback Behavior | Observable Signal (grep-able in code / Cloud Logging) |
 |:---:|---|---|:---:|---|---|---|
@@ -33,7 +33,7 @@
 | **9b** | **Priority Ranking Engine — Mid-Window Drop** (Audit Wave 15, ADR-023) | Scores like `[10, 0, 10]`: slope is technically flat (start and end are equal), but a mid-window assignment collapsed completely. Previously treated as `stagnant` with **0** added to the priority index, identical to a student with stable performance. | Medium | `_score_trend()` introduces a new `volatile` verdict when the overall slope lies within the flat band but the peak-to-trough amplitude is $\ge$ `TREND_VOLATILITY_BAND` (2.0); slope is calculated via least-squares linear regression instead of `sum(diffs)/len(diffs)` (which only reads the first and last points). | Adds `score_volatility = 1.5` to the priority index (below `score_decline = 2.5`), badges student as `volatile` in teacher digest, and parent note phrases progress as "fluctuating" rather than "declining". | `breakdown.score_volatility` in `compute_priority()` |
 | **10** | **Teacher Digest Synthesizer** | Gemini heavy model unavailable during batch digest generation | Medium | Fallback deterministic Jinja2/string template rendering | Generates fully structured report with student ranking table & 3-step lesson plan | `_logger.error("Digest synthesis degraded to fallback rendering (Gemini unavailable)")` — `aggregator/digest.py:129` |
 | **11** | **Pub/Sub Event Ingestion** | Duplicate delivery of `essay.evaluated` event | Medium | Firestore Idempotency Lease Lock (`events/{event_id}`) | Skips duplicate processing; returns HTTP 200 `{"status": "skipped_duplicate"}` | `_logger.info("Skipping duplicate delivery", extra={"event_id": ...})` — `aggregator/class_aggregator.py:189` |
-| **12** | **API Rate Limiter** (Audit Wave 13, ADR-017) | `curl` loop hammering public debate endpoint → Vertex AI quota depletion (cost-DoS) | High | Per-IP token bucket (`rate_limit.py`): burst 10 / 1 req per 5s for debate; burst 5 / 1 per 10s for login. Key taken from client hop of `X-Forwarded-For` | Returns HTTP `429` + `Retry-After` header; rejected callers continue token accumulation without permanent lockout | `client_key`, `path` in `Rate limit exceeded` logs |
+| **12** | **API Rate Limiter** (Audit Wave 13, ADR-017) | `curl` loop hammering public debate endpoint → Vertex AI quota depletion (cost-DoS) | High | Per-IP token bucket (`rate_limit.py`): burst 10 / 1 req per 5s for debate; burst **15 / 1 per 2s** for login (loosened by ADR-032 so a month-long judging review is not locked out — login makes no LLM call, so the bucket that bounds Vertex AI spend is untouched). Key taken from the **last** `X-Forwarded-For` hop, the only entry Cloud Run vouches for (ADR-026 — see row 12c, which is the correction, not a second mechanism) | Returns HTTP `429` + `Retry-After` header; rejected callers continue token accumulation without permanent lockout | `client_key`, `path` in `Rate limit exceeded` logs |
 | **12b** | **API Rate Limiter — Coverage Gap** (Audit Wave 16) | `/api/parent-note` invokes Gemini (`draft_parent_note()` -> `generate_text()`) and scans every profile in the class first, but was the one LLM-calling route with no bucket — so the stated purpose of ADR-017 ("bound Vertex AI spend") had a hole in it | High | Route now calls `_enforce_rate_limit(request, debate_limiter)` on the same per-IP bucket as the debate endpoints | Returns HTTP `429` + `Retry-After` | `tests/test_api_hardening.py::test_parent_note_is_rate_limited` (verified red when the limiter call is removed) |
 | **12c** | **API Rate Limiter — Forgeable Key** (Audit Wave 17, ADR-026) | `client_key()` read the FIRST `X-Forwarded-For` entry. Cloud Run **appends** the real client address, so the first entry is caller-supplied: varying one header handed the attacker a brand-new full bucket per request, defeating ADR-017 entirely | Critical | Key is now the right-most non-empty hop, the only entry the proxy vouches for; falls back to the socket peer with no proxy | Measured live before: drained bucket + 8 spoofed requests -> `401` x8 (all bypassed). After: `429` x8. `client_key` in logs now equals `httpRequest.remoteIp` | `tests/test_student_endpoint_auth.py::test_client_key_uses_the_last_forwarded_hop_not_the_client_supplied_one` (red when reverted to the first hop) |
 | **13** | **Student Endpoint Authorization** (Audit Wave 13, ADR-018) | Arbitrary caller POSTs arbitrary `student_id` → corrupts another student profile & skews teacher ranking | Critical | `_verify_student_auth()`: `role=student` token acts only for own `user_id`; `class_id` must match; `/turn` derives ownership from session and **verifies before session lookup** to avoid existence oracle | `401` (missing/forged token) · `403` (mismatched student/class) · `400` (invalid student ID format) | `_verify_student_auth` raises HTTPException |
@@ -71,12 +71,34 @@
 
 ---
 
-## 3. Production Readiness Declaration
+## 3. What This Matrix Does And Does Not Establish
 
 ```
-[System Health Audit]
-- Zero Single Point of Failure (SPOF)
-- Deterministic Priority Ranking (100% SLA even during LLM outages)
-- Bounded Memory & Database Storage (MAX_HISTORY_ENTRIES = 50, TTL = 24h)
-- 100% Idempotent Event Delivery
+[Scope of the claims above]
+- Per-component degradation:  every row has a named trigger, fallback, and
+                              grep-able signal. That is what the table proves.
+- Priority ranking survives   priority_engine.py makes zero LLM calls, so an
+  an LLM outage:              outage cannot stop a teacher getting a ranking.
+- Bounded storage:            MAX_HISTORY_ENTRIES = 50; debate_sessions carry
+                              an explicit expire_at with an ACTIVE 24h TTL.
+- Idempotent event delivery:  digest_id is pinned to event_id (ADR-010) and
+                              claimed via a Firestore create() lease, so a
+                              Pub/Sub redelivery cannot write a second digest.
+
+[Explicitly NOT claimed]
+- NOT zero single point of failure. The Web API and the Pub/Sub consumer share
+  one Cloud Run service and one instance pool, so that pool is a common failure
+  domain -- see the scope note at the top of this file and "Architectural
+  Limitations" in README.md for the measured blast radius.
+- NOT an SLA. Nothing here was measured against an availability target, and no
+  uptime commitment is offered or implied.
 ```
+
+> *Audit Wave 28: this section was headed "Production Readiness Declaration" and
+> asserted "Zero Single Point of Failure (SPOF)" and "100% SLA even during LLM
+> outages" — both directly contradicted by the scope note this same file opens
+> with, which states that the shared instance pool **is** a common failure
+> domain. A reader going top-to-bottom met the retraction and the claim in one
+> document. The underlying engineering facts were real; the two absolute words
+> wrapped around them were not, and this project does not get to apply a
+> standard to its metrics that it exempts its own summary box from.*

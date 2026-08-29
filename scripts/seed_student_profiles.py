@@ -1,6 +1,5 @@
-"""Phase 2 seed data: 5 student profiles with varied history, per
-the Phase 2 spec, so Phase 3's Class Aggregator has something real to
-rank against during development and the demo video.
+"""Seed data: 5 student profiles with varied history, so the Class Aggregator
+has something real to rank against during development and demos.
 
 Profiles (all in class 'c1'):
   stu_improving   - steadily improving scores, persona rotates normally
@@ -9,7 +8,7 @@ Profiles (all in class 'c1'):
   stu_declining   - average score trending down across recent essays
   stu_inactive    - only 1 essay, a while ago (long-inactivity case)
   stu_common_fallacy - shares a fallacy ("hasty generalization") with
-                    stu_stuck, for Systemic Fallacy Clustering in Phase 3
+                    stu_stuck, for Systemic Fallacy Clustering
 
 Writes real documents to the Firestore project configured in .env. Safe to
 rerun -- each profile is fully overwritten (not appended) via empty_profile

@@ -7,6 +7,7 @@ against live GCP services.
 from __future__ import annotations
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, patch
 
 from eduagent.aggregator.class_aggregator import format_digest_email, format_digest_email_html, process_event, should_coalesce_digest
@@ -55,7 +56,7 @@ def test_format_digest_email_html_includes_table_and_mini_lesson():
 
 
 def test_format_digest_email_html_escapes_model_generated_text():
-    """Wave 26 #1.3: this HTML is no longer Gmail-only -- it is also injected into
+    """This HTML is no longer Gmail-only -- it is also injected into
     the Teacher Dashboard preview. Gmail sanitizes; our own origin does not, so
     markup arriving in an LLM-written field must come out inert.
 
@@ -102,6 +103,7 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
         patch("eduagent.integrations.sheets_mcp.append_audit_row") as mock_sheets_append,
         patch("eduagent.aggregator.class_aggregator.persist_digest") as mock_persist_digest,
         patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        patch("eduagent.aggregator.class_aggregator.get_class_settings", return_value={}),
     ):
         mock_teacher.email = "teacher@example.com"
         mock_sheets.audit_spreadsheet_id = "sheet123"
@@ -110,7 +112,7 @@ def test_process_event_full_happy_path_calls_gmail_and_sheets():
 
     assert result["status"] == "processed"
     assert result["gmail_draft_id"] == "draft123"
-    # Wave 26: the hex message id is carried separately -- Gmail's web UI
+    # The hex message id is carried separately -- Gmail's web UI
     # addresses drafts by that, not by the API draft id, so collapsing the two
     # gives the teacher a link that opens an empty compose window.
     assert result["gmail_draft_message_id"] == "1a04055b6640d946"
@@ -138,6 +140,7 @@ def test_process_event_skips_gmail_and_sheets_when_unconfigured():
         patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
         patch("eduagent.aggregator.class_aggregator.persist_digest"),
         patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        patch("eduagent.aggregator.class_aggregator.get_class_settings", return_value={}),
     ):
         mock_teacher.email = ""
         mock_sheets.audit_spreadsheet_id = ""
@@ -189,14 +192,14 @@ def test_process_event_coalesces_digest_within_debounce_window():
     mock_synthesize.assert_not_awaited()  # never even got to the expensive LLM digest call
 
 
-# --- Wave 27 / ADR-031: WHY the Gmail draft is missing, not just THAT it is ---
+# --- ADR-031: WHY the Gmail draft is missing, not just THAT it is ---
 # Judging runs for a month and a Gmail refresh token can expire inside that
 # window. Before this, both causes rendered the same dashboard badge ("no
-# recipient configured"), so a judge with an address in their Settings box was
+# recipient configured"), so a teacher with an address in their Settings box was
 # shown a message their own screen contradicted.
 
 
-def _run_with_gmail(gmail_patch, teacher_email="teacher@example.com"):
+def _run_with_gmail(gmail_patch, teacher_email="teacher@example.com", class_settings=None):
     with (
         patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
         patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
@@ -205,6 +208,7 @@ def _run_with_gmail(gmail_patch, teacher_email="teacher@example.com"):
         patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
         patch("eduagent.aggregator.class_aggregator.persist_digest") as mock_persist,
         patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        patch("eduagent.aggregator.class_aggregator.get_class_settings", return_value=class_settings or {}),
         gmail_patch,
     ):
         mock_teacher.email = teacher_email
@@ -246,3 +250,123 @@ def test_gmail_draft_status_is_no_recipient_when_no_address_is_configured():
 
     assert result["gmail_draft_status"] == "no_recipient"
     assert mock_persist.call_args.kwargs["gmail_draft_status"] == "no_recipient"
+
+
+# ---------------------------------------------------------------------------
+# The Teacher Settings tab actually reaching the digest path.
+#
+# `class_aggregator.py` CALLED get_class_settings() without importing it, so
+# every call raised NameError into a bare `except: pass`. The teacher's saved
+# `digest_notify_email` / `audit_spreadsheet_id` were therefore dead on the
+# only path that consumes them, while the Settings UI showed them saved and
+# `POST /api/classes/{id}/test-sheets` (which imports correctly, via api.py)
+# reported the Sheet as reachable. Nothing failed loudly; drafts simply always
+# went to the deployment-wide TEACHER.email.
+#
+# These tests bind the fix to behaviour rather than to the import line: they
+# assert the *override wins over the deployment default*, which is false for
+# both the NameError version and any future refactor that drops the read.
+# ---------------------------------------------------------------------------
+
+
+def _run_and_capture_recipient(*, teacher_email, class_settings):
+    """Runs a full process_event and hands back the address the Gmail draft was
+    actually addressed to -- the one observable that separates a working
+    Settings read from the NameError version."""
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
+        patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
+        patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+        patch("eduagent.aggregator.class_aggregator.persist_digest"),
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        patch("eduagent.aggregator.class_aggregator.get_class_settings", return_value=class_settings),
+        patch(
+            "eduagent.integrations.gmail_mcp.create_digest_draft",
+            return_value={"draft_id": "d1", "message_id": "1a04055b6640d946"},
+        ) as mock_gmail,
+    ):
+        mock_teacher.email = teacher_email
+        mock_sheets.audit_spreadsheet_id = ""
+        result = asyncio.run(process_event({"event_id": "e_recipient", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+    return result, mock_gmail
+
+
+def test_class_settings_digest_email_overrides_the_deployment_wide_default():
+    """The address a teacher typed into Settings must win over TEACHER.email."""
+    result, mock_gmail = _run_and_capture_recipient(
+        teacher_email="deployment-default@example.com",
+        class_settings={"digest_notify_email": "teacher-typed-this@example.com"},
+    )
+
+    assert result["gmail_draft_status"] == "created"
+    assert mock_gmail.call_args.kwargs["to_address"] == "teacher-typed-this@example.com"
+
+
+def test_class_settings_absent_falls_back_to_the_deployment_wide_default():
+    """The fallback is deliberate, not accidental -- a class with no Settings
+    saved still gets its digest delivered."""
+    result, mock_gmail = _run_and_capture_recipient(
+        teacher_email="deployment-default@example.com",
+        class_settings={"digest_notify_email": ""},
+    )
+
+    assert result["gmail_draft_status"] == "created"
+    assert mock_gmail.call_args.kwargs["to_address"] == "deployment-default@example.com"
+
+
+def test_class_settings_audit_spreadsheet_overrides_the_deployment_wide_sheet():
+    """Same defect, second field: the per-class audit Sheet was equally dead."""
+    with (
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
+        patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
+        patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+        patch("eduagent.aggregator.class_aggregator.persist_digest"),
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        patch(
+            "eduagent.aggregator.class_aggregator.get_class_settings",
+            return_value={"audit_spreadsheet_id": "sheet_from_settings"},
+        ),
+        patch("eduagent.integrations.gmail_mcp.create_digest_draft", return_value={"draft_id": "d1", "message_id": "abc"}),
+        patch("eduagent.integrations.sheets_mcp.append_audit_row") as mock_append,
+    ):
+        mock_teacher.email = "teacher@example.com"
+        mock_sheets.audit_spreadsheet_id = "sheet_from_deployment"
+        result = asyncio.run(process_event({"event_id": "e_sheet", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+
+    assert result["status"] == "processed"
+    mock_append.assert_called_once()
+    assert mock_append.call_args.kwargs["spreadsheet_id"] == "sheet_from_settings"
+
+
+def test_class_settings_failure_is_logged_not_swallowed_silently(caplog):
+    """The NameError survived because nothing ever reported it. A Firestore
+    outage on this read must degrade to the deployment default AND say so."""
+    with (
+        caplog.at_level(logging.ERROR, logger="eduagent.aggregator.class_aggregator"),
+        patch("eduagent.aggregator.class_aggregator.claim_event", return_value=True),
+        patch("eduagent.aggregator.class_aggregator.load_class_profiles", return_value=_FAKE_PROFILES),
+        patch("eduagent.aggregator.class_aggregator.synthesize_digest", new_callable=AsyncMock, return_value=_FAKE_DIGEST),
+        patch("eduagent.aggregator.class_aggregator.TEACHER") as mock_teacher,
+        patch("eduagent.aggregator.class_aggregator.SHEETS") as mock_sheets,
+        patch("eduagent.aggregator.class_aggregator.persist_digest"),
+        patch("eduagent.aggregator.class_aggregator.get_last_digest_timestamp", return_value=None),
+        patch(
+            "eduagent.aggregator.class_aggregator.get_class_settings",
+            side_effect=RuntimeError("Firestore unavailable"),
+        ),
+        patch(
+            "eduagent.integrations.gmail_mcp.create_digest_draft",
+            return_value={"draft_id": "d1", "message_id": "1a04055b6640d946"},
+        ) as mock_gmail,
+    ):
+        mock_teacher.email = "deployment-default@example.com"
+        mock_sheets.audit_spreadsheet_id = ""
+        result = asyncio.run(process_event({"event_id": "e_settings_down", "student_id": "stu_stuck", "class_id": "c1", "essay_id": "e1"}))
+
+    assert result["status"] == "processed"
+    assert mock_gmail.call_args.kwargs["to_address"] == "deployment-default@example.com"
+    assert any("get_class_settings failed" in r.message for r in caplog.records)

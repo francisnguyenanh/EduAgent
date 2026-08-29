@@ -1,17 +1,16 @@
 """Cloud Run entrypoint -- Class Aggregator as a Pub/Sub PUSH subscriber.
 
-PHASE 7: replaces scripts/run_class_aggregator_subscriber.py's pull loop
-(Phase 3 dev-mode) with the transport Cloud Run actually needs: an HTTPS
-endpoint that Pub/Sub calls directly. `process_event()` itself (the actual
-business logic -- idempotency, ranking, digest, Gmail/Sheets) is UNCHANGED
-from Phase 3, exactly as planned back then ("same process_event() call,
-different transport"). This module is transport plumbing only.
+Replaces the pull loop in scripts/run_class_aggregator_subscriber.py (kept for
+local development) with the transport Cloud Run actually needs: an HTTPS
+endpoint that Pub/Sub calls directly. `process_event()` itself -- the actual
+business logic of idempotency, ranking, digest and Gmail/Sheets delivery -- is
+shared unchanged between the two. This module is transport plumbing only.
 
 Pub/Sub push message contract: https://cloud.google.com/pubsub/docs/push
   POST / with body {"message": {"data": "<base64 essay.evaluated JSON>", ...}}
   - 2xx response -> Pub/Sub acks (success)
   - non-2xx response -> Pub/Sub retries per the subscription's retry policy,
-    eventually dead-lettering after PUBSUB.max_delivery_attempts (Phase 3/4)
+    eventually dead-lettering after PUBSUB.max_delivery_attempts
 """
 
 from __future__ import annotations
@@ -74,8 +73,8 @@ _google_auth_request = google_auth_requests.Request()
 
 
 def _verify_pubsub_push_auth(authorization: str | None) -> None:
-    """Wave 8 / ADR-014: this service is deployed --allow-unauthenticated so
-    judges can open the Web UI without a GCP identity, which means Cloud Run
+    """ADR-014: this service is deployed --allow-unauthenticated so
+    the Web UI can be opened without a GCP identity, which means Cloud Run
     IAM no longer protects `POST /` -- this endpoint must authenticate the
     Pub/Sub push subscription's own OIDC token itself, at the application
     layer, or it becomes a public trigger for LLM-costed digest generation.
@@ -129,7 +128,7 @@ def _require_token(authorization: str | None) -> dict:
 
 
 def _verify_class_auth(class_id: str, authorization: str | None, required_role: str | None = None) -> dict:
-    """Wave 6 P0 IDOR prevention: verifies the request carries a valid Bearer token
+    """P0 IDOR prevention: verifies the request carries a valid Bearer token
     for the exact class_id in the URL path, and verifies role if required."""
     claims = _require_token(authorization)
 
@@ -147,13 +146,13 @@ def _verify_class_auth(class_id: str, authorization: str | None, required_role: 
 
 
 def _verify_student_auth(*, student_id: str, class_id: str, authorization: str | None) -> dict:
-    """Wave 12 Group 2 / ADR-018: authorizes a student-facing debate action.
+    """ADR-018: authorizes a student-facing debate action.
 
     Before this existed, all five debate endpoints (`start`, `start-with-image`,
     `start-with-gdoc`, `turn`, `reflect`) took an arbitrary caller-supplied
     `student_id` and `class_id` with NO token check at all, while every
-    `/api/classes/*` route was properly gated. Two concrete consequences the
-    audit identified, on a public `--allow-unauthenticated` URL:
+    `/api/classes/*` route was properly gated. Two concrete consequences of
+    that, on a public `--allow-unauthenticated` URL:
       1. Anyone could POST as any student in any class, writing junk into that
          student's Firestore profile and publishing a Pub/Sub event that skews
          the teacher's intervention ranking -- an integrity attack on a third
@@ -212,7 +211,7 @@ def _enforce_rate_limit(request: Request, limiter) -> None:
 @app.get("/", response_class=HTMLResponse)
 @app.get("/demo", response_class=HTMLResponse)
 async def demo_page() -> HTMLResponse:
-    """Wave 3 #2: a human (or a judge) opening the live Cloud Run URL in a
+    """A first-time visitor opening the live Cloud Run URL in a
     browser previously got nothing but the Pub/Sub push endpoint's own
     handler (POST-only, so GET / fell through to FastAPI's default 404).
     This is a GET route -- it does not collide with the POST / push
@@ -276,7 +275,7 @@ async def api_test_sheets(class_id: str, payload: TestSheetsRequest | None = Non
 
 @app.post("/api/parent-note")
 async def api_parent_note(request: Request, payload: ParentNoteRequest, authorization: str | None = Header(None)) -> dict:
-    # Wave 16 #5: this was the one Gemini-invoking route with no bucket. ADR-017
+    # This was the one Gemini-invoking route with no bucket. ADR-017
     # exists because "each call fans out into Gemini requests on a public URL,
     # so a curl loop was an unmetered spend channel" -- that reasoning applies
     # here verbatim: draft_parent_note() calls generate_text(), and the route
@@ -395,10 +394,10 @@ async def api_debate_turn(request: Request, payload: DebateTurnRequest) -> dict:
 
 @app.post("/api/debate/reflect")
 async def api_debate_reflect(request: Request, payload: DebateReflectionRequest) -> dict:
-    """Wave 7: Metacognitive self-correction loop -- evaluates the student's
+    """Metacognitive self-correction loop -- evaluates the student's
     post-debate revised claim and updates their profile with growth bonus.
 
-    Wave 15 #2: the payload is now session-only, so this route resolves ownership
+    The payload is now session-only, so this route resolves ownership
     the same way /api/debate/turn does -- from the session's own stored
     student_id/class_id, authenticating BEFORE the lookup so the 403-vs-404
     split cannot be used to probe which session ids are real.
@@ -441,8 +440,8 @@ async def api_class_analytics(class_id: str, limit: int = 10, authorization: str
     except Exception:
         _logger.exception("list_recent_digests failed for class_id=%s", class_id)
         raise HTTPException(status_code=503, detail="Firestore unavailable -- try again shortly.")
-    # Wave 26 #1.3: attach the SAME HTML body that went into the Gmail draft, so
-    # a judge can read the digest without access to the mailbox that holds it.
+    # Attach the SAME HTML body that went into the Gmail draft, so
+    # the digest can be read without access to the mailbox that holds it.
     # Rendered from the stored digest_text/ranked_students -- not re-generated
     # and not re-worded -- so "what the page shows" and "what the teacher will
     # send" cannot drift. Per-digest try/except: an older doc written before a
@@ -462,7 +461,7 @@ async def api_class_analytics(class_id: str, limit: int = 10, authorization: str
 
 @app.get("/api/classes/{class_id}/students")
 async def api_class_students(class_id: str, limit: int = 50, authorization: str | None = Header(None)) -> dict:
-    """Wave 3: class roster ordered by most-recently-active student, backed
+    """Class roster ordered by most-recently-active student, backed
     by the composite index in firestore.indexes.json -- see
     memory/firestore_memory.py::list_students_by_class."""
     _verify_class_auth(class_id, authorization, required_role="teacher")
@@ -521,7 +520,7 @@ async def pubsub_push(request: Request, authorization: str | None = Header(None)
     message = envelope.get("message")
     if not message or "data" not in message:
         # Malformed push request (not a valid Pub/Sub envelope) -- this is a
-        # client/config error, not a transient failure. Per PHASE 4's chaos-
+        # client/config error, not a transient failure. Per the chaos-
         # test finding, retrying a message that will fail identically every
         # time just burns delivery attempts; ack it (200) so Pub/Sub doesn't
         # loop on something that can never succeed, but log loudly so a
@@ -538,7 +537,7 @@ async def pubsub_push(request: Request, authorization: str | None = Header(None)
     try:
         result = await process_event(event)
     except Exception:
-        # Same discipline as the Phase 3/4 pull subscriber: an exception here
+        # Same discipline as the pull subscriber: an exception here
         # means retry (return non-2xx) so Pub/Sub redelivers -- eventually
         # dead-lettering per PUBSUB.max_delivery_attempts -- rather than
         # silently swallowing a real processing failure.

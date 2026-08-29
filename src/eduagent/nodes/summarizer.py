@@ -1,4 +1,4 @@
-"""Summarizer -- agent node (Gemini Flash). Compresses the essay into a
+"""Summarizer -- LLM-backed function node (Gemini Flash). Compresses the essay into a
 structured claim/evidence/fallacy map that downstream nodes consume.
 
 Kept to ONE narrow job (design principle #1: single-prompt
@@ -63,7 +63,7 @@ _EMPTY_SUMMARY = {"main_claim": "", "claims": [], "evidence": [], "fallacies_dra
 
 def summarize_essay(essay_text: str, *, essay_id: str | None = None, student_id: str | None = None) -> tuple[dict, bool]:
     """Pure(ish) core of the node below, factored out so callers outside the
-    ADK graph -- Wave 3 #2's interactive REST API -- can run the EXACT same
+    ADK graph, such as the interactive REST API -- can run the EXACT same
     production summarization logic instead of a second, divergent
     implementation. Returns (summary, degraded)."""
     if not essay_text.strip():
@@ -75,7 +75,7 @@ def summarize_essay(essay_text: str, *, essay_id: str | None = None, student_id:
             system_instruction=_SYSTEM_INSTRUCTION,
             prompt=f"Extract structure from this student essay:\n\n<student_essay>\n{essay_text}\n</student_essay>",
             response_schema=_SCHEMA,
-            # Wave 3 token/latency optimization: structure extraction is a
+            # Token/latency optimization: structure extraction is a
             # lookup/extraction task, not one that benefits from extended
             # reasoning -- Scorer/Teacher Digest Synthesizer keep the model
             # default since they actually need deeper reasoning.

@@ -1,4 +1,4 @@
-"""One-off Phase 0 verification: write + read a real document in each Firestore
+"""One-off verification: write + read a real document in each Firestore
 collection declared in eduagent.config.FirestoreConfig, then clean up.
 
 Not part of the app — just proof the GCP project/credentials/collections work

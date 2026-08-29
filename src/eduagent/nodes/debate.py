@@ -1,4 +1,4 @@
-"""Debate Loop -- agent node, 3-turn escalation with persona anchoring.
+"""Debate Loop -- LLM-backed function node, 3-turn escalation with persona anchoring.
 
 Persona anchoring fix (the prior project drifted out of persona mid-debate -- see the known-limitations table in docs/eligibility_statement.md): the persona.anchor text is
 re-injected into EVERY turn's prompt, not just a system prompt set once at
@@ -10,7 +10,7 @@ Each generated question is checked against the independent Validator
 VALIDATOR.max_regeneration_retries times, then falls back to a safe canned
 question rather than ever emitting a validated-bad turn.
 
-Phase 1 note: this pipeline runs as a single batch call per essay (no live
+This pipeline runs as a single batch call per essay (no live
 back-and-forth UI yet), so turns 2 and 3 use `ctx.state["student_responses"]`
 if a caller supplied them (e.g. a test, or later the Web UI); otherwise the
 loop only produces turn 1 -- there is nothing to escalate against yet.
@@ -40,7 +40,7 @@ _PERSONA_FALLBACK_QUESTIONS: dict[str, str] = {
 }
 _DEFAULT_FALLBACK_QUESTION = "That's an interesting point -- what evidence led you to that conclusion?"
 
-# NOTE (Audit Wave 27): the Vietnamese below is FUNCTIONAL, not untranslated
+# NOTE: the Vietnamese below is FUNCTIONAL, not untranslated
 # documentation. This project accepts essays in Vietnamese as well as English
 # (skills/language.py detects which), and these are the graceful-degradation
 # questions served when Vertex AI is unavailable (failure_matrix row 3). A
@@ -53,7 +53,7 @@ _PERSONA_FALLBACK_QUESTIONS_VI: dict[str, str] = {
 }
 _DEFAULT_FALLBACK_QUESTION_VI = "Đó là một lập luận đáng chú ý -- bằng chứng nào dẫn bạn đến kết luận này?"
 
-# Wave 3 #1 (token optimization): only the fields the Debate Loop actually
+# Token optimization: only the fields the Debate Loop actually
 # reasons over -- dropping `evidence` here (still used by cognitive_scorer)
 # keeps the compacted summary small without losing anything this node reads.
 _SUMMARY_FIELDS_FOR_PROMPT = ("main_claim", "claims", "fallacies_draft")
@@ -82,12 +82,12 @@ def _build_prompt(
     if turn == 1:
         # Only turn 1 needs the student's actual raw writing -- from turn 2
         # onward the debate argues against the extracted claims + the
-        # transcript so far, not the source text verbatim again (Wave 3 #1:
-        # re-sending a long raw essay on every turn was pure repeated token
+        # transcript so far, not the source text verbatim again
+        # (re-sending a long raw essay on every turn was pure repeated token
         # cost with no reasoning benefit turns 2+ actually used).
         parts.insert(0, f"Original essay:\n<student_essay>\n{essay_text}\n</student_essay>")
     if turn == 1 and prior_weaknesses:
-        # Memory injection (Phase 2 -> Phase 3 follow-up): only surfaced on
+        # Memory injection: only surfaced on
         # the opening turn, where "have you improved on this before" is a
         # meaningful question to ask -- repeating it every turn would just be
         # noise once the live back-and-forth is underway.
@@ -110,7 +110,7 @@ def build_system_instruction(*, persona_id: str, turn_number: int, language: str
     """The persona-anchoring system instruction, exactly as generate_debate_turn
     sends it to Gemini.
 
-    Factored out (Wave 12 Group 1) so the eval suite's persona-fidelity layer can
+    Factored out so the eval suite's persona-fidelity layer can
     assert against the REAL production builder. Previously that eval rebuilt
     the string itself (`f"{persona.anchor}\\n\\n{get_escalation_instruction(1)}"`)
     and then checked `persona.anchor in system_instruction` -- a tautology that

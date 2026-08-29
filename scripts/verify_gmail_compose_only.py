@@ -1,4 +1,4 @@
-"""Phase 0 verification: what gmail.compose actually enforces, and what it
+"""Verification: what gmail.compose actually enforces, and what it
 doesn't (real finding, tested 2026-08-24 against the live Gmail API).
 
 CORRECTED UNDERSTANDING (see ADR-001 in README.md for the

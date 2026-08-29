@@ -1,11 +1,11 @@
-"""Wave 3 #2 / Wave 4 -- single-file Vanilla HTML/CSS/JS demo page for the
+"""Single-file Vanilla HTML/CSS/JS demo page for the
 Cloud Run service, so a human opening the deployed URL in a browser sees a
 working Student/Teacher UI instead of a bare push-subscriber 404. Kept as
 one dependency-free string (no build step, no static file mount) -- matches
 this project's "no new infra than necessary" discipline elsewhere.
 
-Wave 4 adds a mock role-based login gate (see auth.py) in front of the same
-Student/Teacher panels Wave 3 already built, plus a Teacher "Priority" tab
+A mock role-based login gate (see auth.py) sits in front of the
+Student/Teacher panels, plus a Teacher "Priority" tab
 (live Intervention Priority Index + Parent Update Note co-pilot) and a
 Settings tab -- all against endpoints server.py exposes.
 """
@@ -123,7 +123,7 @@ DEMO_PAGE_HTML = """<!doctype html>
 </header>
 <main>
 
-  <!-- Judge 1-Click Showcase Bar (Wave 7) -->
+  <!-- Judge 1-Click Showcase Bar -->
   <div class="judge-bar" id="judge-bar">
     <div class="judge-bar-title">✨ Judge 1-Click Showcase:</div>
     <div class="judge-bar-btns">
@@ -226,7 +226,7 @@ DEMO_PAGE_HTML = """<!doctype html>
           <div id="complete-radar"></div>
           <div id="complete-feedback" class="feedback-box"></div>
           
-          <!-- Metacognitive Self-Correction Loop (Wave 7) -->
+          <!-- Metacognitive Self-Correction Loop -->
           <div id="reflection-card" class="reflection-card">
             <h4 style="margin:0 0 0.5rem 0; color:var(--accent);">🧠 Metacognitive Self-Correction (Revised Thesis)</h4>
             <p style="font-size:0.82rem; color:var(--muted); margin:0 0 0.75rem 0;">
@@ -292,7 +292,7 @@ DEMO_PAGE_HTML = """<!doctype html>
 
       <label for="setting_sheet_id">Audit Log Google Sheet (Link or Spreadsheet ID)</label>
       <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-        <input id="setting_sheet_id" style="flex:1; min-width:280px; margin:0;" placeholder="https://docs.google.com/spreadsheets/d/1pUGTCIz.../edit or ID">
+        <input id="setting_sheet_id" style="flex:1; min-width:280px; margin:0;" placeholder="https://docs.google.com/spreadsheets/d/&lt;spreadsheet-id&gt;/edit or just the ID">
         <button class="small" type="button" id="btn-test-sheets" onclick="testSheetsConnection()">🧪 Test Sheet Connection</button>
       </div>
       <div id="sheets-test-status" class="hint hidden" style="margin-top:0.4rem;"></div>
@@ -366,7 +366,7 @@ async function autoLogin(userId, role, displayName) {
   } catch (e) {
     console.error('Auto-login error:', e);
   }
-  // Wave 12 Group 2: the debate endpoints now require a Bearer token (they used
+  // The debate endpoints require a Bearer token (they used
   // to accept any caller-supplied student_id). A tokenless fallback identity
   // therefore cannot do anything except collect 401s -- so say so plainly
   // instead of leaving the page looking mysteriously broken.
@@ -482,7 +482,7 @@ function authHeaders(extra = {}) {
   return h;
 }
 
-// Wave 5 #2: one avatar/color per Socratic persona so the 4 debate
+// One avatar/color per Socratic persona so the 4 debate
 // personalities read as distinct characters in the chat, not interchangeable
 // grey boxes -- matches PERSONAS in skills/personas.py by persona_id.
 const PERSONA_STYLE = {
@@ -924,7 +924,7 @@ function createRadarChartSvg(scores) {
 }
 
 function renderCompleteResult(result) {
-  // Wave 5 #1: respects the teacher's show_score_radar_to_students setting
+  // Respects the teacher's show_score_radar_to_students setting
   // (Settings tab) -- api.py already stripped `scores`/`rationale` out of
   // `result` server-side when that flag is off, so the client only ever
   // has to check for their presence, never re-derive the decision itself.
@@ -1205,9 +1205,9 @@ async function loadAnalytics() {
   }
 }
 
-// Wave 26 #1.2-#1.4 -- the Gmail draft lives in the SYSTEM account's Drafts
-// folder, so before this a judge (or a teacher on a different address) had no
-// way to see what the agent had actually composed. `digest_html` is the exact
+// The Gmail draft lives in the SYSTEM account's Drafts folder, so without this
+// a reader (or a teacher on a different address) would have no way to see what
+// the agent actually composed. `digest_html` is the exact
 // body the draft carries, rendered server-side and HTML-escaped at the source
 // (class_aggregator._h), so there is no second renderer to drift and no
 // unescaped LLM text reaching this origin.
@@ -1220,7 +1220,7 @@ function digestDraftPreview(latest) {
   // before this field existed fall back to opening the Drafts folder, which
   // still gets the teacher there.
   const composeId = latest.gmail_draft_message_id;
-  // Wave 27 / ADR-031: three outcomes, three honest badges. This used to be a
+  // ADR-031: three outcomes, three honest badges. This used to be a
   // boolean, so an expired Gmail OAuth token rendered "no recipient
   // configured" -- a message the teacher's own Settings box contradicts. The
   // digest itself is never affected: it is composed, stored and rendered

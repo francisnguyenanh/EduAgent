@@ -1,7 +1,7 @@
 # EduAgent — Autonomous Socratic Collaborative Partner
 
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-Vertex_AI_%7C_Cloud_Run_%7C_Firestore-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/)
-[![Google ADK2](https://img.shields.io/badge/Framework-Google_ADK2-34A853?logo=google&logoColor=white)](https://github.com/google/agent-development-kit)
+[![Google ADK2](https://img.shields.io/badge/Framework-Google_ADK2-34A853?logo=google&logoColor=white)](https://github.com/google/adk-python)
 [![Models](https://img.shields.io/badge/Models-Gemini_3.5_%7C_3.7_Flash_%7C_Gemma_4-EA4335?logo=googlegemini&logoColor=white)](https://cloud.google.com/vertex-ai)
 [![Eval Suite](https://img.shields.io/badge/ADK_Eval_Suite-50%2F50_Passed-0F9D58?logo=pytest&logoColor=white)](eval/results/eval_report.md)
 [![License: All Rights Reserved](https://img.shields.io/badge/License-All_Rights_Reserved-lightgrey.svg)](LICENSE)
@@ -118,7 +118,8 @@ flowchart TD
         direction TB
         IN["Intake\n(FunctionNode)"] -->|route: image| OCR["Multimodal OCR\n(Gemini Vision + Gemma 4 cross-model check)"]
         IN -->|route: text| SAN["Sanitizer\n(FunctionNode, anti-injection regex)"]
-        OCR --> SAN
+        OCR --> CONFIRM{{"HUMAN GATE 1 — student reads\nand corrects the transcription\n(ADR-029: /extract-* then /start)"}}
+        CONFIRM --> SAN
         SAN --> SUM["Summarizer\n(FunctionNode → Gemini Flash)"]
         SUM --> PS["Persona Selector\n(FunctionNode, reads Firestore history)"]
         PS --> DEBATE["Debate Loop (3 turns)\n(Persona anchoring + escalation)"]
@@ -152,10 +153,23 @@ flowchart TD
     MUT -.->|"read-modify-write"| PROFILES[("Firestore\nstudent_profiles")]
     PS -.->|"read history"| PROFILES
     API -.->|"reads ranking / digests"| ANALYTICS
-    GMAIL -.->|"teacher clicks Send\n(HITL human gate)"| TEACHER["Teacher Gmail Inbox"]
+    GMAIL -.->|"HUMAN GATE 2 — teacher clicks Send\n(ADR-001: code never calls .send())"| TEACHER["Teacher Gmail Inbox"]
 ```
 
+<details>
+<summary><b>🖼️ Same diagram as a static image</b> (<code>assets/architecture_diagram.png</code>) — for viewers that do not render Mermaid</summary>
+
+![EduAgent two-tier architecture: Tier 1 per-student Socratic pipeline, Pub/Sub event boundary, Tier 2 class aggregator, and the two human gates](assets/architecture_diagram.png)
+
+*Exported directly from the Mermaid source above with `mermaid-cli`, so the two cannot drift.*
+
+</details>
+
 > **Deterministic-First Node Design:** Every node in the Tier 1 ADK2 graph is a `FunctionNode`—there are zero opaque agent nodes (`grep -rn "AgentNode" src/` returns 0 results). Calls to Gemini occur *inside* deterministic Python functions with explicit timeouts, retry policies, and automated fallback modes.
+
+> **The two human gates are marked on the diagram, not just described in prose.** `HUMAN GATE 1` is the student approving their own OCR transcription before the AI argues with it (ADR-029); `HUMAN GATE 2` is the teacher pressing Send on the digest email (ADR-001). Everything between them runs unprompted — that is the precise claim this project makes about autonomy, and the diagram is drawn so it can be checked rather than taken on trust.
+>
+> Both gates are drawn as hexagons/edge labels rather than boxes because **neither is a graph node**: gate 1 is the boundary between two separate HTTP calls (`POST /api/debate/extract-image` returns the transcription; `POST /api/debate/start` opens the debate on the text the student approved), and gate 2 is a click in the teacher's own mail client, outside this system entirely. That is why they do not contradict the `FunctionNode` claim above — there is no node in the ADK graph that waits for a human.
 
 ### Repository Structure
 
@@ -173,10 +187,11 @@ src/eduagent/
   rate_limit.py   Per-IP token-bucket rate limiter
 eval/             ADK Eval Suite (evalset.py, results/) + eval/test_images/ (handwritten test assets)
 scripts/          Diagnostic tools (doctor.py), demos (demo_tier1_run.py), and deployment automation
-tests/            Pytest test suite (353 tests, unit + integration)
+tests/            Pytest test suite (357 tests, unit + integration)
 docs/             Technical documentation (failure matrix, data lifecycle & privacy threat model,
                   eligibility statement, and the three generated evidence reports)
-assets/           gcp_evidence/ (Cloud Console screenshots) + sample_essays/
+assets/           architecture_diagram.png (exported from the README Mermaid) +
+                  gcp_evidence/ (Cloud Console screenshots) + sample_essays/
 ```
 
 ---
@@ -234,11 +249,52 @@ python scripts/run_eval_suite.py --strict
    gcloud firestore fields ttls update expire_at --collection-group=debate_sessions --enable-ttl
    ```
 
-3. **Deploy Container:**
+3. **Set the deployment-wide digest recipient.** `scripts/deploy_to_cloud_run.py` builds the
+   revision's environment with `--env-vars-file`, which **replaces** the whole env set rather than
+   merging into it — so this value must be present at deploy time or the revision ships unable to
+   deliver. It is read from `.env` (or the shell), and the script **refuses to deploy** without it
+   rather than producing a revision that silently reports `gmail_draft_status: "no_recipient"`:
+
+   ```bash
+   # in .env, or exported before deploying
+   EDUAGENT_TEACHER_EMAIL=teacher@your-domain.com     # required — deploy aborts if unset
+   EDUAGENT_AUDIT_SPREADSHEET_ID=<sheet id or URL>    # optional — Sheets row skipped if unset
+   ```
+
+   A teacher can override the recipient per class in the dashboard's **Settings** tab
+   (`digest_notify_email`); this env var is the fallback for classes that have not.
+
+4. **Deploy Container:**
 
    ```bash
    python scripts/deploy_to_cloud_run.py
    ```
+
+### 3.5 Before recording a demo — disable digest debouncing
+
+`DigestDebounceConfig` coalesces digests per `class_id` on a **120-second window** (`config.py`), so
+that a whole class submitting at once does not generate one Gmail draft per student. During a
+recording or a rehearsal retake that is the wrong behaviour: the second essay you submit within two
+minutes returns `status: "coalesced_skip_digest"` and **no new digest and no Gmail draft appear** —
+usually at exactly the moment the camera is pointed at them.
+
+```bash
+# Before recording: generate a digest for every event.
+gcloud run services update eduagent-class-aggregator \
+  --region=asia-southeast1 --update-env-vars=EDUAGENT_DIGEST_DEBOUNCE_SECONDS=0
+
+# After recording: restore the production default.
+gcloud run services update eduagent-class-aggregator \
+  --region=asia-southeast1 --update-env-vars=EDUAGENT_DIGEST_DEBOUNCE_SECONDS=120
+```
+
+> **Coalescing never loses data**, which is why it is safe to leave on outside a recording: the
+> essay's `student_profiles` write already happened in Tier 1 and does not depend on Tier 2, and the
+> next event for that class — from any student — re-reads every profile fresh, so the skipped
+> submission is still represented in the following digest. The only thing deferred is the
+> notification. Note `--update-env-vars` here (a merge) rather than the deploy script's
+> `--env-vars-file` (a replace) — using the latter for this one variable would drop every other
+> environment variable from the revision.
 
 ---
 
@@ -470,7 +526,7 @@ deliberately open so a judge can open the portals without a GCP identity or an O
 
 ## 6. Security & Threat Model
 
-* **Dedicated Service Account (`eduagent-sa`):** Exactly 5 granular IAM roles: `datastore.user`, `pubsub.editor`, `aiplatform.user`, `cloudtrace.agent`, and `logging.logWriter`. Zero Owner/Editor credentials.
+* **Dedicated Service Account (`eduagent-sa`):** Exactly 5 granular *project-level* IAM roles: `datastore.user`, `pubsub.editor`, `aiplatform.user`, `cloudtrace.agent`, and `logging.logWriter`. Zero Owner/Editor credentials. The same account additionally holds `roles/secretmanager.secretAccessor` **bound per secret, not project-wide** (ADR-020) — stated explicitly so "five roles" is not contradicted by the sixth grant a judge would find on the three mounted secrets.
 * **Gmail Least-Privilege AST Gate:** OAuth scope restricted to `gmail.compose` only. AST parser check (`tests/test_gmail_mcp_never_sends.py`) fails build if `.send()` is ever written. Human teacher compose-and-send action is the sole transmission path.
 * **Append-Only Audit Trails:** Google Sheets API integration exports only `append_audit_row()`, protecting historic metrics against truncation or modification.
 * **Webhook OIDC Authentication:** FastAPI `/` push subscriber verifies Google's Pub/Sub OIDC signature (`google.oauth2.id_token.verify_oauth2_token`) against Google public keys, rejecting unauthenticated web requests.
@@ -489,7 +545,7 @@ deliberately open so a judge can open the portals without a GCP identity or an O
 
 ### Failure behaviour is enumerated, not assumed
 
-All **20** externally-dependent components — Gemini, Gemma, Firestore, Pub/Sub, the Gmail and Sheets
+All **21** externally-dependent components — Gemini, Gemma, Firestore, Pub/Sub, the Gmail and Sheets
 MCP clients, OCR, the session store, the priority engine — carry a documented trigger condition,
 degrade path, fallback behaviour, and a **grep-able observable signal in the source**, so a claimed
 mitigation can be checked rather than believed. One deliberate exception proves the rule: component
@@ -515,6 +571,83 @@ The OpenTelemetry span tree produced by the `@traced_node` decorator across the 
 its millisecond figures are produced by timed sleep stubs, not by live Gemini calls, and the file
 says so at the top.** For real latencies, submit an essay on the live deployment and read Cloud
 Trace in the Google Cloud Console for the deployed revision.
+
+### Deployed-system evidence (Google Cloud Console captures)
+
+Every Google Cloud service this project claims is captured running in the author's project, so the
+claims in this section can be checked without GCP access to it. All 14 captures below were taken
+(or re-verified) on **2026-08-29** against the currently live revision. Full set, including the raw
+files: [`assets/gcp_evidence/`](assets/gcp_evidence/).
+
+<details>
+<summary><b>🔍 Expand all 14 captures</b> — Gemini/Gemma logs, Pub/Sub, Cloud Run, Firestore, structured logging, and the end-to-end trace</summary>
+
+**Gemini API logs — both models called, both 200 OK.** `generateContent` calls to
+`gemini-3.5-flash` *and* `gemma-4-26b-a4b-it-maas` (ADR-028's cross-*model* OCR check), all
+returning `HTTP/1.1 200 OK`, in the same one-day log window.
+![Cloud Logging search for generateContent showing both gemini-3.5-flash and gemma-4-26b-a4b-it-maas calls returning 200 OK](assets/gcp_evidence/Gemini%20API%20logs.png)
+
+**Cloud Trace — one request, the whole decision path.** 20 spans under a single trace:
+`intake → multimodal_ocr → sanitizer → summarizer → persona_selector → debate_loop →
+challenge_validator → cognitive_scorer → profile_mutator`. This is the graph in §2, executing.
+![Cloud Trace span waterfall for one end-to-end EduAgent request, showing 20 spans across the Tier 1 node sequence](assets/gcp_evidence/Cloud%20Trace%20span%20end-to-end.png)
+
+**Pub/Sub — the Tier 1 → Tier 2 boundary, as configured.** Delivery type `Push` to the Cloud Run
+URL, **push authentication enabled** with `eduagent-sa` and an audience pinned to the service
+(ADR-014), dead-letter topic `essay-evaluated-dlq`, and **maximum delivery attempts = 5** (ADR-003).
+![Pub/Sub class-aggregator-sub detail page showing push delivery, OIDC authentication, dead-letter topic and 5 delivery attempts](assets/gcp_evidence/Pub-Sub_Dead%20Letter.png)
+
+**Pub/Sub — publish traffic is non-zero.** `essay-evaluated` topic metrics, `Published message
+count` at `0.0167/s` for the sampled window, not the empty `: 0` legend an idle topic would show.
+![Pub/Sub essay-evaluated topic metrics showing a non-zero published message count](assets/gcp_evidence/Pub-Sub_publish%20message%20count.png)
+
+**Pub/Sub — the dead-letter topic has a real subscription.** `essay-evaluated-dlq-sub` exists and
+is attached, so a message that exhausts its 5 delivery attempts (above) has somewhere to land.
+![Pub/Sub essay-evaluated-dlq topic subscriptions list showing essay-evaluated-dlq-sub attached](assets/gcp_evidence/Pub-Sub_DLQ.png)
+
+**Cloud Run — the revision actually serving traffic.** `eduagent-class-aggregator-00056-qbv` at
+100% traffic, with `Concurrency 80`, `Request timeout 300s`, `CPU 1`, `Memory 512MiB`, and
+`Revision max instances 5` — matching §5 exactly.
+![Cloud Run Revisions tab showing the live revision at 100% traffic with concurrency 80, 300s timeout, 512MiB memory and max 5 instances](assets/gcp_evidence/Revisions.png)
+
+**Firestore `student_profiles` — the stuck-streak case Act 5 talks about.** `name: "Tom"`,
+`persona_streak.current_persona: "skeptic"`, `times_repeated_without_improvement: 3`,
+`flags.needs_attention: true`, `score_trend: "declining"` — the state that makes the priority
+engine rank him first, deterministically, with zero LLM calls.
+![Firestore student_profiles/stu_stuck document showing Tom stuck on the skeptic persona for 3 essays with needs_attention true](assets/gcp_evidence/Firestore-student_profiles__stu_stuck.png)
+
+<details>
+<summary>Four more <code>student_profiles</code> documents (Mia, Jerry, David, Emma) — same shape, different trend</summary>
+
+![Firestore student_profiles/stu_improving document for Mia, score_trend improving](assets/gcp_evidence/Firestore-student_profiles__stu_improving.png)
+![Firestore student_profiles/stu_declining document for Jerry, score_trend declining](assets/gcp_evidence/Firestore-student_profiles__stu_declining.png)
+![Firestore student_profiles/stu_inactive document for David, last updated 2026-07-10](assets/gcp_evidence/Firestore-student_profiles__stu_inactive.png)
+![Firestore student_profiles/stu_common_fallacy document for Emma, persona devils_advocate](assets/gcp_evidence/Firestore-student_profiles__stu_common_fallacy.png)
+
+</details>
+
+**Firestore `class_analytics` — a real Tier 2 digest, not the test fixture.** `headline` is
+Gemini's own sentence about the class, `gmail_draft_id` is a real Gmail API draft id, and
+`ranked_students` holds all 7 seeded students (Tom, David, Jerry, Mia, Emma, Alice, Bob) in
+priority order — split across two captures because the ranked list doesn't fit one screen.
+![Firestore class_analytics/c1/digests document, top half: real Gemini headline and Gmail draft id](assets/gcp_evidence/class_analytics.png)
+![Firestore class_analytics/c1/digests document, bottom half: all 7 ranked students in priority order](assets/gcp_evidence/class_analytics_2.png)
+
+**Firestore `processed_events` — real dedupe leases, not hand-inserted rows.** Every document id is
+a genuine UUID with a `claimed_at` timestamp (ADR-010's lease against double-processing).
+![Firestore processed_events collection showing UUID document ids each with a claimed_at timestamp](assets/gcp_evidence/processed_events.png)
+
+**Cloud Logging — structured JSON, traceable by class and event.** One log line from
+`eduagent.aggregator.class_aggregator`, with `class_id` and `event_id` as top-level JSON fields —
+the correlation mechanism `logging_config.py` describes, not free-text logging.
+![Cloud Logging entry showing structured JSON payload with class_id and event_id fields from eduagent.aggregator.class_aggregator](assets/gcp_evidence/Log.png)
+
+</details>
+
+> Screenshots are the weakest class of evidence in this repository. They are here only because a
+> judge cannot open someone else's Cloud Console — not because they prove anything the code does
+> not. Everything they depict is checkable directly: `scripts/doctor.py` verifies each of these
+> services against the live project and prints what it found.
 
 ---
 
@@ -559,7 +692,7 @@ listed failure, and restoring the file — not by reasoning about what *should* 
 
 ### Test Suite Coverage
 
-**353 tests** (`pytest -q -m "not e2e"`, re-measured 2026-08-28, Audit Wave 27). The per-module coverage below is **88% statement coverage** over `src/eduagent`, measured 2026-08-27 at 309 tests — the test count has since grown, so treat the percentages as a floor rather than a current reading. `pytest-cov` is **not** in `requirements.txt` (it is not needed to run the suite); reproduce the table with `pip install pytest-cov && pytest --cov=src/eduagent --cov-report=term -q -m "not e2e"`:
+**357 tests** (`pytest -q -m "not e2e"`, re-measured 2026-08-29, Audit Wave 28). The per-module coverage below is **88% statement coverage** over `src/eduagent`, measured 2026-08-27 at 309 tests — the test count has since grown, so treat the percentages as a floor rather than a current reading. `pytest-cov` is **not** in `requirements.txt` (it is not needed to run the suite); reproduce the table with `pip install pytest-cov && pytest --cov=src/eduagent --cov-report=term -q -m "not e2e"`:
 
 ```bash
 pip install pytest-cov

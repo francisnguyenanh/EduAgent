@@ -1,4 +1,4 @@
-"""Unit tests for the deterministic image prep step (Wave 3 #1) -- pure PIL
+"""Unit tests for the deterministic image prep step -- pure PIL
 transforms, no network/LLM involved."""
 
 from __future__ import annotations

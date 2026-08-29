@@ -1,4 +1,4 @@
-"""Tier-A coverage (Audit Wave 24): the shared retry POLICY itself.
+"""Tier-A coverage: the shared retry POLICY itself.
 
 `tests/test_resilience.py` exercises nodes that degrade; this file tests the
 predicate that decides what is even worth retrying. That predicate is the

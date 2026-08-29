@@ -1,6 +1,6 @@
 """Sheets MCP integration -- append-only audit log for teacher digests.
 
-Uses the SAME OAuth client as gmail_mcp.py (Phase 0's eduagent-gmail-mcp
+Uses the SAME OAuth client as gmail_mcp.py (the eduagent-gmail-mcp
 Desktop app) but a separate token/scope, so the spreadsheet lives in the
 teacher's own Google account (easy to show live in the demo video) rather
 than a service-account-owned Drive space nobody can easily open.

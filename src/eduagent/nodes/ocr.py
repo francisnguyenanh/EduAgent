@@ -1,4 +1,4 @@
-"""Multimodal OCR -- agent node (Gemini Vision). PHASE 6: ingests messy,
+"""Multimodal OCR -- LLM-backed function node (Gemini Vision). Ingests messy,
 unstructured input (a photo of a handwritten essay) instead of clean text
 only -- directly answers the track's "did the team ingest unusual, messy,
 or highly complex unstructured data streams?" judging question.
@@ -72,7 +72,7 @@ _SCHEMA = {
 
 _DEGRADED_CONFIDENCE = "unavailable"
 
-# Real finding during PHASE 6 development: on a genuinely too-degraded image,
+# Observed in development: on a genuinely too-degraded image,
 # Gemini Vision sometimes self-reports confidence="high" while actually
 # hallucinating a plausible-sounding but entirely UNRELATED sentence, despite
 # an explicit anti-hallucination instruction in the prompt above (confirmed:
@@ -85,7 +85,7 @@ _CONSISTENCY_SIMILARITY_THRESHOLD = 0.75
 # ADR-028: a SEPARATE threshold for the cross-MODEL comparison, because the
 # two comparisons have measurably different distributions and reusing one
 # number for both is a real bug, not a tuning preference. Measured over the 12
-# real handwriting samples in eval/test_images/ (Wave 24):
+# real handwriting samples in eval/test_images/:
 #
 #   same-model  (Gemini vs Gemini): legible images 0.989-1.000 -- 0.75 sits far
 #                                   below the cluster, so it is a safe cut
@@ -109,7 +109,7 @@ _CONSISTENCY_SIMILARITY_THRESHOLD = 0.75
 # evaluated against; there is no held-out set. The claim is "0.75 is
 # demonstrably wrong for cross-model comparison", not "0.50 is optimal".
 #
-# Wave 25 tried normalising both texts (lowercase + collapse whitespace) before
+# Tried normalising both texts (lowercase + collapse whitespace) before
 # comparing, to stop punctuation/line-break differences counting as
 # disagreement. Reverted after measuring it on the same 12 captured pairs: it
 # made three LEGIBLE images score WORSE, the opposite of its purpose --
@@ -136,7 +136,7 @@ def _transcribe_once(*, image_bytes: bytes, image_mime_type: str) -> dict:
         image_bytes=image_bytes,
         image_mime_type=image_mime_type,
         response_schema=_SCHEMA,
-        # Wave 3 token/latency optimization: verbatim transcription is a
+        # Token/latency optimization: verbatim transcription is a
         # perception task, not a reasoning task -- extended thinking adds
         # latency/cost here without improving transcription accuracy.
         thinking_budget=0,
@@ -152,10 +152,10 @@ _GEMMA_TRANSCRIBE_PROMPT = (
     "guessing. Output ONLY the transcription itself, with no preamble or notes."
 )
 # The label written into the result when the second pass fell back to Gemini.
-# Kept as a real, grep-able value rather than a silent None: Wave 12 spent a
-# whole audit deleting 11 trace attributes that documentation claimed existed
-# and code never emitted, so a new observability signal has to be one you can
-# actually find in a log.
+# Kept as a real, grep-able value rather than a silent None: an earlier audit
+# deleted 11 trace attributes that documentation claimed existed and code never
+# emitted, so a new observability signal has to be one you can actually find in
+# a log.
 _CROSS_CHECK_FALLBACK_MODEL = "gemini-fallback"
 
 
@@ -174,7 +174,7 @@ def _transcribe_second_opinion(*, image_bytes: bytes, image_mime_type: str, essa
     previously could not see.
 
     Gemma 4 is Model-as-a-Service on shared capacity, so `429 request queue is
-    full` is routine (measured: 4 of 10 raw calls during Wave 24). llm.py
+    full` is routine (measured: 4 of 10 raw calls). llm.py
     retries it, and if it still fails this falls back to the original
     same-model second pass. A busy shared queue must never block a student's
     submission -- that is the same degrade-don't-fail discipline as everywhere
@@ -237,7 +237,7 @@ def _cross_check_consistency(first: dict, second_text: str, *, cross_model: bool
 
 def transcribe_essay_image(image_bytes: bytes, image_mime_type: str, *, essay_id: str | None = None, student_id: str | None = None) -> dict:
     """Pure(ish) core of the node below -- preprocess, transcribe twice,
-    cross-check -- factored out so callers outside the ADK graph (Wave 3 #2/#7's
+    cross-check -- factored out so callers outside the ADK graph (the
     interactive REST API image-upload path) run the EXACT same production OCR
     logic instead of a second, divergent implementation. Returns
     {transcribed_text, confidence, uncertain_segments, degraded}."""
@@ -245,7 +245,7 @@ def transcribe_essay_image(image_bytes: bytes, image_mime_type: str, *, essay_id
         _logger.error("transcribe_essay_image called with no image bytes", extra={"essay_id": essay_id})
         return {"transcribed_text": "", "confidence": _DEGRADED_CONFIDENCE, "uncertain_segments": [], "degraded": True, "cross_check_model": None}
 
-    # Wave 3 #1: normalize EXIF rotation + downscale large phone-camera photos
+    # Normalize EXIF rotation + downscale large phone-camera photos
     # BEFORE either Vision call -- both cross-check calls below see the same
     # prepped bytes, so the similarity comparison stays apples-to-apples.
     image_bytes, image_mime_type = preprocess_image_bytes(image_bytes, image_mime_type)

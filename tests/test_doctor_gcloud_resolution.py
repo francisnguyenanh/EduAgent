@@ -1,10 +1,10 @@
-"""Wave 15 #5 -- the preflight scripts must not die on a Windows machine.
+"""The preflight scripts must not die on a Windows machine.
 
 `scripts/doctor.py` and `scripts/deploy_to_cloud_run.py` invoked the gcloud CLI
 as the bare string "gcloud". On Windows the SDK installs `gcloud.cmd` and there
 is no extension-less binary, so CreateProcess raised FileNotFoundError and
 `python scripts/doctor.py` ended in a traceback instead of a report -- on the
-exact machine a judge is most likely to run it from.
+exact machine it is most likely to be run from.
 
 Two guards, because the fix has two halves:
   1. neither script may pass a bare "gcloud" to subprocess (AST-level, so the

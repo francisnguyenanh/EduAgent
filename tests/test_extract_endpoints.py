@@ -1,4 +1,4 @@
-"""Tests for the two-step ingest flow (Audit Wave 25 review).
+"""Tests for the two-step ingest flow (ADR-029).
 
 `/api/debate/extract-image` and `/api/debate/extract-gdoc` let a student pull
 the text out of a photo or Doc, SEE it, correct it, and only then start the

@@ -1,13 +1,12 @@
-"""PHASE 6: generates the 2 placeholder sample images referenced in
-Phase 6's DoD ("chuan bi san 2 anh mau cho video: 1 anh 'dep vua
-phai' + 1 anh that su lon xon").
+"""Generates the two placeholder sample images used by the OCR demo: one
+tidily written and one deliberately messy.
 
 IMPORTANT: these are SYNTHETIC placeholders (rendered typed text, not real
 handwriting) -- good enough to exercise and demo the OCR node's code path
 (routing, verbatim transcription incl. typos, confidence flagging) before a
 real handwritten photo is available. Before recording the actual demo video,
-replace assets/sample_essays/*.png with real photos of real handwritten
-student essays, per the DoD's own requirement ("upload anh viet tay that").
+replace assets/sample_essays/*.png with photographs of genuine handwritten
+student essays.
 
 Usage: python scripts/generate_sample_essay_images.py
 """

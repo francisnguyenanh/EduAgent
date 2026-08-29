@@ -60,7 +60,7 @@ def test_maas_queue_full_recognises_429_only():
 
 def test_generate_text_from_image_retries_429_then_succeeds():
     """Measured reality this exists for: 4 of 10 raw Gemma calls returned 429
-    during Wave 24 integration testing, yet all 6 test images transcribed
+    during integration testing, yet all 6 test images transcribed
     successfully once retried."""
     from unittest.mock import MagicMock, patch
 

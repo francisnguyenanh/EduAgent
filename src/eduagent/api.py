@@ -1,17 +1,17 @@
-"""Wave 3 #2 -- Interactive REST API for the Cloud Run service.
+"""Interactive REST API for the Cloud Run service.
 
 `server.py`'s original surface was a Pub/Sub push-only endpoint: a human (or
-a judge) opening the deployed URL in a browser got a bare 404/JSON. This
+a first-time visitor) opening the deployed URL in a browser got a bare 404/JSON. This
 module adds the student-facing debate flow (reusing `interactive.py`'s
 session helper -- itself a thin wrapper around the exact production
 summarizer/persona_selector/debate functions, not a second implementation)
-and a read-only teacher analytics endpoint over the digests PHASE 3/Wave 2
-already persist to Firestore.
+and a read-only teacher analytics endpoint over the digests the Tier 2
+aggregator already persists to Firestore.
 
-Wave 5: once the 3rd turn completes, this module also scores the debate (via
+Once the 3rd turn completes, this module also scores the debate (via
 `interactive.complete_debate_session()`, itself a thin wrapper around
-`nodes/scorer.py`'s `score_essay()` -- the exact same prompt/schema PHASE 1's
-batch `cognitive_scorer` node uses, not a second divergent copy) and returns
+`nodes/scorer.py`'s `score_essay()` -- the exact same prompt/schema the batch
+`cognitive_scorer` graph node uses, not a second divergent copy) and returns
 it gated behind the class's `show_score_radar_to_students` setting. This is
 read-only, for the student-facing "how did I do" summary -- it deliberately
 does NOT persist to Firestore or mutate the student's profile. That
@@ -59,12 +59,12 @@ from eduagent.skills.personas import get_persona
 
 _logger = logging.getLogger(__name__)
 
-# Wave 6: Input caps & boundaries to prevent cost-DoS, prompt-injection, and 504 timeouts
+# Input caps & boundaries to prevent cost-DoS, prompt-injection, and 504 timeouts
 MAX_ESSAY_CHARS = 20_000
 MAX_IMAGE_B64_CHARS = 14_000_000  # ~10MB binary equivalent
 MAX_STUDENT_REPLY_CHARS = 4_000
 
-# Wave 16 #2: the response schema only *describes* the 0.0-1.0 range in prose;
+# The response schema only *describes* the 0.0-1.0 range in prose;
 # Vertex does not enforce it, and this number is added to a permanent,
 # teacher-visible counter. A model that returns 99.0 must not be able to write
 # 99.0 into a student's record, so the bound is enforced here rather than
@@ -83,7 +83,7 @@ class DebateStartRequest(BaseModel):
 
 
 class DebateStartFromImageRequest(BaseModel):
-    """Wave 3 #7: same as DebateStartRequest but the essay arrives as a photo
+    """Same as DebateStartRequest but the essay arrives as a photo
     of handwriting instead of typed text -- image_base64 is the raw image
     bytes, base64-encoded (as a browser's FileReader.readAsDataURL would
     produce, stripped of the `data:image/...;base64,` prefix)."""
@@ -150,7 +150,7 @@ def _start_debate_from_essay_text(
     if len(essay_text) > MAX_ESSAY_CHARS:
         raise ValueError(f"Essay too long: {len(essay_text)} characters (maximum allowed is {MAX_ESSAY_CHARS}).")
 
-    # Wave 6 P0 fix: ensure live API inputs pass through deterministic prompt-injection stripping
+    # P0 fix: ensure live API inputs pass through deterministic prompt-injection stripping
     clean_essay_text, injection_matches = strip_injection_attempts(essay_text)
     if injection_matches:
         _logger.warning("Sanitized prompt injection attempt from live essay input", extra={"matches": injection_matches, "student_id": student_id})
@@ -228,7 +228,7 @@ def start_debate(payload: DebateStartRequest) -> dict:
 
 
 def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
-    """Wave 3 #7: image-upload variant -- transcribes via the exact
+    """Image-upload variant -- transcribes via the exact
     production OCR path (transcribe_essay_image(), same EXIF/downscale
     preprocessing + self-consistency cross-check as the batch graph's
     multimodal_ocr node) before handing off to the shared debate-start core.
@@ -252,11 +252,11 @@ def start_debate_from_image(payload: DebateStartFromImageRequest) -> dict:
             "confidence": ocr_result["confidence"],
             "uncertain_segments": ocr_result["uncertain_segments"],
             "degraded": ocr_result["degraded"],
-            # ADR-028 / Audit Wave 25: which model family actually produced the
+            # ADR-028: which model family actually produced the
             # cross-check's second transcription pass -- "gemma-4-26b-a4b-it-maas"
             # normally, "gemini-fallback" when Gemma's shared MaaS queue was full.
             # Surfaced to the client on purpose: without it the only proof Gemma
-            # is in the request path lives in Cloud Logging, which a judge testing
+            # is in the request path lives in Cloud Logging, which someone testing
             # the hosted URL has no access to. A signal nothing can read is the
             # ADR-015 failure mode (a flag written but never on the read path),
             # and this one is also the evidence for the extra-model bonus claim.
@@ -340,11 +340,11 @@ def submit_debate_turn(payload: DebateTurnRequest) -> dict:
 
 
 def _score_and_close_session(session_id: str) -> dict:
-    """Wave 5 -- runs once Turn 3 (VALIDATOR.max_debate_turns) finishes:
+    """Runs once Turn 3 (VALIDATOR.max_debate_turns) finishes:
     scores the debate via the exact cognitive_scorer prompt (interactive.py's
     complete_debate_session(), which itself ends the session -- no separate
     end_debate_session() call needed here) and gates the numeric radar behind
-    the class's own show_score_radar_to_students setting (Wave 4 #2), same
+    the class's own show_score_radar_to_students setting, same
     respected-by-default=True fallback get_settings() already uses elsewhere,
     so a Firestore hiccup degrades to "show the radar" rather than silently
     hiding it from every student in the class."""
@@ -371,7 +371,7 @@ def _max_turns() -> int:
 
 
 def login(payload: LoginRequest) -> dict:
-    """Wave 4 #1 -- see auth.py's module docstring for why this is a mock,
+    """See auth.py's module docstring for why this is a mock,
     stateless login rather than real Firebase Auth/OAuth. Raises LoginError
     (mapped to HTTP 401 in server.py) for a bad password or malformed ID."""
     result = auth_login(payload)
@@ -385,8 +385,8 @@ def login(payload: LoginRequest) -> dict:
 
 
 def class_priority(class_id: str) -> dict:
-    """Wave 4 #2 Teacher Executive Dashboard -- the deterministic Intervention
-    Priority Index (priority_engine.rank_students, PHASE 3) as a live
+    """Teacher Executive Dashboard -- the deterministic Intervention
+    Priority Index (priority_engine.rank_students) as a live
     read, independent of whatever the last persisted digest happened to
     rank at send-time. Zero LLM calls."""
     from eduagent.aggregator.class_aggregator import load_class_profiles
@@ -432,7 +432,7 @@ def test_sheets_connection(class_id: str, payload: TestSheetsRequest | None = No
 
 
 def parent_note(payload: ParentNoteRequest) -> dict:
-    """Wave 4 #3 -- "Copy Parent Update Note" button's backend: re-derives
+    """"Copy Parent Update Note" button's backend: re-derives
     this one student's priority `reason` (same pure function the ranking
     table already used) and hands it to the LLM only to phrase, never to
     decide, per parent_note.py's module docstring."""
@@ -459,7 +459,7 @@ def parent_note(payload: ParentNoteRequest) -> dict:
 
 
 class DebateReflectionRequest(BaseModel):
-    """Wave 15 #2/#4: carries only the session_id and the new claim.
+    """Carries only the session_id and the new claim.
 
     It used to also accept `student_id`, `class_id`, `original_fallacy`,
     `original_claim` and `language` straight from the client, with no link to
@@ -509,19 +509,19 @@ _REFLECTION_SCHEMA = {
 
 
 def submit_reflection(payload: DebateReflectionRequest) -> dict:
-    """DOT 7: Metacognitive Self-Correction Loop. Evaluates the student's
+    """Metacognitive Self-Correction Loop. Evaluates the student's
     post-debate revised claim, rewards cognitive growth into their Firestore
     profile, and returns encouraging constructive feedback.
 
-    Wave 15 #2/#4: everything except the revised claim itself is read off the
+    Everything except the revised claim itself is read off the
     server's session record -- see DebateReflectionRequest for the two holes
     that closes. The reflection is claimed (and the session marked spent) BEFORE
     the LLM call, so a slow Gemini response cannot be double-submitted into two
     growth bonuses; the session is torn down after the profile write, which is
     the real end of the debate flow.
 
-    Wave 16 #1/#2: two ways this could write a number into a permanent,
-    teacher-visible record that nothing had actually earned, both now closed:
+    Two ways this could once write a number into a permanent, teacher-visible
+    record that nothing had actually earned, both now closed:
 
       1. A Vertex AI outage used to set `resolved=True, growth_bonus=0.5` and
          persist it, so an outage minted a "Cognitive Breakthrough" out of any
@@ -596,7 +596,7 @@ def submit_reflection(payload: DebateReflectionRequest) -> dict:
         fallback_msg = "Luận điểm chỉnh sửa thể hiện sự tiến bộ tư duy." if lang == "vi" else "Good effort in revising your claim."
         feedback = str(result.get("feedback", fallback_msg))
     except LLMGenerationError:
-        # Wave 16 #1: an outage must NOT mint a breakthrough. ADR-008's rule --
+        # An outage must NOT mint a breakthrough. ADR-008's rule --
         # content the model was never confident about (here: never evaluated at
         # all) may not silently become part of a student's permanent,
         # teacher-visible record -- applies to `breakthrough_count` exactly as

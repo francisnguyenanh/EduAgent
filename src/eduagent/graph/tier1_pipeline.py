@@ -1,7 +1,7 @@
 """Tier 1 — Per-Student Adaptive Socratic Pipeline (ADK2 Graph Workflow).
 
-Phase 1: real node logic (LLM calls via Vertex AI + deterministic function
-nodes) replaces the Phase 0 stubs. Graph shape stays linear -- branching for
+Real node logic (LLM calls via Vertex AI + deterministic function
+nodes) replaces the original stubs. Graph shape stays linear -- branching for
 Debate<->Validator retry happens INSIDE debate_loop (see nodes/debate.py),
 not as separate graph edges, so the overall pipeline shape stays simple and
 auditable.
@@ -45,7 +45,7 @@ def build_tier1_workflow() -> Workflow:
         ),
         edges=[
             (START, _intake_node),
-            # PHASE 6: intake.py sets ctx.route to "image" or "text" depending
+            # intake.py sets ctx.route to "image" or "text" depending
             # on whether node_input carried an inline image part -- a
             # text-only essay skips the OCR node (and its Vision API cost)
             # entirely; a photo essay detours through it, then rejoins the

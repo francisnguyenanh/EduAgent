@@ -1,4 +1,4 @@
-"""Tier-A coverage (Audit Wave 24): the route-level degrade branches.
+"""Tier-A coverage: the route-level degrade branches.
 
 Every teacher route wraps its call in `try/except -> HTTPException(503|502)`.
 Those handlers are the difference between "Firestore is down, try again

@@ -1,4 +1,4 @@
-"""Wave 16 -- rotates the Gmail and Sheets OAuth refresh tokens end to end.
+"""Rotates the Gmail and Sheets OAuth refresh tokens end to end.
 
 WHY: both refresh tokens were exposed in cleartext on the live Cloud Run
 revision spec before ADR-020 (readable by anyone with `run.services.get`).
@@ -112,7 +112,7 @@ def _mint_new_token(scopes: list[str], token_path: Path, label: str):
 def _gcloud() -> str:
     """Absolute path to the gcloud launcher.
 
-    Wave 27: this script was the one place the Wave 15 #5 Windows fix never
+    This script was the one place the Windows gcloud fix never
     reached. `doctor.py::_gcloud_executable()` and
     `deploy_to_cloud_run.py::_gcloud()` both resolve the launcher first,
     because on Windows gcloud ships as `gcloud.CMD` and CreateProcess does not
@@ -144,7 +144,7 @@ def _upload_secret_version(secret_name: str, token_path: Path) -> None:
 def rotate(which: str, *, upload_only: bool = False) -> None:
     cfg = _TARGETS[which]
     if upload_only:
-        # Wave 27 recovery path. Rotation is revoke -> mint -> upload, and the
+        # Recovery path. Rotation is revoke -> mint -> upload, and the
         # upload used to be able to fail on Windows *after* the browser consent
         # had already produced a valid token. Re-running the whole thing would
         # then revoke that good token and demand consent a second time --

@@ -1,4 +1,4 @@
-"""Trace Evidence Generator (Task 10.8).
+"""Trace Evidence Generator.
 
 Runs an end-to-end traced pipeline simulation with OpenTelemetry and exports
 a detailed Markdown report documenting span hierarchy, latency distribution,

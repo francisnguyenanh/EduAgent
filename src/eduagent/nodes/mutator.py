@@ -1,18 +1,18 @@
 """Profile Mutator -- deterministic function node.
 
-Phase 2: writes the per-essay delta into a real Firestore student_profile via
+Writes the per-essay delta into a real Firestore student_profile via
 a transactional read-modify-write (memory/firestore_memory.py), merging with
 essay_history/persona_streak instead of overwriting. This is the concrete
 answer to the track's judging question "does the agent synthesize or mutate
 data, rather than just reading it?" -- the write itself computes streaks and
 attention flags, it doesn't just append a row.
 
-Phase 3: after the Firestore write succeeds, publishes `essay.evaluated` to
+After the Firestore write succeeds, publishes `essay.evaluated` to
 Pub/Sub so the Tier 2 Class Aggregator can react. Publish failure is logged
 but never raised -- the essay result is already durably saved; losing the
 Tier 2 trigger is recoverable, losing the student's actual work is not.
 
-Phase 4: if scorer.py degraded (Gemini outage -> no real score available),
+If scorer.py degraded (Gemini outage -> no real score available),
 this node does NOT write a fabricated score into student_profiles -- that
 would corrupt score_trend and unfairly flag the student. Instead the essay
 is parked in `pending_essays` for reprocessing once Gemini recovers.
@@ -34,7 +34,7 @@ from eduagent.tracing import traced_node
 
 _logger = logging.getLogger(__name__)
 
-# Wave 3 latency optimization: keeps references to the fire-and-forget publish
+# Latency optimization: keeps references to the fire-and-forget publish
 # tasks below alive -- asyncio.create_task() only holds a WEAK reference, so
 # without this the task object can be garbage-collected mid-flight and
 # silently never run (a known asyncio gotcha, not paranoia).
@@ -61,7 +61,7 @@ def _resolve_essay_id(ctx: Context) -> str:
 
 
 async def _publish_essay_evaluated_background(*, event_id: str, student_id: str, class_id: str, essay_id: str) -> None:
-    """Wave 3 latency optimization: the Tier 1 pipeline's own result to the
+    """Latency optimization: the Tier 1 pipeline's own result to the
     student is already fully decided by this point (Firestore write done) --
     the Tier 2 Pub/Sub handoff is a separate concern the student shouldn't
     have to wait on. Runs the existing blocking publish_essay_evaluated()
@@ -106,7 +106,7 @@ async def profile_mutator(ctx: Context) -> dict:
     student_feedback = ctx.state.get("student_feedback", "")
     validation_result = ctx.state.get("validation_result", {})
     scores_degraded = ctx.state.get("scores_degraded", False)
-    # PHASE 6: an OCR pass Gemini itself flags as unreliable (see nodes/ocr.py's
+    # An OCR pass Gemini itself flags as unreliable (see nodes/ocr.py's
     # self-consistency cross-check) means everything downstream -- summary,
     # persona choice, debate, scores -- was computed on possibly-fabricated
     # text. Same discipline as scores_degraded: never let low-confidence
@@ -182,7 +182,7 @@ async def profile_mutator(ctx: Context) -> dict:
         "profile_delta": delta,
         "profile_after_mutation": updated_profile,
         "pending_retry": pending,
-        # PHASE 6: surfaced so a caller (Web UI, this demo script, a teacher
+        # Surfaced so a caller (Web UI, this demo script, a teacher
         # review queue) can tell a low-confidence OCR pass from a normal one
         # WITHOUT having to inspect internal ctx.state directly.
         "ocr_confidence": ctx.state.get("ocr_confidence"),

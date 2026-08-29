@@ -22,8 +22,8 @@ from eduagent.memory.student_profile import weakness_taxonomy_from_profile
 # How many DISTINCT students must share a fallacy before it counts as a
 # class-level (systemic) pattern worth a mini-lesson.
 #
-# Wave 12 Group 3: docs previously claimed ">= 3 students" while this constant was
-# 2 -- a doc/code mismatch a judge can diff in seconds. Resolved by keeping 2 and
+# Docs previously claimed ">= 3 students" while this constant was
+# 2 -- a doc/code mismatch anyone can diff in seconds. Resolved by keeping 2 and
 # correcting the docs, because 2 is the defensible threshold here: the pedagogic
 # claim is "this is not one student's idiosyncratic mistake", and two independent
 # students is exactly the point that stops being true. Raising it to 3 would also
@@ -71,7 +71,7 @@ def compute_priority(profile: dict, *, now: datetime, common_fallacy_set: set[st
 
     score_trend = profile.get("score_trend", "insufficient_data")
     decline_component = PRIORITY_WEIGHTS.score_decline * (1 if score_trend == "declining" else 0)
-    # Wave 15 #3: before "volatile" existed, a student whose score collapsed for
+    # Before "volatile" existed, a student whose score collapsed for
     # one essay and recovered was classified "stagnant" and contributed exactly
     # 0 here -- ranked identically to a student holding a steady score. The trend
     # classifier now separates the two (student_profile.py::_score_trend) and
