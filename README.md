@@ -53,6 +53,7 @@ between those two points runs itself.
 
 Experience the live deployed system on Google Cloud without local installation:
 
+* **Demo Video:** [https://www.youtube.com/watch?v=t2mb4c_fHUQ](https://www.youtube.com/watch?v=t2mb4c_fHUQ)
 * **Live Web Application:** [https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/](https://eduagent-class-aggregator-636767063018.asia-southeast1.run.app/)
 * **Demo Passcodes — the two roles use different passcodes (ADR-025):**
   * **Student Portal:** ID: `c1_stu01` (or custom ID e.g. `c1_judge01`) | Passcode: `eduagent2026`
